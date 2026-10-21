@@ -10,6 +10,7 @@ import { criarRascunho } from '../../domain/draft-reducer';
 import { DadosBlock } from './DadosBlock';
 import { ParticipantesBlock } from './ParticipantesBlock';
 import { TipoBlock } from './TipoBlock';
+import { TEMPO_VOLUME_MS } from '../../test/tempos';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
   return {
@@ -52,9 +53,6 @@ function avisoAtual(): HTMLElement {
   if (!aviso) throw new Error('Nenhum aviso (role="status") na tela.');
   return aviso;
 }
-
-/** Teto de tempo dos testes que montam 200 a 500 linhas: o jsdom é lento e a suíte roda em paralelo. */
-const TEMPO_VOLUME_MS = 30_000;
 
 function linhas(n: number): string {
   return Array.from(

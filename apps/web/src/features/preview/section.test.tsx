@@ -13,9 +13,7 @@ import { OperacaoIAProvider } from '../../generation/OperacaoIA';
 import { ToastProvider } from '../../ui/Toast';
 import { GenerateBar } from '../form/GenerateBar';
 import { A4Preview } from './A4Preview';
-
-/** Teto dos testes de volume: 200 grupos em jsdom, com cobertura e a máquina ocupada, passam de 5 s. */
-const TEMPO_VOLUME_MS = 30_000;
+import { TEMPO_VOLUME_MS } from '../../test/tempos';
 
 const CPF_NA_TRANSCRICAO = '529.982.247-25';
 const CPF_INVENTADO = '111.444.777-35';

@@ -1,10 +1,17 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mask } from '@lavra/pii-br';
 import { corporativa } from '../../ata-types/corporativa';
 import { DEBOUNCE_DETECCAO_MS, LIMITE_TRANSCRICAO } from '../../config/limits';
 import { DraftProvider } from '../../domain/DraftContext';
 import { TranscricaoBlock } from '../form/TranscricaoBlock';
+
+// `mask` real, mas espionado: o teste de volume prova que ele só roda depois do debounce.
+vi.mock('@lavra/pii-br', async (original) => {
+  const real = await original<typeof import('@lavra/pii-br')>();
+  return { ...real, mask: vi.fn(real.mask) };
+});
 
 const CPF_A = '529.982.247-25';
 const CPF_B = '111.444.777-35';
@@ -125,22 +132,31 @@ describe('prévia de privacidade', () => {
     expect(screen.getByRole('button', { name: 'Ver o que vai para a IA' })).toBeDisabled();
   });
 
-  it('200 mil caracteres: o onChange responde em menos de 50 ms e a detecção só roda após o debounce', () => {
+  it('200 mil caracteres: digitar não roda a detecção; ela roda uma vez só após o debounce', () => {
     renderizar();
     const base = `Maria informou o CPF ${CPF_A} na pauta. `;
     const grande = base.repeat(Math.ceil(200_000 / base.length)).slice(0, 200_000);
     expect(grande).toHaveLength(200_000);
 
-    // Aquece o caminho (primeira renderização) com um texto pequeno.
     colar('a');
+    passarDebounce();
+    const espiao = vi.mocked(mask);
+    espiao.mockClear();
+
     const t0 = performance.now();
     colar(grande);
     const ms = performance.now() - t0;
-    expect(ms).toBeLessThan(50);
 
+    // O custo da digitação não inclui o `mask`: nenhuma chamada antes do debounce.
+    expect(espiao).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^Transcrição da reunião/)).toHaveValue(grande);
     expect(screen.queryByText(/dados pessoais serão protegidos/)).not.toBeInTheDocument();
+    // Só uma rede contra regressão grosseira (o tempo real é medido no E2E, em navegador).
+    expect(ms).toBeLessThan(2000);
+
     passarDebounce();
+    expect(espiao).toHaveBeenCalled();
+    expect(espiao.mock.calls.every(([texto]) => texto === grande)).toBe(true);
     expect(screen.getByText(/dados pessoais serão protegidos \(\d+ CPF\)/)).toBeInTheDocument();
   });
 
