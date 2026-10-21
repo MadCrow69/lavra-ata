@@ -98,8 +98,8 @@ export function useChamadaIA(
     try {
       const r = await chamar(controle.signal, {
         ...opcoesCadeia,
-        aoRecusarChave: (cfg) => {
-          keys.definirEstado(cfg.id, cfg.chave, 'invalida');
+        aoRecusarChave: (cfg, erro) => {
+          keys.definirEstado(cfg.id, cfg.chave, 'invalida', erro.semCredito);
         },
       });
       // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.

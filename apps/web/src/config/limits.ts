@@ -18,3 +18,9 @@ export const LIMITE_ARQUIVO_BYTES = 5 * 1024 * 1024;
 
 /** A partir deste percentual de `LIMITE_TRANSCRICAO` o contador passa a avisar. */
 export const PERCENTUAL_ALERTA_TRANSCRICAO = 90;
+
+/** Máximo de caracteres do tipo da ata no nome do arquivo exportado. */
+export const TIPO_NOME_ARQUIVO_MAX = 40;
+
+/** Trecho do nome do arquivo exportado quando a ata não tem data válida. */
+export const SEM_DATA_NOME_ARQUIVO = 'sem-data';

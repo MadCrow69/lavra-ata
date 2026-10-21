@@ -1,0 +1,78 @@
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rotulo {
+  padding: 0;
+  margin-bottom: var(--espaco-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+}
+
+.miniatura {
+  flex: none;
+  max-width: min(12rem, 100%);
+  max-height: 4rem;
+  padding: var(--espaco-1);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  /* A logo é desenhada para papel branco, em qualquer tema. */
+  background: var(--cor-folha);
+  object-fit: contain;
+}
+
+.lembrar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.lembrar input {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+}
+
+.ajuda {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}
+
+.processando,
+.aviso {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-primaria);
+  background: var(--cor-fundo);
+  font-size: 0.9375rem;
+}
+
+.aviso {
+  border-left-color: var(--cor-destaque);
+  color: var(--cor-destaque-texto);
+}
+
+.erro {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-erro);
+  background: var(--cor-fundo);
+  color: var(--cor-erro-texto);
+  font-weight: 600;
+}

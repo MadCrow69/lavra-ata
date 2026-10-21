@@ -1,18 +1,16 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { erroProvedor } from '../../ai/errors';
-import { KeysProvider } from '../../ai/KeysContext';
 import { criarKeyStore, type ChaveProvedor } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
 import { LIMITE_INSTRUCAO } from '../../config/limits';
-import { DraftProvider, useDraft } from '../../domain/DraftContext';
+import { useDraft } from '../../domain/DraftContext';
 import type { Atribuicao, AtaDraft, ResultadoAta } from '../../domain/draft';
 import { criarRascunho } from '../../domain/draft-reducer';
-import { OperacaoIAProvider } from '../../generation/OperacaoIA';
-import { ToastProvider } from '../../ui/Toast';
 import { GenerateBar } from '../form/GenerateBar';
 import { A4Preview } from './A4Preview';
+import { renderizarComProvedores } from '../../test/provedores';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
 
 const CPF_NA_TRANSCRICAO = '529.982.247-25';
@@ -155,21 +153,14 @@ function renderizar({
   for (const c of chaves) store.definir(c);
   const { a, gerar } = adaptadores(impl);
   const opcoesCadeia = { adaptadores: a, esperaRetryMs: 0 };
-  render(
-    <KeysProvider store={store}>
-      <DraftProvider inicial={inicial}>
-        <OperacaoIAProvider>
-          <ToastProvider>
-            {comBarra ? (
-              <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={opcoesCadeia} />
-            ) : null}
-            <A4Preview opcoesCadeia={opcoesCadeia} />
-            {comEdicaoPorFora ? <EdicaoPorFora /> : null}
-            <Espiao />
-          </ToastProvider>
-        </OperacaoIAProvider>
-      </DraftProvider>
-    </KeysProvider>,
+  renderizarComProvedores(
+    <>
+      {comBarra ? <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={opcoesCadeia} /> : null}
+      <A4Preview opcoesCadeia={opcoesCadeia} />
+      {comEdicaoPorFora ? <EdicaoPorFora /> : null}
+      <Espiao />
+    </>,
+    { inicial, keyStore: store },
   );
   return { gerar, store, user: userEvent.setup() };
 }

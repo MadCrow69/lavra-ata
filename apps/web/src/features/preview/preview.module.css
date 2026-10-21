@@ -83,17 +83,23 @@
   flex: none;
   align-items: center;
   justify-content: center;
-  width: clamp(4.5rem, 20cqi, 8rem);
+  width: clamp(5.5rem, 20cqi, 8rem);
   aspect-ratio: 3 / 2;
-  border: 1px dashed var(--cor-folha-borda);
   color: var(--cor-folha-suave);
   font-family: var(--fonte-interface);
   font-size: 0.8125rem;
   text-align: center;
 }
 
-.logoReserva {
-  padding: var(--espaco-1);
+/* Sem logo: o espaço reservado é um botão para adicioná-la. */
+.logoVazia {
+  border: 1px dashed var(--cor-folha-borda);
+}
+
+.logoVazia button {
+  padding: 0 var(--espaco-2);
+  font-size: 0.8125rem;
+  line-height: 1.2;
 }
 
 .logoImagem {

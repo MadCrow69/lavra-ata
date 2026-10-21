@@ -6,6 +6,9 @@ import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
 import { OperacaoIAProvider, useOperacaoIA } from '../../generation/OperacaoIA';
+import { LogoProvider, useLogo } from '../../logo/LogoContext';
+import type { LogoStore } from '../../logo/logo-store';
+import type { LogoDoc } from '../../document/model';
 import { AppShell } from '../../shell/AppShell';
 import type { AbaId } from '../../shell/MobileTabs';
 import { useLarguraLarga } from '../../shell/useLarguraLarga';
@@ -23,6 +26,7 @@ import { GeracaoNoDocumento } from './GeracaoNoDocumento';
 import styles from './workbench.module.css';
 
 const MENSAGEM_NOVA_ATA = 'Nova ata iniciada. Tipo e tom mantidos.';
+const MENSAGEM_NOVA_ATA_COM_LOGO = 'Nova ata iniciada. Tipo, tom e logo mantidos.';
 
 /** O rascunho tem algo que a pessoa escreveu (um rascunho só com tipo e tom não é "recuperado"). */
 function temConteudo(d: AtaDraft): boolean {
@@ -68,6 +72,8 @@ function useSalvarRascunho(state: AtaDraft): void {
     window.addEventListener('pagehide', salvarJa);
     document.addEventListener('visibilitychange', aoMudarVisibilidade);
     return () => {
+      // Desmontar (inclusive pelo limite de erro) com o timer pendente não pode perder a última tecla.
+      salvarJa();
       window.removeEventListener('pagehide', salvarJa);
       document.removeEventListener('visibilitychange', aoMudarVisibilidade);
     };
@@ -83,6 +89,7 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
   const { state, dispatch } = useDraft();
   const { operacao, interromper } = useOperacaoIA();
   const { mostrar } = useToast();
+  const { logo } = useLogo();
   const largo = useLarguraLarga();
   const [aba, setAba] = useState<AbaId>('editar');
   const [chavesAbertas, setChavesAbertas] = useState(false);
@@ -132,7 +139,7 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
     setAvisoRecuperado(false);
     setConfirmando(false);
     setAba('editar');
-    mostrar({ titulo: MENSAGEM_NOVA_ATA });
+    mostrar({ titulo: logo === null ? MENSAGEM_NOVA_ATA : MENSAGEM_NOVA_ATA_COM_LOGO });
   };
 
   // Rascunho vazio e IA parada: não há o que perder, então "Nova ata" não pergunta.
@@ -196,7 +203,7 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
 
   const documento = (
     <div ref={documentoRef} className={styles.documento} tabIndex={-1}>
-      {largo ? null : <GeracaoNoDocumento />}
+      {largo ? null : <GeracaoNoDocumento key={`geracao-${String(rodada)}`} />}
       <A4Preview key={rodada} {...opcoes} />
     </div>
   );
@@ -241,7 +248,10 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
       >
         <p>
           Os dados da reunião, os participantes, a transcrição e a ata gerada nesta aba serão
-          apagados. O tipo de ata e o tom da redação são mantidos.
+          apagados.{' '}
+          {logo === null
+            ? 'O tipo de ata e o tom da redação são mantidos.'
+            : 'O tipo de ata, o tom da redação e a logo são mantidos.'}
         </p>
         {operacao !== null ? <p>A geração em andamento será cancelada.</p> : null}
       </Modal>
@@ -252,24 +262,32 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
 export interface WorkbenchProps {
   /** Substitui os adaptadores reais e a espera do retry (testes). */
   opcoesCadeia?: OpcoesCadeia;
+  /** Armazenamento e processamento da logo (testes); o padrão é o do navegador. */
+  logo?: { store?: LogoStore; processar?: (arquivo: File) => Promise<LogoDoc> };
 }
 
 /**
  * A bancada inteira: formulário (blocos 1–4 e barra de geração) em "Editar", a folha em
  * "Documento", o modal de chaves e "Nova ata". O rascunho vem da sessão na abertura (com aviso) e
- * volta para ela a cada alteração, com espera.
+ * volta para ela a cada alteração, com espera. A logo tem armazenamento próprio (`LogoProvider`):
+ * nunca entra no rascunho e sobrevive a "Nova ata".
  */
-export function Workbench({ opcoesCadeia }: WorkbenchProps) {
+export function Workbench({ opcoesCadeia, logo }: WorkbenchProps) {
   // Lido uma vez, na abertura: o que esta aba guardou antes de recarregar.
   const [recuperado] = useState(() => carregarRascunho());
   return (
-    <DraftProvider {...(recuperado ? { inicial: recuperado } : {})}>
-      <OperacaoIAProvider>
-        <Bancada
-          recuperou={recuperado !== null && temConteudo(recuperado)}
-          opcoesCadeia={opcoesCadeia}
-        />
-      </OperacaoIAProvider>
-    </DraftProvider>
+    <LogoProvider
+      {...(logo?.store ? { store: logo.store } : {})}
+      {...(logo?.processar ? { processar: logo.processar } : {})}
+    >
+      <DraftProvider {...(recuperado ? { inicial: recuperado } : {})}>
+        <OperacaoIAProvider>
+          <Bancada
+            recuperou={recuperado !== null && temConteudo(recuperado)}
+            opcoesCadeia={opcoesCadeia}
+          />
+        </OperacaoIAProvider>
+      </DraftProvider>
+    </LogoProvider>
   );
 }

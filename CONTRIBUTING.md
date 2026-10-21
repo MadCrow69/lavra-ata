@@ -21,11 +21,16 @@ pnpm typecheck                  # TypeScript em todos os pacotes
 pnpm test                       # Vitest, com no máximo 4 workers
 pnpm build                      # build de todos os pacotes
 pnpm --filter @lavra/web e2e    # E2E (Playwright) contra o build; exige `pnpm build` antes
+pnpm --filter @lavra/web cobertura:fontes   # regera a cobertura de caracteres das fontes do PDF
 ```
 
 O `pnpm dev` não existe na raiz; use o filtro do pacote, como acima.
 
 Na primeira vez, instale o navegador do E2E: `pnpm --filter @lavra/web exec playwright install chromium`. O E2E roda contra o `vite preview` do build, onde a CSP está ativa, e intercepta os três provedores de IA: nenhuma chamada real sai.
+
+### Cobertura de caracteres das fontes do PDF
+
+O aviso "caracteres que não existem na fonte do PDF" se baseia em `apps/web/src/export/pdf/cobertura-gerada.ts`, **gerado** dos mapas de caracteres (cmap) dos `.woff` que o PDF embute. Não edite o arquivo à mão e não o copie do `unicode-range` do pacote da fonte, que declara pontos sem desenho. Rode `pnpm --filter @lavra/web cobertura:fontes` e commite o resultado **sempre que trocar ou atualizar uma fonte do PDF** (inclusive subir a versão de `@fontsource/inter` ou `@fontsource/source-serif-4`); o teste `gerar-cobertura-fontes.test.ts` reprova se o arquivo estiver desatualizado.
 
 ### Testes com teto de workers
 

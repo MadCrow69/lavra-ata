@@ -3,13 +3,17 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
 import { erroProvedor } from '../../ai/errors';
+import { erroSemCredito } from '../../ai/providers/comum';
 import { KeysProvider } from '../../ai/KeysContext';
 import { criarKeyStore, type KeyStore } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
-import { RASCUNHO } from '../../config/storage-keys';
+import { LOGO, RASCUNHO } from '../../config/storage-keys';
+import { ESPERA_SALVAR_RASCUNHO_MS } from '../../config/ui';
 import type { AtaDraft } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
+import type { LogoDoc } from '../../document/model';
+import { criarLogoStore, type LogoStore } from '../../logo/logo-store';
 import { ToastProvider } from '../../ui/Toast';
 import { Workbench } from './Workbench';
 
@@ -49,15 +53,25 @@ function adaptadores(gerar: Gerar): Record<ProviderId, ProviderAdapter> {
 interface Opcoes {
   gerar?: Gerar;
   store?: KeyStore;
+  logo?: { store?: LogoStore; processar?: (arquivo: File) => Promise<LogoDoc> };
 }
 
-function renderizar({ gerar = () => Promise.resolve(resposta()), store }: Opcoes = {}) {
+const LOGO_FICTICIA: LogoDoc = {
+  dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ',
+  largura: 300,
+  altura: 100,
+};
+
+function renderizar({ gerar = () => Promise.resolve(resposta()), store, logo }: Opcoes = {}) {
   const espiao = vi.fn<Gerar>(gerar);
   const keyStore = store ?? criarKeyStore(null);
   const utils = render(
     <KeysProvider store={keyStore}>
       <ToastProvider>
-        <Workbench opcoesCadeia={{ adaptadores: adaptadores(espiao), esperaRetryMs: 0 }} />
+        <Workbench
+          opcoesCadeia={{ adaptadores: adaptadores(espiao), esperaRetryMs: 0 }}
+          {...(logo ? { logo } : {})}
+        />
       </ToastProvider>
     </KeysProvider>,
   );
@@ -199,6 +213,23 @@ describe('Workbench: fluxo de ponta a ponta', () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it('salva o rascunho pendente ao desmontar (limite de erro)', () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderizar();
+      fireEvent.change(screen.getByLabelText(/^Assunto/), { target: { value: 'Planejamento' } });
+      // Desmonta antes de `ESPERA_SALVAR_RASCUNHO_MS`: o que estava pendente não pode se perder.
+      act(() => {
+        vi.advanceTimersByTime(ESPERA_SALVAR_RASCUNHO_MS - 1);
+      });
+      expect(carregarRascunho()?.dados.assunto ?? '').not.toBe('Planejamento');
+      unmount();
+      expect(carregarRascunho()?.dados.assunto).toBe('Planejamento');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('esconder a aba grava o rascunho na hora, sem esperar o debounce', async () => {
     const { user } = renderizar();
     await user.type(screen.getByLabelText(/^Assunto/), 'Reembolsos');
@@ -254,7 +285,98 @@ describe('Workbench: rascunho recuperado', () => {
   });
 });
 
+async function enviarLogo(user: UserEvent): Promise<void> {
+  await user.upload(
+    screen.getByLabelText('Arquivo da logo'),
+    new File([new Uint8Array([1])], 'logo.png', { type: 'image/png' }),
+  );
+  await within(folha()).findByAltText('Logo da organização');
+}
+
+describe('Workbench: logo', () => {
+  it('o rascunho salvo na sessão nunca contém a logo, que fica em chave própria', async () => {
+    const { user, unmount } = renderizar({
+      logo: { processar: () => Promise.resolve(LOGO_FICTICIA) },
+    });
+    await enviarLogo(user);
+    await user.type(screen.getByLabelText(/^Assunto/), 'Reembolsos');
+    // Desmontar grava o rascunho pendente: o JSON salvo é o que sobrevive a recarregar a página.
+    unmount();
+
+    const rascunho = sessionStorage.getItem(RASCUNHO) ?? '';
+    expect(rascunho).toContain('Reembolsos');
+    expect(rascunho).not.toContain('data:image');
+    expect(rascunho).not.toContain(LOGO_FICTICIA.dataUrl);
+    // A logo foi guardada, só que em outra chave.
+    expect(sessionStorage.getItem(LOGO)).toContain(LOGO_FICTICIA.dataUrl);
+    expect(localStorage.getItem(LOGO)).toBeNull();
+  });
+
+  it('a IA nunca recebe a logo: o pedido de geração não contém a imagem', async () => {
+    salvarRascunho(completo());
+    const { user, gerar } = renderizar({
+      store: comChave(),
+      logo: { processar: () => Promise.resolve(LOGO_FICTICIA) },
+    });
+    await enviarLogo(user);
+    await user.click(botaoGerar());
+    expect(await within(folha()).findByText(`Reembolso a ${CPF}.`)).toBeVisible();
+
+    const [, pedido] = gerar.mock.calls[0] ?? [];
+    expect(JSON.stringify(pedido)).not.toContain('data:image');
+    expect(JSON.stringify(pedido)).not.toContain('iVBORw0KGgo');
+  });
+
+  it('uma logo guardada na sessão aparece no bloco 1 e na folha ao abrir', () => {
+    // Outra "página": uma store nova lê o que a anterior guardou na sessão.
+    criarLogoStore().definir(LOGO_FICTICIA);
+    renderizar({ logo: { store: criarLogoStore() } });
+    expect(
+      within(screen.getByRole('region', { name: 'Tipo de ata e logo' })).getByAltText(
+        'Logo da organização',
+      ),
+    ).toHaveAttribute('src', LOGO_FICTICIA.dataUrl);
+    expect(within(folha()).getByAltText('Logo da organização')).toBeVisible();
+  });
+});
+
 describe('Workbench: Nova ata', () => {
+  it('"Nova ata" mantém a logo e diz isso', async () => {
+    salvarRascunho(completo());
+    const { user } = renderizar({ logo: { processar: () => Promise.resolve(LOGO_FICTICIA) } });
+    await enviarLogo(user);
+    await user.click(screen.getByRole('button', { name: 'Fechar aviso de rascunho recuperado' }));
+
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+    const dialogo = screen.getByRole('dialog', { name: 'Começar uma nova ata?' });
+    expect(dialogo).toHaveTextContent('O tipo de ata, o tom da redação e a logo são mantidos.');
+    await user.click(within(dialogo).getByRole('button', { name: 'Apagar e começar' }));
+
+    expect(screen.getByLabelText(/^Assunto/)).toHaveValue('');
+    expect(screen.getByText('Nova ata iniciada. Tipo, tom e logo mantidos.')).toBeVisible();
+    expect(within(folha()).getByAltText('Logo da organização')).toHaveAttribute(
+      'src',
+      LOGO_FICTICIA.dataUrl,
+    );
+    expect(
+      within(screen.getByRole('region', { name: 'Tipo de ata e logo' })).getByRole('button', {
+        name: 'Remover logo',
+      }),
+    ).toBeVisible();
+  });
+
+  it('sem logo, o aviso e o modal seguem falando só de tipo e tom', async () => {
+    salvarRascunho(completo());
+    const { user } = renderizar();
+    await user.click(screen.getByRole('button', { name: 'Fechar aviso de rascunho recuperado' }));
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+    expect(screen.getByRole('dialog', { name: 'Começar uma nova ata?' })).toHaveTextContent(
+      'O tipo de ata e o tom da redação são mantidos.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Apagar e começar' }));
+    expect(screen.getByText('Nova ata iniciada. Tipo e tom mantidos.')).toBeVisible();
+  });
+
   it('pede confirmação, limpa tudo e mantém tipo e tom', async () => {
     salvarRascunho(completo({ tom: 'conciso' }));
     const { user } = renderizar();
@@ -320,6 +442,25 @@ describe('Workbench: Nova ata', () => {
   });
 });
 
+describe('Workbench: conta sem saldo', () => {
+  it('geração recusada por falta de saldo: o cartão da chave mostra o saldo, não "verifique se copiou"', async () => {
+    salvarRascunho(completo());
+    const { user, store } = renderizar({
+      store: comChave(),
+      gerar: () => Promise.reject(erroSemCredito('openai', 429)),
+    });
+    await user.click(botaoGerar());
+    await waitFor(() => {
+      expect(store.cadeia()).toEqual([]);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Configurar chaves de IA' }));
+    const cartao = within(screen.getByRole('region', { name: 'OpenAI' }));
+    expect(cartao.getByText(/sem crédito ou saldo/)).toBeVisible();
+    expect(cartao.queryByText(/verifique se copiou/)).not.toBeInTheDocument();
+  });
+});
+
 describe('Workbench: estados depois de gerar', () => {
   it('no celular, a aba ativa vira "Documento" ao terminar de gerar', async () => {
     simularLargura(false);
@@ -364,6 +505,32 @@ describe('Workbench: estados depois de gerar', () => {
     // Cancelar por aqui é cancelar pela pessoa: a barra registra e a ata não muda.
     expect(within(painel).getByText('Geração cancelada. A ata não foi alterada.')).toBeVisible();
     expect(within(folha()).queryByText(`Reembolso a ${CPF}.`)).not.toBeInTheDocument();
+  });
+
+  it('o aviso "Geração cancelada" some depois de "Nova ata"', async () => {
+    simularLargura(false);
+    salvarRascunho(completo());
+    const { user } = renderizar({
+      store: comChave(),
+      gerar: (_cfg, req) =>
+        new Promise((_resolve, reject) => {
+          req.signal.addEventListener('abort', () => {
+            reject(erroProvedor('cancelado', 'openai'));
+          });
+        }),
+    });
+    await user.click(botaoGerar());
+    await user.click(screen.getByRole('tab', { name: 'Documento' }));
+    const painel = screen.getByRole('tabpanel', { name: 'Documento' });
+    await user.click(within(painel).getByRole('button', { name: 'Cancelar geração da ata' }));
+    expect(within(painel).getByText('Geração cancelada. A ata não foi alterada.')).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: 'Editar' }));
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+    await user.click(screen.getByRole('button', { name: 'Apagar e começar' }));
+    await user.click(screen.getByRole('tab', { name: 'Documento' }));
+
+    expect(screen.queryByText(/Geração cancelada/)).not.toBeInTheDocument();
   });
 
   it('no celular, se a geração falha com a pessoa no Documento, volta ao Editar com o erro', async () => {

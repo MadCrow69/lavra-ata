@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ErroProvedor } from '../../ai/errors';
+import { ErroProvedor, mensagemSemCredito } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
 import { MODELOS, ROTULO_PROVEDOR, URL_CHAVE } from '../../config/models';
@@ -70,9 +70,10 @@ export function CartaoProvedor({
     novaChave: string,
     novoModelo: string,
     estado: 'nao_testada' | 'ok' | 'invalida',
+    semCredito = false,
   ) => {
     if (novaChave.trim() === '') keys.remover(provedor);
-    else keys.definir({ provedor, chave: novaChave, modelo: novoModelo, estado });
+    else keys.definir({ provedor, chave: novaChave, modelo: novoModelo, estado, semCredito });
   };
 
   const aoDigitarChave = (valor: string): void => {
@@ -86,17 +87,17 @@ export function CartaoProvedor({
     if (valor === OUTRO_MODELO) {
       setModo('outro');
       setModelo('');
-      gravar(chave, '', atual?.estado ?? 'nao_testada');
+      gravar(chave, '', atual?.estado ?? 'nao_testada', atual?.semCredito);
       return;
     }
     setModo('lista');
     setModelo(valor);
-    gravar(chave, valor, atual?.estado ?? 'nao_testada');
+    gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
   };
 
   const aoDigitarModelo = (valor: string): void => {
     setModelo(valor);
-    gravar(chave, valor, atual?.estado ?? 'nao_testada');
+    gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
   };
 
   const apagar = (): void => {
@@ -116,9 +117,9 @@ export function CartaoProvedor({
     testeRef.current = controle;
     setTestando(true);
     setFalha(null);
-    const registrar = (estado: 'ok' | 'invalida'): void => {
+    const registrar = (estado: 'ok' | 'invalida', semCredito = false): void => {
       // Só o veredito: o modelo pode ter mudado enquanto o teste rodava.
-      keys.definirEstado(provedor, testada, estado);
+      keys.definirEstado(provedor, testada, estado, semCredito);
     };
     try {
       await adaptador.testarChave({ id: provedor, chave: testada }, controle.signal);
@@ -128,7 +129,7 @@ export function CartaoProvedor({
       if (controle.signal.aborted) return;
       if (e instanceof ErroProvedor && e.tipo === 'cancelado') return;
       if (e instanceof ErroProvedor && e.tipo === 'chave_invalida') {
-        registrar('invalida');
+        registrar('invalida', e.semCredito);
       } else if (e instanceof ErroProvedor) {
         // A mensagem já vem sem a chave dos adaptadores; a troca abaixo é a segunda barreira.
         setFalha(e.message.split(testada).join('[chave removida]'));
@@ -156,7 +157,7 @@ export function CartaoProvedor({
     estadoTexto = 'Chave válida';
     estadoClasse = styles.estadoOk ?? '';
   } else if (temChave && atual?.estado === 'invalida') {
-    estadoTexto = MSG_CHAVE_INVALIDA;
+    estadoTexto = atual.semCredito === true ? mensagemSemCredito(provedor) : MSG_CHAVE_INVALIDA;
     estadoClasse = styles.estadoErro ?? '';
   }
   const icone = falha || atual?.estado === 'invalida' ? '✕' : '✓';

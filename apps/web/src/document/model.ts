@@ -41,8 +41,8 @@ export type DocBloco =
 
 export interface DocumentModel {
   titulo: string;
-  /** `logo` é a imagem da pessoa (Plano 04); `null` = espaço reservado. */
-  cabecalho: { logo: string | null; linhas: string[] };
+  /** `logo` é a imagem da pessoa; `null` = espaço reservado. */
+  cabecalho: { logo: LogoDoc | null; linhas: string[] };
   blocos: DocBloco[];
   /** Rodapé paginado dos documentos (PDF e DOCX); a folha em tela é contínua e não o exibe. */
   rodape: string;
@@ -51,4 +51,11 @@ export interface DocumentModel {
    * (spec 8.1.1). Não vai para PDF nem DOCX. `null` quando nenhuma seção tem autoria de IA.
    */
   rodapeInterno: string | null;
+}
+
+/** Logo da pessoa já validada e rasterizada: PNG em data URL, com as dimensões em pixels. */
+export interface LogoDoc {
+  dataUrl: string;
+  largura: number;
+  altura: number;
 }

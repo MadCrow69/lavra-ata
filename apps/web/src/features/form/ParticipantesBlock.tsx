@@ -13,6 +13,7 @@ import {
 } from '../../domain/draft';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
+import { plural } from '../../ui/plural';
 import { useConsultaMidia } from '../../ui/useConsultaMidia';
 import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
@@ -26,10 +27,6 @@ import {
 import styles from './form.module.css';
 
 const CONSULTA_CARTOES = `(max-width: ${String(LARGURA_CARTOES_REM)}rem)`;
-
-function plural(n: number, singular: string, pluralForma: string): string {
-  return n === 1 ? singular : pluralForma;
-}
 
 interface LinhaProps {
   participante: Participante;

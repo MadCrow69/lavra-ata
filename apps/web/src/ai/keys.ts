@@ -1,5 +1,6 @@
 import { MODELOS } from '../config/models';
 import { CHAVES } from '../config/storage-keys';
+import { storageOuNulo } from '../domain/storage-ou-nulo';
 import { PROVEDORES, type ProviderConfig, type ProviderId } from './types';
 
 export interface ChaveProvedor {
@@ -7,6 +8,11 @@ export interface ChaveProvedor {
   chave: string;
   modelo: string;
   estado: 'nao_testada' | 'ok' | 'invalida';
+  /**
+   * Só na memória (como `estado`): a chave foi recusada por falta de crédito, não por estar errada.
+   * Só vale com `estado === 'invalida'`.
+   */
+  semCredito?: boolean;
 }
 
 export interface KeyStore {
@@ -20,7 +26,12 @@ export interface KeyStore {
    * Grava só o veredito do teste. Não faz nada se a chave guardada para o provedor já não é a que
    * foi testada (a pessoa a trocou durante o teste); nunca mexe no modelo escolhido.
    */
-  definirEstado: (p: ProviderId, chave: string, estado: ChaveProvedor['estado']) => void;
+  definirEstado: (
+    p: ProviderId,
+    chave: string,
+    estado: ChaveProvedor['estado'],
+    semCredito?: boolean,
+  ) => void;
   remover: (p: ProviderId) => void;
   reordenar: (ordem: ProviderId[]) => void;
   lembrar: () => boolean;
@@ -95,22 +106,13 @@ function lerPersistido(bruto: string | null): Persistido | null {
   return { chaves: validas, ordem: normalizarOrdem(Array.isArray(ordem) ? ordem : []) };
 }
 
-/** `localStorage` do navegador, ou `null` se o acesso for bloqueado (modo privado, política). */
-function storagePadrao(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Guarda as chaves de API na memória da página. Só vão para `storage` (por padrão
  * `localStorage`) quando a pessoa marca "Lembrar neste navegador". `null` = nunca persiste.
  * Nunca registra a chave em log nem lança por falha de armazenamento.
  */
 export function criarKeyStore(storage?: Storage | null): KeyStore {
-  const alvo = storage === undefined ? storagePadrao() : storage;
+  const alvo = storage === undefined ? storageOuNulo('local') : storage;
   const chaves = new Map<ProviderId, ChaveProvedor>();
   let ordem: ProviderId[] = [...PROVEDORES];
   let lembrar = false;
@@ -188,13 +190,18 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
         chave,
         modelo: modeloOuPadrao(c.provedor, c.modelo),
         estado: c.estado,
+        ...(c.estado === 'invalida' && c.semCredito === true ? { semCredito: true } : {}),
       });
       mudou();
     },
-    definirEstado(p, chave, estado) {
+    definirEstado(p, chave, estado, semCredito = false) {
       const c = chaves.get(p);
-      if (c?.chave !== chave.trim() || c.estado === estado) return;
+      const semCreditoNovo = estado === 'invalida' && semCredito;
+      if (c?.chave !== chave.trim()) return;
+      if (c.estado === estado && (c.semCredito ?? false) === semCreditoNovo) return;
       c.estado = estado;
+      if (semCreditoNovo) c.semCredito = true;
+      else delete c.semCredito;
       mudou();
     },
     remover,

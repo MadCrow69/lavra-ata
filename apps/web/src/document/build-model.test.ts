@@ -10,8 +10,14 @@ import {
   type ResultadoAta,
 } from '../domain/draft';
 import { criarRascunho } from '../domain/draft-reducer';
-import { construirDocumento, contarPreencher, dividirPreencher } from './build-model';
-import type { DocBloco } from './model';
+import { modeloDeVolume } from '../test/documento-volume';
+import {
+  construirDocumento,
+  contarPreencher,
+  dividirPreencher,
+  textosDoDocumento,
+} from './build-model';
+import type { DocBloco, LogoDoc } from './model';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
   return {
@@ -229,6 +235,25 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
   });
 });
 
+describe('construirDocumento com logo', () => {
+  const logo: LogoDoc = { dataUrl: 'data:image/png;base64,AAAA', largura: 300, altura: 100 };
+
+  it('põe a logo em cabecalho.logo', () => {
+    expect(construirDocumento(rascunho(), corporativa, logo).cabecalho.logo).toEqual(logo);
+  });
+
+  it('sem o terceiro argumento, ou com null, a logo é null', () => {
+    expect(construirDocumento(rascunho(), corporativa).cabecalho.logo).toBeNull();
+    expect(construirDocumento(rascunho(), corporativa, null).cabecalho.logo).toBeNull();
+  });
+
+  it('a logo não muda o resto do documento', () => {
+    const com = construirDocumento(rascunho(), corporativa, logo);
+    const sem = construirDocumento(rascunho(), corporativa);
+    expect({ ...com, cabecalho: { ...com.cabecalho, logo: null } }).toEqual(sem);
+  });
+});
+
 describe('construirDocumento com resultado', () => {
   const d = rascunho({ resultado: resultado() });
   const modelo = construirDocumento(d, corporativa);
@@ -398,5 +423,38 @@ describe('construirDocumento com resultado', () => {
     const antes = JSON.stringify(d);
     construirDocumento(d, corporativa);
     expect(JSON.stringify(d)).toBe(antes);
+  });
+});
+
+describe('textosDoDocumento', () => {
+  const modelo = modeloDeVolume({ participantes: 3, encaminhamentos: 2 });
+  const textos = textosDoDocumento(modelo);
+
+  it('traz título, cabeçalho, cabeçalhos e células de tabela, aviso de minuta e rodapé', () => {
+    expect(textos).toContain(modelo.titulo);
+    expect(textos).toEqual(expect.arrayContaining(modelo.cabecalho.linhas));
+    expect(textos).toEqual(expect.arrayContaining(['Ação', 'Responsável', 'Prazo', 'Status']));
+    expect(textos).toContain('Participante de volume nº 001 — João Ação');
+    expect(textos).toContain('Resumo');
+    expect(textos).toContain(AVISO_MINUTA);
+    expect(textos.some((t) => t.startsWith('Página '))).toBe(true);
+  });
+
+  it('junta as partes de cada parágrafo e de cada item de lista, com a lacuna no lugar', () => {
+    expect(textos).toContain(
+      'A reunião ocorreu em [PREENCHER: local] e tratou do orçamento anual.',
+    );
+    expect(textos).toContain('Aprovar o orçamento');
+  });
+
+  it('nunca inclui o rodapé interno (só da tela), que este modelo tem', () => {
+    expect(modelo.rodapeInterno).not.toBeNull();
+    expect(textos.join(' ')).not.toContain(modelo.rodapeInterno);
+  });
+
+  it('contarPreencher sobre textosDoDocumento: paridade com a contagem por bloco no volume', () => {
+    // Uma lacuna no resumo; cabeçalhos de tabela, títulos de seção, aviso e rodapé não têm.
+    expect(contarPreencher(modelo)).toBe(1);
+    expect(contarPreencher(modeloDeVolume({ participantes: 200, encaminhamentos: 200 }))).toBe(1);
   });
 });

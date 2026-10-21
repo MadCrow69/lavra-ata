@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -6,6 +6,7 @@ import { ErroProvedor, erroProvedor } from '../../ai/errors';
 import { KeysProvider, useKeys } from '../../ai/KeysContext';
 import { criarKeyStore } from '../../ai/keys';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
+import { erroSemCredito } from '../../ai/providers/comum';
 import { MODELOS, URL_CHAVE } from '../../config/models';
 import { CHAVES } from '../../config/storage-keys';
 import { KeysModal } from './KeysModal';
@@ -239,6 +240,40 @@ describe('KeysModal', () => {
       ),
     ).toBeInTheDocument();
     expect(within(cartao('Google Gemini')).queryByText('Chave válida')).not.toBeInTheDocument();
+  });
+
+  it('conta sem crédito mostra a mensagem de saldo, não "verifique se copiou a chave inteira"', async () => {
+    const { user } = await montar({
+      testar: { openai: () => Promise.reject(erroSemCredito('openai', 429)) },
+    });
+    await user.type(campoChave('OpenAI'), CHAVE);
+    await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
+    const c = cartao('OpenAI');
+    expect(await within(c).findByText(/sem crédito ou saldo/)).toBeInTheDocument();
+    expect(within(c).queryByText(/verifique se copiou/)).not.toBeInTheDocument();
+  });
+
+  it('sem saldo: trocar o modelo mantém a mensagem de saldo; digitar outra chave a limpa', async () => {
+    const { user, store } = await montar();
+    await user.type(campoChave('OpenAI'), CHAVE);
+    // Como a geração faz ao receber 429 insufficient_quota (ver o teste do Workbench).
+    act(() => {
+      store.definirEstado('openai', CHAVE, 'invalida', true);
+    });
+    const c = cartao('OpenAI');
+    expect(within(c).getByText(/sem crédito ou saldo/)).toBeInTheDocument();
+
+    await user.selectOptions(
+      within(c).getByLabelText('Modelo'),
+      within(c).getByRole('option', { name: 'Outro modelo…' }),
+    );
+    await user.type(within(c).getByLabelText('Id do modelo'), 'modelo-digitado');
+    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-digitado', semCredito: true });
+    expect(within(c).getByText(/sem crédito ou saldo/)).toBeInTheDocument();
+
+    await user.type(campoChave('OpenAI'), '9');
+    expect(within(c).queryByText(/sem crédito ou saldo/)).not.toBeInTheDocument();
+    expect(store.listar()[0]?.semCredito).toBeUndefined();
   });
 
   it('erro de rede/limite mostra a mensagem do provedor, não "chave inválida"; texto com a chave é limpo', async () => {

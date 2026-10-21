@@ -10,3 +10,9 @@ export const ESPERA_SALVAR_RASCUNHO_MS = 500;
  * mudar um exige mudar o outro.
  */
 export const LARGURA_CARTOES_REM = 40;
+
+/**
+ * Espera, em ms, antes de revogar a URL de objeto de um download: revogar na hora cancela o
+ * arquivo em alguns navegadores.
+ */
+export const ESPERA_REVOGAR_URL_MS = 10_000;

@@ -1,4 +1,5 @@
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
+import { plural } from '../../ui/plural';
 
 export interface LinhaParticipante {
   nome: string;
@@ -39,10 +40,6 @@ export function normalizarBusca(texto: string): string {
 export function contarRepetidos(novos: string[], existentes: string[]): number {
   const conhecidos = new Set(existentes.map(normalizarBusca));
   return novos.filter((nome) => conhecidos.has(normalizarBusca(nome))).length;
-}
-
-function plural(n: number, singular: string, pluralForma: string): string {
-  return n === 1 ? singular : pluralForma;
 }
 
 export interface ResumoAdicao {
