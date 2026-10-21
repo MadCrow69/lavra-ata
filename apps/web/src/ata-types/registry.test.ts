@@ -118,6 +118,54 @@ describe('problemasDoRegistro', () => {
     expect(problemas).toHaveLength(1);
     expect(problemas[0]).toContain('motivo');
   });
+
+  it('visivelSe que testa um id com `in` ou enumera os dados também é problema (Proxy: has e ownKeys)', () => {
+    const comIn = comCampo(TIPO_DE_TESTE, 'motivo', {
+      visivelSe: (dados) => 'codigo' in dados,
+    });
+    const problemasIn = problemasDoRegistro([comIn]);
+    expect(problemasIn).toHaveLength(1);
+    expect(problemasIn[0]).toContain('codigo');
+
+    for (const leitura of [
+      (dados: Record<string, string>) => Object.keys(dados).length > 0,
+      (dados: Record<string, string>) => Object.entries(dados).length > 0,
+      (dados: Record<string, string>) => ({ ...dados }).natureza === 'x',
+    ]) {
+      const problemas = problemasDoRegistro([
+        comCampo(TIPO_DE_TESTE, 'motivo', { visivelSe: leitura }),
+      ]);
+      expect(problemas).toHaveLength(1);
+      expect(problemas[0]).toContain('motivo');
+    }
+  });
+
+  it('`in` com id de camposNoPrompt continua permitido', () => {
+    const copia = comCampo(TIPO_DE_TESTE, 'motivo', {
+      visivelSe: (dados) => 'natureza' in dados && dados.natureza === 'extraordinaria',
+    });
+    expect(problemasDoRegistro([copia])).toEqual([]);
+  });
+
+  it('extra de participante enviado à IA cujo visivelSe lê campo fora de camposNoPrompt é problema', () => {
+    const copia: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+        c.id === 'vinculo' ? { ...c, visivelSe: (dados) => dados.codigo === 'x' } : c,
+      ),
+    };
+    const problemas = problemasDoRegistro([copia]);
+    expect(problemas).toHaveLength(1);
+    expect(problemas[0]).toContain('vinculo');
+    // Um extra que NÃO vai para a IA pode ler qualquer campo: a IA nunca vê o resultado.
+    const naoEnviado: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+        c.id === 'fracao' ? { ...c, visivelSe: (dados) => dados.codigo === 'x' } : c,
+      ),
+    };
+    expect(problemasDoRegistro([naoEnviado])).toEqual([]);
+  });
 });
 
 describe('problemaDoCampo', () => {

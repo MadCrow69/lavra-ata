@@ -22,6 +22,7 @@ pnpm test                       # Vitest, com no máximo 4 workers
 pnpm build                      # build de todos os pacotes
 pnpm --filter @lavra/web e2e    # E2E (Playwright) contra o build; exige `pnpm build` antes
 pnpm --filter @lavra/web cobertura:fontes   # regera a cobertura de caracteres das fontes do PDF
+pnpm --filter @lavra/web metricas:fontes    # regera as métricas do Inter usadas no teste de largura das colunas
 ```
 
 O `pnpm dev` não existe na raiz; use o filtro do pacote, como acima.
@@ -31,6 +32,8 @@ Na primeira vez, instale o navegador do E2E: `pnpm --filter @lavra/web exec play
 ### Cobertura de caracteres das fontes do PDF
 
 O aviso "caracteres que não existem na fonte do PDF" se baseia em `apps/web/src/export/pdf/cobertura-gerada.ts`, **gerado** dos mapas de caracteres (cmap) dos `.woff` que o PDF embute. Não edite o arquivo à mão e não o copie do `unicode-range` do pacote da fonte, que declara pontos sem desenho. Rode `pnpm --filter @lavra/web cobertura:fontes` e commite o resultado **sempre que trocar ou atualizar uma fonte do PDF** (inclusive subir a versão de `@fontsource/inter` ou `@fontsource/source-serif-4`); o teste `gerar-cobertura-fontes.test.ts` reprova se o arquivo estiver desatualizado.
+
+O mesmo vale para `apps/web/src/test/metricas-inter.gerada.ts` (avanço de cada caractere do Inter regular e negrito, usado por `colunas-a4.test.ts` para provar que o cabeçalho e as opções de cada coluna de participantes cabem no A4): rode `pnpm --filter @lavra/web metricas:fontes` ao trocar a fonte do corpo; `gerar-metricas-fontes.test.ts` reprova se estiver desatualizado.
 
 ### Testes com teto de workers
 

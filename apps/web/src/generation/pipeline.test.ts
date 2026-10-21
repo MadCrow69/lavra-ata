@@ -1,6 +1,7 @@
 import { createMaskMap, mask } from '@lavra/pii-br';
 import { describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../ata-types/corporativa';
+import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { ErroCadeia, ErroProvedor, erroProvedor } from '../ai/errors';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../ai/types';
 import type { AtaDraft, Bloco, Encaminhamento, Participante, ResultadoAta } from '../domain/draft';
@@ -456,5 +457,97 @@ describe('normalizarResultado', () => {
       { ...corporativa, temEncaminhamentos: false },
     );
     expect(r.encaminhamentos).toEqual([]);
+  });
+});
+
+describe('gerarAta: extras de participante', () => {
+  const UNIDADE = 'Apto 101';
+  const FRACAO = '0,0125';
+  const respostaDoTeste = () => ({
+    secoes: Object.fromEntries(TIPO_DE_TESTE.secoes.map((s) => [s.chave, []])),
+    encaminhamentos: [],
+  });
+  const dTeste = (parcial: Partial<Participante> = {}): AtaDraft => ({
+    ...rascunho(),
+    tipoId: TIPO_DE_TESTE.id,
+    dados: { data: '2026-10-14', natureza: 'ordinaria', modalidade: 'hibrida' },
+    participantes: [
+      {
+        ...ANA,
+        papel: '',
+        extras: { unidade: UNIDADE, vinculo: 'proprietario', fracao: FRACAO },
+        ...parcial,
+      },
+    ],
+    transcricao: 'Ana: concordo.',
+  });
+
+  it('extras que não vão para a IA não saem do navegador', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(dTeste(), TIPO_DE_TESTE, CADEIA, sinal(), opcoes);
+    const enviado = `${pedidos[0]?.sistema ?? ''}\n${pedidos[0]?.usuario ?? ''}`;
+    expect(enviado).toContain('Ana Souza — Proprietário(a) — presente');
+    expect(enviado).not.toContain(UNIDADE);
+    expect(enviado).not.toContain(FRACAO);
+  });
+
+  it('CPF digitado no nome chega mascarado', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(dTeste({ nome: `Ana ${CPF}` }), TIPO_DE_TESTE, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Ana [CPF_1]');
+    expect(usuario).not.toContain(CPF);
+  });
+
+  it('CPF digitado em um extra que não segue não aparece, nem como CPF nem como marcador', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(
+      dTeste({ extras: { unidade: CPF, vinculo: 'proprietario' } }),
+      TIPO_DE_TESTE,
+      CADEIA,
+      sinal(),
+      opcoes,
+    );
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).not.toContain(CPF);
+    expect(usuario).not.toContain('52998224725');
+    // O texto fixo do prompt cita "[CPF_1]" como exemplo: confere só dos dados em diante.
+    expect(usuario.slice(0, usuario.indexOf('Transcrição'))).not.toMatch(/\[CPF_\d+\]/);
+    expect(usuario).toContain('<transcricao>\nAna: concordo.\n</transcricao>');
+  });
+
+  it('extra marcado para a IA segue, mas mascarado', async () => {
+    const tipo = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: [
+        ...TIPO_DE_TESTE.camposParticipante,
+        {
+          id: 'procuracao',
+          rotulo: 'Procuração',
+          tipo: 'texto' as const,
+          obrigatorio: false,
+          enviarParaIA: true,
+        },
+      ],
+    };
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(
+      dTeste({ extras: { vinculo: 'procurador', procuracao: `outorgada por ${CPF}` } }),
+      tipo,
+      CADEIA,
+      sinal(),
+      opcoes,
+    );
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Ana Souza — Procurador(a) — outorgada por [CPF_1] — presente');
+    expect(usuario).not.toContain(CPF);
   });
 });

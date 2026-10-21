@@ -107,14 +107,23 @@ describe('definicaoPdf: tabelas', () => {
     expect(no.fontSize).toBe(TIPOGRAFIA_DOCUMENTO.tabelaPt);
   });
 
+  it('participantes: larguras por peso da coluna (corporativa 43% · 29% · 28%)', () => {
+    const { table } = tabelaComCabecalho(def, 'Presença');
+    expect(table.widths).toEqual(['43%', '29%', '28%']);
+    expect(table.body.map((linha) => achatar(linha[0]))).toContain('Łukasz Żółć');
+  });
+
   it('tabela sem larguras → "*" em cada coluna; cabeçalho em negrito', () => {
-    const { table, no } = tabelaComCabecalho(def, 'Presença');
+    const sintetico: DocumentModel = {
+      ...volume,
+      blocos: [{ tipo: 'tabela', colunas: ['Item', 'Valor', 'Nota'], linhas: [['a', 'b', 'c']] }],
+    };
+    const { table, no } = tabelaComCabecalho(definicaoPdf(sintetico), 'Valor');
     expect(table.widths).toEqual(['*', '*', '*']);
     expect(table.headerRows).toBe(1);
     expect(table.dontBreakRows).toBe(true);
     expect(table.body[0]?.every((celula) => ehObj(celula) && celula.bold === true)).toBe(true);
     expect(no.layout).toBe('lightHorizontalLines');
-    expect(table.body.map((linha) => achatar(linha[0]))).toContain('Łukasz Żółć');
   });
 });
 

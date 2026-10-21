@@ -71,22 +71,23 @@ export interface AtaTypeDefinition {
   /**
    * Campos do formulário enviados à IA como contexto (ex.: data, modalidade). Só metadados não
    * sensíveis: os demais (organização, local, condução…) vão direto do formulário para o documento.
-   * A cópia enviada leva SÓ estes campos: o `visivelSe` deles só pode depender de campos daqui.
+   * A cópia enviada leva SÓ estes campos: o `visivelSe` deles, e o dos extras de participante com
+   * `enviarParaIA`, só pode depender de campos daqui.
    */
   camposNoPrompt: string[];
   /** Regras de prompt específicas do tipo (as comuns ficam em `regras-comuns.ts`). */
   regrasPrompt: string[];
   titulo: (dados: Record<string, string>) => string;
-  /** Texto fixo de abertura; dado ausente vira `[PREENCHER: …]`. */
   /**
    * Linhas do cabeçalho da ata (organização, data, horário, modalidade, local…), só com o que já
    * foi informado: o que falta não aparece (as lacunas `[PREENCHER]` ficam no preâmbulo).
    */
   cabecalho: (d: EntradaDoDocumento) => string[];
+  /** Texto fixo de abertura; dado ausente vira `[PREENCHER: …]`. */
   preambulo: (d: EntradaDoDocumento) => string;
   fecho: (d: EntradaDoDocumento) => string;
   assinaturas: (d: EntradaDoDocumento) => GrupoAssinaturas[];
-  /** Frases impressas depois das assinaturas, antes do aviso de minuta. */
+  /** Frases impressas depois do aviso de minuta (um aviso por frase), no fim do documento. */
   avisosFinais?: (d: EntradaDoDocumento) => string[];
   resumoDosParticipantes?: (
     d: Pick<AtaDraft, 'dados' | 'participantes'>,

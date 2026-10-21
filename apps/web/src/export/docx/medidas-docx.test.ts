@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { LARGURAS_ENCAMINHAMENTOS } from '../../config/documento';
+import {
+  A4_PT,
+  LARGURAS_ENCAMINHAMENTOS,
+  LARGURA_UTIL_PT,
+  PAGINA_DOCUMENTO,
+} from '../../config/documento';
 import { A4_DXA, larguraUtilDxa, largurasDxa, ptParaDxa, ptParaPx } from './medidas-docx';
 
 const soma = (n: readonly number[]) => n.reduce((a, b) => a + b, 0);
@@ -7,6 +12,17 @@ const soma = (n: readonly number[]) => n.reduce((a, b) => a + b, 0);
 describe('medidas do DOCX', () => {
   it('A4 em vinte avos de ponto', () => {
     expect(A4_DXA).toEqual({ largura: 11906, altura: 16838 });
+  });
+
+  it('o A4 em dxa é o A4 em pt (fonte única) arredondado para o inteiro do Word', () => {
+    expect(A4_DXA.largura).toBe(Math.round(A4_PT.largura * 20));
+    expect(A4_DXA.altura).toBe(Math.round(A4_PT.altura * 20));
+  });
+
+  it('LARGURA_UTIL_PT é a largura do A4 menos as margens (≈ 483,28 pt)', () => {
+    expect(LARGURA_UTIL_PT).toBeCloseTo(483.28, 2);
+    expect(LARGURA_UTIL_PT).toBeCloseTo(A4_PT.largura - 2 * PAGINA_DOCUMENTO.margemPt, 10);
+    expect(Math.abs(larguraUtilDxa() - LARGURA_UTIL_PT * 20)).toBeLessThan(1);
   });
 
   it('converte pt em dxa (×20) e em px (×96/72)', () => {

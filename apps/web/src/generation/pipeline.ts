@@ -6,12 +6,20 @@ import {
   validateOutput,
   type MaskMap,
 } from '@lavra/pii-br';
+import { ehVisivel } from '../ata-types/registry';
 import type { AtaTypeDefinition } from '../ata-types/types';
 import { gerarComFallback, type OpcoesCadeia } from '../ai/chain';
 import { erroProvedor } from '../ai/errors';
 import { ehRegistro } from '../ai/providers/comum';
 import type { FalhaProvedor, ProviderConfig, ResultadoCadeia } from '../ai/types';
-import type { AtaDraft, Atribuicao, Bloco, Encaminhamento, ResultadoAta } from '../domain/draft';
+import type {
+  AtaDraft,
+  Atribuicao,
+  Bloco,
+  Encaminhamento,
+  Participante,
+  ResultadoAta,
+} from '../domain/draft';
 import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { nomeComArtigo } from '../features/privacy/rotulos';
 import { normalizarBlocos, normalizarEncaminhamentos, normalizarResultado } from './normalize';
@@ -63,10 +71,23 @@ class Mascarador {
 /**
  * Cópia do rascunho com tudo que vai para a IA mascarado: transcrição primeiro (é ela que define
  * a numeração), depois metadados, pauta e participantes. A cópia leva SÓ os campos de
- * `camposNoPrompt` (mascarados); demais campos, justificativas, extras, resultado e mapa não seguem.
+ * `camposNoPrompt` e os extras de participante com `enviarParaIA` (todos mascarados); demais
+ * campos, justificativas, extras, resultado e mapa não seguem.
  */
 function rascunhoMascarado(d: AtaDraft, tipo: AtaTypeDefinition, m: Mascarador): AtaDraft {
   const transcricao = m.mascarar(d.transcricao);
+  // Dos extras de participante só seguem os marcados com `enviarParaIA` (e visíveis), mascarados;
+  // unidade, fração, participação etc. ficam no navegador e nem entram no mapa de marcadores.
+  const idsDosExtras = tipo.camposParticipante
+    .filter((c) => c.enviarParaIA === true && ehVisivel(c, d.dados))
+    .map((c) => c.id);
+  const extrasParaIA = (p: Participante): Record<string, string> =>
+    Object.fromEntries(
+      idsDosExtras.flatMap((id) => {
+        const valor = p.extras[id];
+        return valor === undefined ? [] : [[id, m.mascarar(valor)]];
+      }),
+    );
   const dados: Record<string, string> = {};
   for (const id of tipo.camposNoPrompt) {
     const valor = d.dados[id];
@@ -80,9 +101,10 @@ function rascunhoMascarado(d: AtaDraft, tipo: AtaTypeDefinition, m: Mascarador):
     participantes: d.participantes.map((p) => ({
       ...p,
       nome: m.mascarar(p.nome),
-      papel: m.mascarar(p.papel),
+      // Tipo sem coluna de papel: o que estiver ali não é enviado, então nem entra no mapa.
+      papel: tipo.rotuloPapel === null ? '' : m.mascarar(p.papel),
       justificativa: '',
-      extras: {},
+      extras: extrasParaIA(p),
     })),
     mapa: null,
     resultado: null,

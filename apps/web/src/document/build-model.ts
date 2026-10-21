@@ -23,6 +23,7 @@ import {
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { ROTULO_CURTO } from '../config/models';
 import type { DocBloco, DocumentModel, Inline, LogoDoc } from './model';
+import { largurasPorPeso } from './larguras';
 import { partesDoRodape } from './rodape';
 
 /** Lacuna que a pessoa completa à mão: `[PREENCHER: o que falta]`. Sempre em maiúsculas. */
@@ -127,6 +128,7 @@ function tabelaDeParticipantes(d: EntradaDoDocumento, tipo: AtaTypeDefinition): 
     tipo: 'tabela',
     colunas: colunas.map((c) => c.rotulo),
     linhas: d.participantes.map((p) => colunas.map((c) => celula(p, c.id, c.campo))),
+    larguras: largurasPorPeso(colunas.map((c) => c.peso)),
     colunaPresenca: colunas.findIndex((c) => c.id === 'presenca'),
     presencas: d.participantes.map((p) => p.presenca),
   };
@@ -181,10 +183,27 @@ function rodapeInterno(blocos: DocBloco[], resultado: ResultadoAta | null): stri
 }
 
 /**
+ * Um bloco de assinaturas por grupo com pessoas, cada um sob o título do grupo (se tiver). O grupo
+ * sem título não leva `grupo`; o sem pessoas some por inteiro (nem o título aparece).
+ */
+function blocosDeAssinaturas(tipo: AtaTypeDefinition, d: EntradaDoDocumento): DocBloco[] {
+  return tipo.assinaturas(d).flatMap(({ titulo, pessoas }): DocBloco[] => {
+    if (pessoas.length === 0) return [];
+    return titulo
+      ? [
+          { tipo: 'subtitulo', texto: titulo },
+          { tipo: 'assinaturas', pessoas, grupo: titulo },
+        ]
+      : [{ tipo: 'assinaturas', pessoas }];
+  });
+}
+
+/**
  * Monta o documento da ata. Antes de gerar (sem `resultado`) traz só o que o formulário já tem,
  * mais um placeholder no lugar das seções. Depois, preâmbulo, seções na ordem do tipo (as vazias
- * não aparecem), encaminhamentos, fecho, assinaturas e o aviso de minuta. A `logo` (já rasterizada)
- * vai só para o cabeçalho: nunca faz parte do rascunho nem do que a IA recebe.
+ * não aparecem), encaminhamentos, fecho, assinaturas por grupo, o aviso de minuta e os avisos
+ * finais do tipo. A `logo` (já rasterizada) vai só para o cabeçalho: nunca faz parte do rascunho
+ * nem do que a IA recebe.
  */
 export function construirDocumento(
   d: EntradaDoDocumento,
@@ -237,10 +256,11 @@ export function construirDocumento(
       );
     }
     blocos.push(paragrafo(tipo.fecho(d)));
-    // Todos os grupos num único bloco, como antes; a apresentação por grupo vem no Task 2.
-    const pessoas = tipo.assinaturas(d).flatMap((g) => g.pessoas);
-    if (pessoas.length > 0) blocos.push({ tipo: 'assinaturas', pessoas });
+    blocos.push(...blocosDeAssinaturas(tipo, d));
     blocos.push({ tipo: 'aviso', texto: AVISO_MINUTA });
+    blocos.push(
+      ...(tipo.avisosFinais?.(d).map((texto): DocBloco => ({ tipo: 'aviso', texto })) ?? []),
+    );
   }
 
   return {

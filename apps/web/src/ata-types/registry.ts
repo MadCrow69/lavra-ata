@@ -108,19 +108,43 @@ export function colunasDeParticipantes(
   ];
 }
 
-/** `dados` que lança ao ler um id fora de `permitidos` (a cópia enviada à IA só tem esses). */
+/**
+ * `dados` que lança ao tocar um id fora de `permitidos` (a cópia enviada à IA só tem esses): ler
+ * (`dados.x`), testar (`'x' in dados`) ou enumerar (`Object.keys`, `Object.entries`, espalhar),
+ * porque enumerar veria só a cópia e esconderia a dependência dos demais campos.
+ */
 function dadosSoDoPrompt(permitidos: ReadonlySet<string>): Record<string, string> {
+  const conferir = (chave: string | symbol): void => {
+    if (typeof chave === 'string' && !permitidos.has(chave)) {
+      throw new Error(`lê “${chave}”, que não está em camposNoPrompt`);
+    }
+  };
   return new Proxy<Record<string, string>>(
     {},
     {
       get(_alvo, chave) {
-        if (typeof chave === 'string' && !permitidos.has(chave)) {
-          throw new Error(`lê “${chave}”, que não está em camposNoPrompt`);
-        }
+        conferir(chave);
         return undefined;
+      },
+      has(_alvo, chave) {
+        conferir(chave);
+        return false;
+      },
+      ownKeys() {
+        throw new Error('enumera os dados, que a cópia enviada à IA não garante');
       },
     },
   );
+}
+
+/** Mensagem de falha de um `visivelSe` executado sobre `dadosSoDoPrompt`, ou `null` se não houve. */
+function falhaDoVisivelSe(campo: CampoDef, permitidos: ReadonlySet<string>): string | null {
+  try {
+    campo.visivelSe?.(dadosSoDoPrompt(permitidos));
+    return null;
+  } catch (erro) {
+    return erro instanceof Error ? erro.message : 'falha desconhecida';
+  }
 }
 
 /** As `opcoes` de um contêm as do outro (em qualquer direção). */
@@ -135,7 +159,8 @@ function opcoesContidas(a: CampoDef, b: CampoDef): boolean {
  * `camposParticipante`) tem o mesmo `tipo` e, se `escolha`, opções contidas umas nas outras:
  * mesmo id = mesmo significado, para a troca de tipo preservar o valor. (b) Ids de `campos` e de
  * `camposParticipante` não colidem. (c) `campoComplemento` é id de extra de texto. (d) Todo id de
- * `camposNoPrompt` existe em `campos` e o `visivelSe` desses campos só lê ids dessa lista.
+ * `camposNoPrompt` existe em `campos` e o `visivelSe` desses campos, e o dos extras de participante
+ * com `enviarParaIA`, só toca ids dessa lista (ler, testar com `in` ou enumerar).
  */
 export function problemasDoRegistro(tipos: readonly AtaTypeDefinition[]): string[] {
   const problemas: string[] = [];
@@ -167,14 +192,13 @@ export function problemasDoRegistro(tipos: readonly AtaTypeDefinition[]): string
         problemas.push(`${tipo.id}: camposNoPrompt cita “${id}”, que não existe em campos.`);
       }
     }
-    for (const campo of tipo.campos) {
-      if (!noPrompt.has(campo.id) || !campo.visivelSe) continue;
-      try {
-        campo.visivelSe(dadosSoDoPrompt(noPrompt));
-      } catch (erro) {
-        const motivo = erro instanceof Error ? erro.message : 'falha desconhecida';
-        problemas.push(`${tipo.id}: o visivelSe de “${campo.id}” ${motivo}.`);
-      }
+    const lidosPelaIA = [
+      ...tipo.campos.filter((c) => noPrompt.has(c.id)),
+      ...tipo.camposParticipante.filter((c) => c.enviarParaIA === true),
+    ];
+    for (const campo of lidosPelaIA) {
+      const motivo = falhaDoVisivelSe(campo, noPrompt);
+      if (motivo !== null) problemas.push(`${tipo.id}: o visivelSe de “${campo.id}” ${motivo}.`);
     }
   }
 

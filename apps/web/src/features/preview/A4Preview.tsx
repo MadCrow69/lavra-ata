@@ -227,8 +227,13 @@ function assinaturaDoBloco(bloco: DocBloco): string {
     case 'tabela':
       return `tabela:${bloco.colunas.join('|')}`;
     case 'assinaturas':
-      return `assinaturas:${bloco.pessoas.map((p) => p.nome).join('|')}`;
+      return `assinaturas:${bloco.grupo ?? ''}:${bloco.pessoas.map((p) => p.nome).join('|')}`;
   }
+}
+
+/** Nome acessível do grupo de assinaturas; dois grupos nunca têm o mesmo nome. */
+function nomeDoGrupoDeAssinaturas(grupo: string | undefined): string {
+  return grupo === undefined ? 'Assinaturas' : `Assinaturas — ${grupo}`;
 }
 
 type DocSecao = Extract<DocBloco, { tipo: 'secao' }>;
@@ -420,7 +425,12 @@ function Blocos({
       case 'assinaturas': {
         const chavesPessoas = chavesUnicas(bloco.pessoas.map((p) => `${p.nome}|${p.papel}`));
         nos.push(
-          <div key={chave} className={styles.assinaturas} role="group" aria-label="Assinaturas">
+          <div
+            key={chave}
+            className={styles.assinaturas}
+            role="group"
+            aria-label={nomeDoGrupoDeAssinaturas(bloco.grupo)}
+          >
             {bloco.pessoas.map((pessoa, j) => (
               <div key={chavesPessoas[j]} className={styles.assinatura}>
                 <span className={styles.linhaAssinatura} aria-hidden="true" />

@@ -250,16 +250,73 @@ describe('schemas', () => {
 });
 
 describe('montarPrompt com um tipo sem coluna de papel', () => {
-  it('lista participantes só com nome e presença, sem o papel digitado', () => {
-    const d = {
-      ...rascunho(),
-      tipoId: TIPO_DE_TESTE.id,
-      dados: { data: '2026-10-14', natureza: 'ordinaria', modalidade: 'hibrida' },
-      participantes: [participante('p1', { papel: 'Cargo que não deve seguir' })],
-    };
-    const { usuario } = montarPrompt(TIPO_DE_TESTE, d, 'texto');
-    expect(usuario).toContain('Participantes (nome — presença):\n- Ana Souza — presente');
-    expect(usuario).not.toContain('Cargo que não deve seguir');
+  const dados = { data: '2026-10-14', natureza: 'ordinaria', modalidade: 'hibrida' };
+  const extras = { unidade: 'Apto 101', vinculo: 'proprietario', fracao: '0,0125' };
+  const d = (parcial: Partial<AtaDraft> = {}): AtaDraft => ({
+    ...rascunho(),
+    tipoId: TIPO_DE_TESTE.id,
+    dados,
+    participantes: [participante('p1', { papel: 'Cargo que não deve seguir', extras })],
+    ...parcial,
+  });
+
+  it('linha do participante: nome, extras que vão para a IA (rótulo da opção) e presença', () => {
+    const { usuario } = montarPrompt(TIPO_DE_TESTE, d(), 'texto');
+    expect(usuario).toContain(
+      'Participantes (nome — vínculo — presença):\n- Ana Souza — Proprietário(a) — presente',
+    );
     expect(usuario).toContain('Modalidade: Híbrida');
+  });
+
+  it('o papel digitado, a unidade e a fração ideal nunca vão (nem no sistema)', () => {
+    const { sistema, usuario } = montarPrompt(TIPO_DE_TESTE, d(), 'texto');
+    for (const texto of ['Cargo que não deve seguir', 'Apto 101', '0,0125']) {
+      expect(sistema + usuario).not.toContain(texto);
+    }
+  });
+
+  it('extra vazio ou valor fora das opções some da linha', () => {
+    const { usuario } = montarPrompt(
+      TIPO_DE_TESTE,
+      d({
+        participantes: [
+          participante('p1', { nome: 'Ana Souza', extras: { vinculo: '' } }),
+          participante('p2', { nome: 'Bruno Lima', extras: { vinculo: 'inexistente' } }),
+        ],
+      }),
+      'texto',
+    );
+    expect(usuario).toContain('- Ana Souza — presente');
+    expect(usuario).toContain('- Bruno Lima — presente');
+    expect(usuario).not.toContain('inexistente');
+  });
+
+  it('pauta sob o título do tipo ("Ordem do dia")', () => {
+    const { usuario } = montarPrompt(TIPO_DE_TESTE, d({ pauta: ['Item um'] }), 'texto');
+    expect(usuario).toContain('Ordem do dia:\n1. Item um');
+    expect(usuario).not.toContain('Pauta:');
+  });
+
+  it('a seção regerada também usa as colunas e o título do tipo', () => {
+    const { usuario } = montarPromptSecao(
+      TIPO_DE_TESTE,
+      d({ pauta: ['Item um'] }),
+      'abertura',
+      '',
+      null,
+      'texto',
+    );
+    expect(usuario).toContain('Participantes (nome — vínculo — presença)');
+    expect(usuario).toContain('Ordem do dia:');
+  });
+});
+
+describe('montarPrompt na corporativa: o texto continua o mesmo', () => {
+  it('cabeçalho de participantes e título da pauta', () => {
+    const { usuario } = montarPrompt(corporativa, rascunho(), 'x');
+    expect(usuario).toContain('\n\nPauta:\n1. Orçamento de 2027');
+    expect(usuario).toContain(
+      '\n\nParticipantes (nome — cargo / empresa — presença):\n- Ana Souza',
+    );
   });
 });

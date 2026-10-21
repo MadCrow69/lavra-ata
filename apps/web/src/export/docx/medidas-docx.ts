@@ -1,21 +1,21 @@
-import { PAGINA_DOCUMENTO } from '../../config/documento';
+import { A4_PT, PAGINA_DOCUMENTO } from '../../config/documento';
 
 /*
  * Medidas do DOCX: o Word conta em vinte avos de ponto (dxa/twips), exceto a imagem, que usa
  * pixels a 96 por polegada. Puro e sem a biblioteca `docx`.
  */
 
-/** Página A4 em dxa (210 × 297 mm). */
-export const A4_DXA = { largura: 11906, altura: 16838 } as const;
-
-/** Pixels a 96 px/pol. (a conversão do PDF e do DOCX é a mesma). */
-export { ptParaPx } from '../../document/medidas';
-
 const DXA_POR_PT = 20;
 
 export function ptParaDxa(pt: number): number {
   return Math.round(pt * DXA_POR_PT);
 }
+
+/** Página A4 em dxa (210 × 297 mm = 11906 × 16838, os inteiros do Word), derivada de `A4_PT`. */
+export const A4_DXA = { largura: ptParaDxa(A4_PT.largura), altura: ptParaDxa(A4_PT.altura) };
+
+/** Pixels a 96 px/pol. (a conversão do PDF e do DOCX é a mesma). */
+export { ptParaPx } from '../../document/medidas';
 
 /** Largura da área de texto: a página menos as duas margens laterais. */
 export function larguraUtilDxa(): number {
