@@ -1,6 +1,7 @@
 import { dataOuNulo, prazoOuNulo, textoLimpo } from '../ata-types/texto-modelo';
 import { CELULA_VAZIA, RESPONSAVEL_A_DEFINIR } from '../config/documento';
 import { ROTULO_STATUS, type Encaminhamento } from '../domain/draft';
+import { semInvisiveis } from '../domain/texto-invisivel';
 import { plural } from '../ui/plural';
 
 export interface GrupoDeTarefas {
@@ -13,16 +14,13 @@ export interface GrupoDeTarefas {
 const COLACAO = 'pt-BR';
 const TITULO_TAREFAS = 'Tarefas por responsável';
 
-/** Invisíveis que não mudam o que a pessoa lê: U+200B–U+200D, U+2060 e U+FEFF. */
-const INVISIVEIS = /[\u200B-\u200D\u2060\uFEFF]/gu;
-
 /**
  * Texto em uma linha só: sem invisíveis, NFC, quebras de linha e espaços colapsados em um
  * espaço, aparado. Uma quebra vinda da IA não pode virar linha solta nem separador de grupo no
  * texto colado. Implementação única para título, ação, prazo livre e nome do responsável.
  */
 function umaLinha(texto: string | undefined): string {
-  return textoLimpo(texto).replace(INVISIVEIS, '').normalize('NFC').replace(/\s+/gu, ' ').trim();
+  return semInvisiveis(textoLimpo(texto)).normalize('NFC').replace(/\s+/gu, ' ').trim();
 }
 
 /** Grafia exibida do responsável. */

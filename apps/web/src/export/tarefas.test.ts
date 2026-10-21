@@ -66,14 +66,14 @@ describe('agruparPorResponsavel', () => {
     expect(a[1]?.itens.map((i) => i.acao)).toEqual(['1', '3']);
   });
 
-  it('empate real no localeCompare (hífen opcional é ignorado) segue a ordem de aparição', () => {
-    const comHifen = 'Ma\u00ADria';
-    expect('Maria'.localeCompare(comHifen, 'pt-BR')).toBe(0);
-    const ab = agruparPorResponsavel([tarefa(comHifen), tarefa('Maria')]);
+  it('empate real no localeCompare (junção de grafemas é ignorada) segue a ordem de aparição', () => {
+    const comJuncao = 'Ma\u034Fria';
+    expect('Maria'.localeCompare(comJuncao, 'pt-BR')).toBe(0);
+    const ab = agruparPorResponsavel([tarefa(comJuncao), tarefa('Maria')]);
     expect(ab).toHaveLength(2);
-    expect(ab.map((g) => g.responsavel)).toEqual([comHifen, 'Maria']);
-    const ba = agruparPorResponsavel([tarefa('Maria'), tarefa(comHifen)]);
-    expect(ba.map((g) => g.responsavel)).toEqual(['Maria', comHifen]);
+    expect(ab.map((g) => g.responsavel)).toEqual([comJuncao, 'Maria']);
+    const ba = agruparPorResponsavel([tarefa('Maria'), tarefa(comJuncao)]);
+    expect(ba.map((g) => g.responsavel)).toEqual(['Maria', comJuncao]);
   });
 
   it('caixa não separa: "ÁLVARO" e "álvaro" são um grupo com a primeira grafia', () => {
@@ -93,6 +93,13 @@ describe('agruparPorResponsavel', () => {
     const sem = agruparPorResponsavel([tarefa('\u200B'), tarefa('A\u200B definir')]);
     expect(sem).toHaveLength(1);
     expect(sem[0]?.semResponsavel).toBe(true);
+  });
+
+  it('formatação invisível (hífen suave, marca de direção) também não separa: um grupo só', () => {
+    const grupos = agruparPorResponsavel([tarefa('Maria'), tarefa('Ma­ria'), tarefa('Maria‎')]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0]?.responsavel).toBe('Maria');
+    expect(grupos[0]?.itens).toHaveLength(3);
   });
 
   it('quebra de linha no nome não cria grupo novo', () => {

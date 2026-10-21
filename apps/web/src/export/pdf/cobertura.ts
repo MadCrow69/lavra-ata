@@ -1,5 +1,6 @@
 import { textosDoDocumento } from '../../document/build-model';
 import type { DocBloco, DocumentModel } from '../../document/model';
+import { semInvisiveis } from '../../domain/texto-invisivel';
 import { COBERTURA_GERADA } from './cobertura-gerada';
 
 /**
@@ -65,12 +66,6 @@ export const SUBSTITUICOES_PDF: ReadonlyMap<number, string> = new Map([
   [0x2027, '·'],
 ]);
 
-/** Formatação invisível (`\p{Cf}`: U+00AD, U+200B–U+200F, U+2060–U+2069, U+FEFF…). */
-const FORMATACAO = /^\p{Cf}$/u;
-
-/** Seletores de variação (U+FE00–U+FE0F): não desenham nada sozinhos. */
-const ehSeletorDeVariacao = (ponto: number): boolean => ponto >= 0xfe00 && ponto <= 0xfe0f;
-
 /**
  * Texto como o PDF o imprime: NFC, sem formatação invisível nem seletor de variação, e com as
  * trocas de `SUBSTITUICOES_PDF`. `separarPorFonte` e `caracteresSemFonte` partem daqui, então o
@@ -78,10 +73,8 @@ const ehSeletorDeVariacao = (ponto: number): boolean => ponto >= 0xfe00 && ponto
  */
 export function prepararTextoPdf(texto: string): string {
   let saida = '';
-  for (const caractere of texto.normalize('NFC')) {
-    const ponto = caractere.codePointAt(0) ?? 0;
-    if (FORMATACAO.test(caractere) || ehSeletorDeVariacao(ponto)) continue;
-    saida += SUBSTITUICOES_PDF.get(ponto) ?? caractere;
+  for (const caractere of semInvisiveis(texto.normalize('NFC'))) {
+    saida += SUBSTITUICOES_PDF.get(caractere.codePointAt(0) ?? 0) ?? caractere;
   }
   return saida;
 }
