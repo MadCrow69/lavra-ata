@@ -198,7 +198,7 @@ function opcoesContidas(a: CampoDef, b: CampoDef): boolean {
  * Invariantes do registro; `[]` = ok. (a) Um id presente em 2+ tipos (em `campos` ou em
  * `camposParticipante`) tem o mesmo `tipo` e, se `escolha`, opções contidas umas nas outras:
  * mesmo id = mesmo significado, para a troca de tipo preservar o valor. (b) Ids de `campos` e de
- * `camposParticipante` não colidem. (c) `campoComplemento` é id de extra de texto. (d) Todo id de
+ * `camposParticipante` não colidem. (c) `campoComplemento` é id de extra de texto, sem `visivelSe`. (d) Todo id de
  * `camposNoPrompt` existe em `campos` e o `visivelSe` desses campos, e o dos extras de participante
  * com `enviarParaIA`, só toca ids dessa lista (ler, testar com `in`/`Object.hasOwn` ou enumerar).
  * (e) Com mais de um grupo de assinaturas (para uma entrada completa), todos têm título.
@@ -223,6 +223,10 @@ export function problemasDoRegistro(tipos: readonly AtaTypeDefinition[]): string
       if (extra?.tipo !== 'texto') {
         problemas.push(
           `${tipo.id}: campoComplemento “${tipo.campoComplemento}” não é um campo de participante de texto.`,
+        );
+      } else if (extra.visivelSe !== undefined) {
+        problemas.push(
+          `${tipo.id}: campoComplemento “${extra.id}” não pode ter visivelSe (o complemento colado ficaria escondido).`,
         );
       }
     }

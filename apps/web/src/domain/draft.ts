@@ -122,6 +122,8 @@ export type DraftAction =
       destino?: string;
     }
   | { type: 'preencherExtrasVazios'; campo: string; valor: string }
+  /** Desfaz um preenchimento em lote: apaga o extra `campo` dos participantes `ids`. */
+  | { type: 'limparExtra'; campo: string; ids: string[] }
   | { type: 'atualizarParticipante'; id: string; patch: Partial<Participante> }
   | { type: 'removerParticipante'; id: string }
   | { type: 'definirTranscricao'; texto: string }

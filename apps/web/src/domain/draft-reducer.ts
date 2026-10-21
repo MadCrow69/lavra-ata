@@ -1,4 +1,5 @@
 import { TIPO_PADRAO_ID } from '../ata-types/registry';
+import { textoLimpo } from '../ata-types/texto-modelo';
 import { calcularAdicao } from './participantes';
 import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } from './draft';
 
@@ -87,13 +88,26 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
         : { ...state, participantes: [...state.participantes, ...novos] };
     }
     case 'preencherExtrasVazios': {
-      const vazio = (p: Participante) => (p.extras[action.campo] ?? '').trim() === '';
+      const vazio = (p: Participante) => textoLimpo(p.extras[action.campo]) === '';
       if (!state.participantes.some(vazio)) return state;
       return {
         ...state,
         participantes: state.participantes.map((p) =>
           vazio(p) ? { ...p, extras: { ...p.extras, [action.campo]: action.valor } } : p,
         ),
+      };
+    }
+    case 'limparExtra': {
+      const alvo = new Set(action.ids);
+      return {
+        ...state,
+        participantes: state.participantes.map((p) => {
+          if (!alvo.has(p.id) || !(action.campo in p.extras)) return p;
+          const extras = Object.fromEntries(
+            Object.entries(p.extras).filter(([campo]) => campo !== action.campo),
+          );
+          return { ...p, extras };
+        }),
       };
     }
     case 'atualizarParticipante':

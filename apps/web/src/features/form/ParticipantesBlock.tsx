@@ -2,12 +2,14 @@ import { memo, useId, useMemo, useRef, useState, type Dispatch, type SubmitEvent
 import {
   camposFaltando,
   colunasDeParticipantes,
-  mensagemObrigatorio,
+  ehObrigatorio,
   problemaDoCampo,
   rotuloDaOpcao,
   rotuloDoCampo,
   type ColunaParticipante,
+  type ProblemaCampo,
 } from '../../ata-types/registry';
+import { textoLimpo } from '../../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
 import { LARGURA_CARTOES_REM } from '../../config/ui';
@@ -43,22 +45,26 @@ interface LinhaProps {
   colunas: ColunaParticipante[];
   /** Os dados da reunião decidem a obrigatoriedade e a validade dos extras (ver `mesmaLinha`). */
   dados: Record<string, string>;
+  /** Prefixo dos ids das descrições compartilhadas por coluna (uma linha de resumo por coluna). */
+  vaziosId: string;
   dispatch: Dispatch<DraftAction>;
 }
 
-/** Mensagem do problema do valor de um extra, ou `null`. Mesmo critério da lista "falta". */
-function erroDoExtra(
-  campo: CampoDef,
-  p: Participante,
-  dados: Record<string, string>,
-): string | null {
-  const problema = problemaDoCampo(campo, p.extras[campo.id], dados);
-  if (problema === null) return null;
-  return problema.tipo === 'vazio' ? mensagemObrigatorio(campo, dados) : problema.mensagem;
+function problemasDaLinha({ participante, colunas, dados }: LinhaProps): (ProblemaCampo | null)[] {
+  return colunas.map((c) =>
+    c.campo ? problemaDoCampo(c.campo, participante.extras[c.id], dados) : null,
+  );
 }
 
-function errosDaLinha({ participante, colunas, dados }: LinhaProps): (string | null)[] {
-  return colunas.map((c) => (c.campo ? erroDoExtra(c.campo, participante, dados) : null));
+function mesmoProblema(a: ProblemaCampo | null, b: ProblemaCampo | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.tipo === 'vazio' || b.tipo === 'vazio') return a.tipo === b.tipo;
+  return a.mensagem === b.mensagem;
+}
+
+/** Id da linha de resumo da coluna: é a descrição de toda célula vazia (obrigatória) dela. */
+function idDoResumoVazios(vaziosId: string, colunaId: string): string {
+  return `${vaziosId}-${colunaId}`;
 }
 
 function mesmasColunas(a: ColunaParticipante[], b: ColunaParticipante[]): boolean {
@@ -71,7 +77,7 @@ function mesmasColunas(a: ColunaParticipante[], b: ColunaParticipante[]): boolea
 
 /**
  * Uma linha só redesenha se mudou algo que ela mostra. `dados` muda a cada tecla de outro bloco:
- * ele só conta pelo que decide aqui (colunas visíveis e mensagens de erro dos extras); senão as
+ * ele só conta pelo que decide aqui (colunas visíveis e problemas dos extras); senão as
  * centenas de linhas redesenhariam a cada tecla digitada em "Dados da reunião".
  */
 function mesmaLinha(a: LinhaProps, b: LinhaProps): boolean {
@@ -79,30 +85,44 @@ function mesmaLinha(a: LinhaProps, b: LinhaProps): boolean {
     a.participante !== b.participante ||
     a.posicao !== b.posicao ||
     a.dispatch !== b.dispatch ||
+    a.vaziosId !== b.vaziosId ||
     !mesmasColunas(a.colunas, b.colunas)
   ) {
     return false;
   }
   if (a.dados === b.dados) return true;
-  const antes = errosDaLinha(a);
-  const depois = errosDaLinha(b);
-  return antes.every((erro, i) => erro === depois[i]);
+  const antes = problemasDaLinha(a);
+  const depois = problemasDaLinha(b);
+  return antes.every((problema, i) => mesmoProblema(problema, depois[i] ?? null));
 }
 
 interface CampoExtraProps {
   campo: CampoDef;
   valor: string;
   rotulo: string;
-  erro: string | null;
+  problema: ProblemaCampo | null;
+  /** Id da mensagem desta célula (só valor inválido) e o da descrição compartilhada (vazio). */
   erroId: string;
+  vazioId: string;
   onChange: (valor: string) => void;
 }
 
-function CampoExtra({ campo, valor, rotulo, erro, erroId, onChange }: CampoExtraProps) {
+function CampoExtra({
+  campo,
+  valor,
+  rotulo,
+  problema,
+  erroId,
+  vazioId,
+  onChange,
+}: CampoExtraProps) {
+  // Vazio é igual em toda a coluna: marca a célula e aponta para UMA descrição compartilhada.
+  // Só o valor inválido é específico da linha e leva texto próprio.
   const acessibilidade = {
     'aria-label': rotulo,
-    'aria-invalid': erro !== null,
-    'aria-describedby': erro === null ? undefined : erroId,
+    'aria-invalid': problema !== null,
+    'aria-describedby':
+      problema === null ? undefined : problema.tipo === 'vazio' ? vazioId : erroId,
   };
   return (
     <>
@@ -135,12 +155,12 @@ function CampoExtra({ campo, valor, rotulo, erro, erroId, onChange }: CampoExtra
           }}
         />
       )}
-      {erro === null ? null : (
+      {problema?.tipo === 'invalido' ? (
         <p id={erroId} className={styles.erroLinha}>
           <span aria-hidden="true">⚠ </span>
-          {erro}
+          {problema.mensagem}
         </p>
-      )}
+      ) : null}
     </>
   );
 }
@@ -154,7 +174,7 @@ const Linha = memo(function Linha(props: LinhaProps) {
   const nomeVazio = p.nome.trim() === '';
   const quem = nomeVazio ? `participante ${String(posicao)}` : p.nome;
   const baseId = useId();
-  const erros = errosDaLinha(props);
+  const problemas = problemasDaLinha(props);
 
   const celula = (coluna: ColunaParticipante, indice: number) => {
     switch (coluna.id) {
@@ -231,8 +251,9 @@ const Linha = memo(function Linha(props: LinhaProps) {
               campo={coluna.campo}
               valor={p.extras[coluna.id] ?? ''}
               rotulo={`${coluna.rotulo} do participante ${String(posicao)}`}
-              erro={erros[indice] ?? null}
+              problema={problemas[indice] ?? null}
               erroId={`${baseId}-${coluna.id}`}
+              vazioId={idDoResumoVazios(props.vaziosId, coluna.id)}
               onChange={(valor) => {
                 atualizar({ extras: { ...p.extras, [coluna.id]: valor } });
               }}
@@ -267,11 +288,22 @@ interface PreencherVaziosProps {
   rotulo: string;
   /** Quantos participantes estão sem valor neste campo. */
   vazios: number;
+  /** Quantos têm um valor que as opções do campo não oferecem (ex.: veio de outro tipo). */
+  invalidos: number;
+  /** Campo obrigatório: a contagem dos vazios já está na linha de resumo da coluna. */
+  obrigatorio: boolean;
   onAplicar: (valor: string) => void;
 }
 
 /** "Preencher os vazios — {campo}": aplica um valor só a quem ainda não tem (nunca sobrescreve). */
-function PreencherVazios({ campo, rotulo, vazios, onAplicar }: PreencherVaziosProps) {
+function PreencherVazios({
+  campo,
+  rotulo,
+  vazios,
+  invalidos,
+  obrigatorio,
+  onAplicar,
+}: PreencherVaziosProps) {
   const [valor, setValor] = useState('');
   const tituloId = useId();
   return (
@@ -295,6 +327,7 @@ function PreencherVazios({ campo, rotulo, vazios, onAplicar }: PreencherVaziosPr
         ))}
       </select>
       <Button
+        aria-label={`Aplicar — ${rotulo}`}
         disabled={vazios === 0 || valor === ''}
         onClick={() => {
           onAplicar(valor);
@@ -304,9 +337,15 @@ function PreencherVazios({ campo, rotulo, vazios, onAplicar }: PreencherVaziosPr
         Aplicar
       </Button>
       <span className={styles.preencherContagem}>
-        {vazios === 0
-          ? 'Ninguém está sem valor.'
-          : `${String(vazios)} ${plural(vazios, 'participante sem valor', 'participantes sem valor')}.`}
+        {[
+          vazios === 0 && invalidos === 0 ? 'Ninguém está sem valor.' : null,
+          vazios > 0 && !obrigatorio
+            ? `${String(vazios)} ${plural(vazios, 'participante sem valor', 'participantes sem valor')}.`
+            : null,
+          invalidos > 0 ? `${String(invalidos)} com valor inválido — corrija na lista.` : null,
+        ]
+          .filter((t) => t !== null)
+          .join(' ')}
       </span>
     </div>
   );
@@ -329,7 +368,14 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const [texto, setTexto] = useState('');
   // `base` = lista de participantes logo após a ação; se a lista mudar por outro caminho
   // (editar, remover), o aviso sai de cena para nunca afirmar uma contagem velha.
-  const [aviso, setAviso] = useState<{ texto: string; base: Participante[] | null } | null>(null);
+  const [aviso, setAviso] = useState<{
+    texto: string;
+    base: Participante[] | null;
+    /** Desfaz a ação do aviso enquanto a lista não mudou por outro caminho. */
+    desfazer?: () => void;
+  } | null>(null);
+  const avisoRef = useRef<HTMLParagraphElement>(null);
+  const vaziosId = useId();
   const [novoNome, setNovoNome] = useState('');
   const [novoComplemento, setNovoComplemento] = useState('');
   const [erroNovo, setErroNovo] = useState<string | undefined>(undefined);
@@ -359,8 +405,15 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     [tipo, dados, participantes],
   );
 
+  // O resumo fica à vista sempre, mas só é ANUNCIADO quando a quantidade de participantes muda
+  // (adicionar, colar, remover): o texto de alguns tipos muda a cada tecla (ex.: somas).
+  const [anuncio, setAnuncio] = useState({ total: participantes.length, texto: resumo?.texto });
+  if (anuncio.total !== participantes.length) {
+    setAnuncio({ total: participantes.length, texto: resumo?.texto });
+  }
+
   if (aviso) {
-    if (aviso.base === null) setAviso({ texto: aviso.texto, base: participantes });
+    if (aviso.base === null) setAviso({ ...aviso, base: participantes });
     else if (aviso.base !== participantes) setAviso(null);
   }
 
@@ -383,21 +436,28 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     return todas.filter(({ p }) => p.id === emEdicao || textoDeBusca(p, colunas).includes(termo));
   }, [participantes, termo, emEdicao, recolhida, colunas]);
 
-  // Campos de escolha sem valor em alguém: o controle "Preencher os vazios" de cada um.
-  const preenchiveis = useMemo(
+  // Por coluna de extra: quantos estão sem valor (mesmo critério da validação: `textoLimpo`) e,
+  // nos de escolha, quantos têm valor fora das opções.
+  const contagens = useMemo(
     () =>
-      colunas.flatMap((c) =>
-        c.campo?.tipo === 'escolha'
-          ? [
-              {
-                coluna: c,
-                campo: c.campo,
-                vazios: participantes.filter((p) => (p.extras[c.id] ?? '').trim() === '').length,
-              },
-            ]
-          : [],
-      ),
-    [colunas, participantes],
+      colunas.flatMap((coluna) => {
+        const campo = coluna.campo;
+        if (!campo) return [];
+        const valores = participantes.map((p) => textoLimpo(p.extras[coluna.id]));
+        return [
+          {
+            coluna,
+            campo,
+            obrigatorio: ehObrigatorio(campo, dados),
+            vazios: valores.filter((v) => v === '').length,
+            invalidos:
+              campo.tipo === 'escolha'
+                ? valores.filter((v) => v !== '' && rotuloDaOpcao(campo, v) === null).length
+                : 0,
+          },
+        ];
+      }),
+    [colunas, participantes, dados],
   );
 
   /** Adiciona as linhas, avisa o resultado e devolve quantas entraram. */
@@ -466,11 +526,21 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     });
   };
 
-  const preencherVazios = (campo: CampoDef, rotulo: string, valor: string, vazios: number) => {
+  const preencherVazios = (campo: CampoDef, rotulo: string, valor: string) => {
+    const ids = participantes.filter((p) => textoLimpo(p.extras[campo.id]) === '').map((p) => p.id);
     dispatch({ type: 'preencherExtrasVazios', campo: campo.id, valor });
     setAviso({
-      texto: descreverPreenchimento(rotulo, rotuloDaOpcao(campo, valor) ?? valor, vazios),
+      texto: descreverPreenchimento(rotulo, rotuloDaOpcao(campo, valor) ?? valor, ids.length),
       base: null,
+      desfazer: () => {
+        dispatch({ type: 'limparExtra', campo: campo.id, ids });
+        setAviso({
+          texto: `Preenchimento desfeito: ${String(ids.length)} ${plural(ids.length, 'participante voltou', 'participantes voltaram')} a ficar sem valor.`,
+          base: null,
+        });
+        // O botão sai de cena: o foco fica no aviso, que passa a anunciar o resultado.
+        avisoRef.current?.focus();
+      },
     });
   };
 
@@ -500,9 +570,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </div>
       </div>
 
-      {resumo?.texto ? (
-        <p role="status" className={styles.resumoTexto}>
-          {resumo.texto}
+      {resumo?.texto ? <p className={styles.resumoTexto}>{resumo.texto}</p> : null}
+      {resumo !== null ? (
+        <p role="status" className={styles.somenteLeitor}>
+          {anuncio.texto}
         </p>
       ) : null}
       {resumo?.alertas.map((alerta) => (
@@ -594,9 +665,12 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       ) : null}
 
       {aviso !== null && (aviso.base === null || aviso.base === participantes) ? (
-        <p role="status" className={styles.aviso}>
-          {aviso.texto}
-        </p>
+        <div className={styles.aviso}>
+          <p ref={avisoRef} role="status" tabIndex={-1} className={styles.avisoTexto}>
+            {aviso.texto}
+          </p>
+          {aviso.desfazer ? <Button onClick={aviso.desfazer}>Desfazer</Button> : null}
+        </div>
       ) : null}
 
       {total === 0 ? (
@@ -606,17 +680,33 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </p>
       ) : (
         <>
-          {preenchiveis.map(({ coluna, campo, vazios }) => (
-            <PreencherVazios
-              key={coluna.id}
-              campo={campo}
-              rotulo={coluna.rotulo}
-              vazios={vazios}
-              onAplicar={(valor) => {
-                preencherVazios(campo, coluna.rotulo, valor, vazios);
-              }}
-            />
-          ))}
+          {contagens.some((c) => c.obrigatorio && c.vazios > 0) ? (
+            <div className={styles.resumoVazios}>
+              {contagens
+                .filter((c) => c.obrigatorio && c.vazios > 0)
+                .map(({ coluna, vazios }) => (
+                  <p key={coluna.id} id={idDoResumoVazios(vaziosId, coluna.id)}>
+                    <span aria-hidden="true">⚠ </span>
+                    {`${coluna.rotulo}: ${String(vazios)} ${plural(vazios, 'participante sem valor', 'participantes sem valor')}.`}
+                  </p>
+                ))}
+            </div>
+          ) : null}
+          {contagens
+            .filter((c) => c.campo.tipo === 'escolha')
+            .map(({ coluna, campo, vazios, invalidos, obrigatorio }) => (
+              <PreencherVazios
+                key={coluna.id}
+                campo={campo}
+                rotulo={coluna.rotulo}
+                vazios={vazios}
+                invalidos={invalidos}
+                obrigatorio={obrigatorio}
+                onAplicar={(valor) => {
+                  preencherVazios(campo, coluna.rotulo, valor);
+                }}
+              />
+            ))}
           {comRolagem ? (
             <div className={styles.busca}>
               <Field rotulo="Buscar participante">
@@ -699,6 +789,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                         posicao={posicao}
                         colunas={colunas}
                         dados={dados}
+                        vaziosId={vaziosId}
                         dispatch={dispatch}
                       />
                     ))}

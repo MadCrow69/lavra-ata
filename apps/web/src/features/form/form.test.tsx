@@ -736,7 +736,7 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
         })),
       );
       const grupo = screen.getByRole('group', { name: 'Preencher os vazios — Vínculo' });
-      const aplicar = within(grupo).getByRole('button', { name: 'Aplicar' });
+      const aplicar = within(grupo).getByRole('button', { name: 'Aplicar — Vínculo' });
       expect(aplicar).toBeDisabled();
       await user.selectOptions(within(grupo).getByRole('combobox'), 'proprietario');
       await user.click(aplicar);
@@ -750,7 +750,60 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
         screen.getByText('Vínculo “Proprietário(a)” aplicado a 3 participantes sem valor.'),
       ).toHaveAttribute('role', 'status');
       // Ninguém sem valor: o controle fica parado.
-      expect(within(grupo).getByRole('button', { name: 'Aplicar' })).toBeDisabled();
+      expect(within(grupo).getByRole('button', { name: 'Aplicar — Vínculo' })).toBeDisabled();
+    });
+
+    it('“Desfazer” devolve ao estado de antes só os participantes preenchidos', async () => {
+      const user = userEvent.setup();
+      renderizar(
+        <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
+        membros(3, (i) => ({
+          extras: { unidade: `Apto ${String(i)}`, ...(i === 1 ? { vinculo: 'procurador' } : {}) },
+        })),
+      );
+      const grupo = screen.getByRole('group', { name: 'Preencher os vazios — Vínculo' });
+      await user.selectOptions(within(grupo).getByRole('combobox'), 'proprietario');
+      await user.click(within(grupo).getByRole('button', { name: 'Aplicar — Vínculo' }));
+      await user.click(screen.getByRole('button', { name: 'Desfazer' }));
+      expect(screen.getByLabelText('Vínculo do participante 1')).toHaveValue('procurador');
+      expect(screen.getByLabelText('Vínculo do participante 2')).toHaveValue('');
+      expect(screen.getByLabelText('Vínculo do participante 3')).toHaveValue('');
+      expect(
+        screen.getByText('Preenchimento desfeito: 2 participantes voltaram a ficar sem valor.'),
+      ).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Desfazer' })).not.toBeInTheDocument();
+    });
+
+    it('valor fora das opções aparece no controle como “com valor inválido”', () => {
+      renderizar(
+        <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
+        membros(3, (i) => ({
+          extras: { unidade: `Apto ${String(i)}`, vinculo: i === 1 ? 'remota' : 'proprietario' },
+        })),
+      );
+      const grupo = screen.getByRole('group', { name: 'Preencher os vazios — Vínculo' });
+      expect(within(grupo).getByText('1 com valor inválido — corrija na lista.')).toBeVisible();
+    });
+
+    it('extras vazios viram UMA linha por coluna; as células só marcam aria-invalid', () => {
+      renderizar(
+        <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
+        membros(3, (i) => ({ extras: { unidade: i === 3 ? '' : `Apto ${String(i)}` } })),
+      );
+      // Vínculo vazio nas 3 linhas e Unidade vazia em 1: nenhuma repetição por célula.
+      expect(screen.queryByText(/Preencha o campo/)).not.toBeInTheDocument();
+      const resumoVinculo = screen.getByText('Vínculo: 3 participantes sem valor.');
+      expect(screen.getByText('Unidade: 1 participante sem valor.')).toBeVisible();
+      for (const n of [1, 2, 3]) {
+        const celula = screen.getByLabelText(`Vínculo do participante ${String(n)}`);
+        expect(celula).toHaveAttribute('aria-invalid', 'true');
+        expect(celula).toHaveAccessibleDescription('Vínculo: 3 participantes sem valor.');
+      }
+      expect(screen.getByLabelText('Unidade do participante 1')).toHaveAttribute(
+        'aria-invalid',
+        'false',
+      );
+      expect(resumoVinculo).toBeVisible();
     });
 
     it('a busca cobre os campos extras (“101” acha “Apto 101”)', async () => {
@@ -766,8 +819,53 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
         <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
         membros(3, (i) => (i > 1 ? { presenca: 'ausente' } : {})),
       );
-      expect(screen.getByText('3 unidades informadas').closest('[role="status"]')).not.toBeNull();
+      // O texto fica à vista e, em outra região, é anunciado só ao adicionar/remover.
+      const copias = screen.getAllByText('3 unidades informadas');
+      expect(copias).toHaveLength(2);
+      expect(copias.some((el) => el.getAttribute('role') === 'status')).toBe(true);
       expect(screen.getByRole('note')).toHaveTextContent('Menos de dois membros presentes.');
+    });
+
+    it('o resumo é anunciado só ao adicionar ou remover, não a cada tecla digitada', async () => {
+      const user = userEvent.setup();
+      const tipo: AtaTypeDefinition = {
+        ...TIPO_DE_TESTE,
+        resumoDosParticipantes: ({ participantes }) => ({
+          texto: `Unidades: ${participantes.map((p) => p.extras.unidade ?? '').join(' / ')}`,
+          alertas: [],
+        }),
+      };
+      renderizar(<ParticipantesBlock tipo={tipo} />, membros(1));
+      const anunciado = () =>
+        screen
+          .getAllByRole('status')
+          .map((el) => el.textContent)
+          .filter((t) => t.startsWith('Unidades:'));
+      expect(anunciado()).toEqual(['Unidades: Apto 101']);
+
+      await user.type(screen.getByLabelText('Unidade do participante 1'), '0');
+      expect(screen.getByText('Unidades: Apto 1010', { selector: 'p:not([role])' })).toBeVisible();
+      expect(anunciado()).toEqual(['Unidades: Apto 101']);
+
+      await user.type(screen.getByLabelText(/^Nome do novo participante/), 'Bia{Enter}');
+      expect(anunciado()).toEqual(['Unidades: Apto 1010 / ']);
+    });
+
+    it('tipo sem coluna de papel e sem campo de complemento mantém “Nome — X” no nome', async () => {
+      const user = userEvent.setup();
+      const semComplemento: AtaTypeDefinition = { ...TIPO_DE_TESTE };
+      delete semComplemento.campoComplemento;
+      renderizar(<ParticipantesBlock tipo={semComplemento} />);
+      // Nada de segundo campo nem de ajuda do formato.
+      expect(screen.queryByLabelText(/^Unidade/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+      expect(screen.queryByText(/Aceita “Nome/)).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+        target: { value: 'Ana Souza — Apto 101' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      expect(screen.getByLabelText('Nome do participante 1')).toHaveValue('Ana Souza — Apto 101');
+      expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('');
     });
 
     it('sem alerta, nenhuma nota aparece', () => {

@@ -105,6 +105,18 @@ describe('problemasDoRegistro', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('campoComplemento não pode ter visivelSe (o complemento colado não pode sumir da tela)', () => {
+    const copia: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+        c.id === 'unidade' ? { ...c, visivelSe: () => true } : c,
+      ),
+    };
+    const problemas = problemasDoRegistro([copia]);
+    expect(problemas).toHaveLength(1);
+    expect(problemas[0]).toContain('unidade');
+  });
+
   it('camposNoPrompt precisa apontar para campos existentes', () => {
     const copia = { ...TIPO_DE_TESTE, camposNoPrompt: ['data', 'fantasma'] };
     expect(problemasDoRegistro([copia]).join('\n')).toContain('fantasma');

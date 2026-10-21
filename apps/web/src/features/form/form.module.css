@@ -171,6 +171,11 @@
 }
 
 .aviso {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-3);
   margin: 0;
   padding: var(--espaco-2) var(--espaco-3);
   border-left: 4px solid var(--cor-primaria);
@@ -417,4 +422,21 @@
 .preencherContagem {
   color: var(--cor-texto-suave);
   font-size: 0.875rem;
+}
+
+.resumoVazios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.resumoVazios p {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--cor-erro-texto);
+}
+
+.avisoTexto {
+  margin: 0;
 }

@@ -343,6 +343,39 @@ describe('draftReducer', () => {
       expect(depois.participantes[1]).toBe(antes.participantes[1]);
     });
 
+    it('espaços e caracteres de espaço contam como vazio (mesmo critério da validação)', () => {
+      const base = comTres();
+      const d = draftReducer(base, {
+        type: 'atualizarParticipante',
+        id: base.participantes[0]?.id ?? '',
+        patch: { extras: { vinculo: '  ' } },
+      });
+      expect(d.participantes[0]?.extras.vinculo).toBe('  ');
+      const depois = draftReducer(d, {
+        type: 'preencherExtrasVazios',
+        campo: 'vinculo',
+        valor: 'proprietario',
+      });
+      expect(depois.participantes[0]?.extras.vinculo).toBe('proprietario');
+    });
+
+    it('limparExtra desfaz o preenchimento só nos ids pedidos', () => {
+      const antes = comTres();
+      const preenchido = draftReducer(antes, {
+        type: 'preencherExtrasVazios',
+        campo: 'vinculo',
+        valor: 'proprietario',
+      });
+      const ids = [antes.participantes[0]?.id ?? '', antes.participantes[2]?.id ?? ''];
+      const depois = draftReducer(preenchido, { type: 'limparExtra', campo: 'vinculo', ids });
+      expect(depois.participantes.map((p) => p.extras.vinculo)).toEqual([
+        undefined,
+        'procurador',
+        undefined,
+      ]);
+      expect(depois.participantes[1]).toBe(preenchido.participantes[1]);
+    });
+
     it('sem ninguém vazio, devolve o mesmo estado', () => {
       const cheio = draftReducer(comTres(), {
         type: 'preencherExtrasVazios',

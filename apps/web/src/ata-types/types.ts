@@ -61,7 +61,10 @@ export interface AtaTypeDefinition {
   camposParticipante: CampoDef[];
   /** Rótulo do papel do participante, ex.: "Cargo / empresa"; `null` = sem coluna de papel. */
   rotuloPapel: string | null;
-  /** Campo extra que recebe o complemento de "Nome — X" (colar e adicionar); sem ele, o papel. */
+  /**
+   * Campo extra que recebe o complemento de "Nome — X" (colar e adicionar); sem ele, o papel.
+   * Precisa estar sempre visível (sem `visivelSe`).
+   */
   campoComplemento?: string;
   /** Títulos dos blocos de participantes e de pauta no formulário e no documento. */
   rotulos: { participantes: string; pauta: string };
