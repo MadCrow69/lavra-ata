@@ -207,6 +207,32 @@ describe('gerarComFallback', () => {
     expect(r.falhas[0]?.mensagem).not.toContain('k1');
   });
 
+  it('chave recusada avisa quem chamou com a configuração usada e segue para o próximo', async () => {
+    const { a } = adaptadores({
+      openai: () => falha('chave_invalida', 'openai'),
+      gemini: () => Promise.resolve({ ok: 2 }),
+    });
+    const aoRecusarChave = vi.fn();
+    const r = await gerarComFallback(cadeia, reqCom(), { adaptadores: a, aoRecusarChave });
+    expect(r.provedor).toBe('gemini');
+    expect(aoRecusarChave).toHaveBeenCalledTimes(1);
+    expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0]);
+  });
+
+  it('chave recusada também é avisada quando toda a cadeia falha; outros erros não', async () => {
+    const { a } = adaptadores({
+      openai: () => falha('json_invalido', 'openai'),
+      gemini: () => falha('chave_invalida', 'gemini'),
+      anthropic: () => falha('recusa', 'anthropic'),
+    });
+    const aoRecusarChave = vi.fn();
+    await expect(
+      gerarComFallback(cadeia, reqCom(), { adaptadores: a, aoRecusarChave }),
+    ).rejects.toBeInstanceOf(ErroCadeia);
+    expect(aoRecusarChave).toHaveBeenCalledTimes(1);
+    expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[1]);
+  });
+
   it('cadeia vazia lança ErroCadeia explicando o que fazer', async () => {
     const { a } = adaptadores({});
     await expect(gerarComFallback([], reqCom(), { adaptadores: a })).rejects.toBeInstanceOf(

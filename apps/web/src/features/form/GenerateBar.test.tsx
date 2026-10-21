@@ -134,7 +134,7 @@ function renderizar({
       </DraftProvider>
     </KeysProvider>,
   );
-  return { onConfigurarChaves, onGerada, gerar, user: userEvent.setup() };
+  return { onConfigurarChaves, onGerada, gerar, store, user: userEvent.setup() };
 }
 
 const botaoGerar = () => screen.getByRole('button', { name: /Gerar ata/ });
@@ -230,6 +230,35 @@ describe('GenerateBar', () => {
     expect(onGerada).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('espiao')).toHaveTextContent(`Reembolso a ${CPF}.`);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('chave recusada no fallback: marcada como inválida e sai da fila (spec 8.1.1)', async () => {
+    const { store, user } = renderizar({
+      chaves: [OPENAI, GEMINI],
+      impl: {
+        openai: () => Promise.reject(erroProvedor('chave_invalida', 'openai', { status: 401 })),
+        gemini: () => Promise.resolve(RESPOSTA),
+      },
+    });
+    await user.click(botaoGerar());
+    expect(await screen.findByTestId('espiao')).toHaveTextContent(`Reembolso a ${CPF}.`);
+    expect(store.listar().find((c) => c.provedor === 'openai')?.estado).toBe('invalida');
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini']);
+    expect(screen.getByText(/Envia para Gemini · gemini-3\.8-flash/)).toBeInTheDocument();
+  });
+
+  it('chave recusada com a cadeia toda falhando também é marcada; as outras não', async () => {
+    const { store, user } = renderizar({
+      chaves: [OPENAI, GEMINI],
+      impl: {
+        openai: () => Promise.reject(erroProvedor('chave_invalida', 'openai', { status: 403 })),
+        gemini: () => Promise.reject(erroProvedor('recusa', 'gemini')),
+      },
+    });
+    await user.click(botaoGerar());
+    await screen.findByRole('alert');
+    const estados = Object.fromEntries(store.listar().map((c) => [c.provedor, c.estado]));
+    expect(estados).toEqual({ openai: 'invalida', gemini: 'ok' });
   });
 
   it('erro: mostra a causa de cada provedor, a ação e "Tentar de novo"', async () => {

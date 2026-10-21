@@ -45,7 +45,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
   const [confirmando, setConfirmando] = useState(false);
   const gerarRef = useRef<HTMLButtonElement>(null);
   // O botão Gerar fica desabilitado durante a geração: o foco vai para Cancelar e volta ao fim.
-  const chamada = useChamadaIA({ tipo: 'ata' }, () => gerarRef.current);
+  const chamada = useChamadaIA({ tipo: 'ata' }, () => gerarRef.current, opcoesCadeia);
   const { operacao, ocupada: gerando, cancelarRef } = chamada;
   const resumoId = useId();
   const ocupadaId = useId();
@@ -65,7 +65,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
       onConfigurarChaves();
       return;
     }
-    await chamada.executar((signal) => gerarAta(state, tipo, cadeia, signal, opcoesCadeia), {
+    await chamada.executar((signal, opcoes) => gerarAta(state, tipo, cadeia, signal, opcoes), {
       aoIniciar: () => {
         setEstado({ fase: 'parado' });
       },

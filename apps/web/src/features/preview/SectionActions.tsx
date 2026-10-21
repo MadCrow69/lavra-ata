@@ -86,6 +86,7 @@ export function SectionActions({
   const chamada = useChamadaIA(
     { tipo: 'secao', chave },
     () => (origemRef.current === 'ajustar' ? ajustarRef : regerarRef).current,
+    opcoesCadeia,
   );
   const { operacao, ocupada: estaOcupada, cancelarRef } = chamada;
   const ultimaInstrucaoRef = useRef<string | null>(null);
@@ -115,7 +116,7 @@ export function SectionActions({
   const executar = async (pedido: string | null, origem: Origem) => {
     if (semChave || operacao !== null) return;
     await chamada.executar(
-      (signal) => regerarSecao(state, tipo, chave, pedido, cadeia, signal, opcoesCadeia),
+      (signal, opcoes) => regerarSecao(state, tipo, chave, pedido, cadeia, signal, opcoes),
       {
         aoIniciar: () => {
           origemRef.current = origem;

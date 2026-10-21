@@ -141,7 +141,7 @@ function renderizar({ inicial = rascunho(), chaves = [GEMINI], impl = {}, comBar
       </DraftProvider>
     </KeysProvider>,
   );
-  return { gerar, user: userEvent.setup() };
+  return { gerar, store, user: userEvent.setup() };
 }
 
 const secao = (titulo: string) => screen.getByRole('region', { name: titulo });
@@ -437,6 +437,17 @@ describe('revisão por seção: regerar e ajustar', () => {
     expect(await within(s).findByText('Agora foi.')).toBeVisible();
     expect(gerar.gemini).toHaveBeenCalledTimes(2);
     expect(within(s).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('chave recusada ao regerar a seção é marcada como inválida no modal de chaves', async () => {
+    const { user, store } = renderizar({
+      impl: { gemini: () => Promise.reject(erroProvedor('chave_invalida', 'gemini')) },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    await within(s).findByRole('alert');
+    expect(store.listar()[0]?.estado).toBe('invalida');
+    expect(store.cadeia()).toEqual([]);
   });
 
   it('a mensagem de erro nunca traz a chave nem o CPF', async () => {

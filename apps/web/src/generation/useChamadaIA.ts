@@ -1,5 +1,7 @@
 import { useEffect, useRef, type RefObject } from 'react';
+import type { OpcoesCadeia } from '../ai/chain';
 import { ErroProvedor } from '../ai/errors';
+import { useKeys } from '../ai/KeysContext';
 import { useOperacaoIA, type OperacaoIA } from './OperacaoIA';
 
 /** O que fazer em cada desfecho de uma chamada. Nenhum é chamado para resultado tardio. */
@@ -23,7 +25,7 @@ export interface ChamadaIA {
    * cancelar, de "Nova ata" (interrompida por fora) ou de desmontar é descartado em silêncio.
    */
   executar: <T>(
-    chamar: (signal: AbortSignal) => Promise<T>,
+    chamar: (signal: AbortSignal, opcoes: OpcoesCadeia) => Promise<T>,
     desfechos: DesfechosDaChamada<T>,
   ) => Promise<void>;
   /** Cancela a chamada desta instância (botão Cancelar). */
@@ -42,12 +44,18 @@ function mesmaOperacao(a: OperacaoIA | null, b: OperacaoIA): boolean {
  * em `useOperacaoIA`, distingue o cancelamento feito aqui da interrupção por fora, descarta o
  * resultado tardio, libera a vez no fim, cancela ao desmontar e cuida do foco (vai para Cancelar
  * no início e volta para `focoAoTerminar()` no fim, se ele se perdeu).
+ *
+ * Chave que o provedor recusar (401/403) é marcada como inválida no KeyStore, mesmo que outro
+ * provedor responda: ela sai da fila e do cabeçalho, e o modal de chaves mostra o motivo (spec
+ * 8.1.1). `opcoesCadeia` (testes) segue junto para a cadeia.
  */
 export function useChamadaIA(
   alvo: OperacaoIA,
   focoAoTerminar: () => HTMLElement | null,
+  opcoesCadeia?: OpcoesCadeia,
 ): ChamadaIA {
   const { operacao, iniciar, concluir, cancelar } = useOperacaoIA();
+  const keys = useKeys();
   const ocupada = mesmaOperacao(operacao, alvo);
   /** Controle da chamada desta instância: distingue a minha operação da de outra e o resultado tardio. */
   const controleRef = useRef<AbortController | null>(null);
@@ -82,7 +90,7 @@ export function useChamadaIA(
   }, [ocupada]);
 
   async function executar<T>(
-    chamar: (signal: AbortSignal) => Promise<T>,
+    chamar: (signal: AbortSignal, opcoes: OpcoesCadeia) => Promise<T>,
     desfechos: DesfechosDaChamada<T>,
   ): Promise<void> {
     const controle = iniciar(alvo);
@@ -90,7 +98,12 @@ export function useChamadaIA(
     controleRef.current = controle;
     desfechos.aoIniciar?.();
     try {
-      const r = await chamar(controle.signal);
+      const r = await chamar(controle.signal, {
+        ...opcoesCadeia,
+        aoRecusarChave: (cfg) => {
+          keys.definirEstado(cfg.id, cfg.chave, 'invalida');
+        },
+      });
       // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.
       if (controleRef.current !== controle || controle.signal.aborted) return;
       desfechos.sucesso(r);

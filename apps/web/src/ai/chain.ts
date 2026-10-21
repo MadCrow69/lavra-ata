@@ -15,6 +15,11 @@ export interface OpcoesCadeia {
   adaptadores?: Record<ProviderId, ProviderAdapter>;
   /** Espera antes do retry único, em ms. */
   esperaRetryMs?: number;
+  /**
+   * O provedor recusou a chave (401/403): recebe a configuração usada, para quem chamou marcar a
+   * chave como inválida (spec 8.1.1). A cadeia segue para o próximo provedor.
+   */
+  aoRecusarChave?: (cfg: ProviderConfig) => void;
 }
 
 /** Espera `ms`, mas acorda com `cancelado` se o sinal abortar (e limpa o timer). */
@@ -85,6 +90,7 @@ export async function gerarComFallback(
           await esperar(espera, req.signal, cfg.id);
           continue;
         }
+        if (erro.tipo === 'chave_invalida') opcoes.aoRecusarChave?.(original);
         falhas.push({ provedor: cfg.id, erro: erro.tipo, mensagem: erro.message });
         break;
       }
