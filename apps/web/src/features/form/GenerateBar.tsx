@@ -23,6 +23,8 @@ export interface GenerateBarProps {
   opcoesCadeia?: OpcoesCadeia;
   /** A ata nova entrou no rascunho (a bancada leva a pessoa até a folha). */
   onGerada?: () => void;
+  /** A geração falhou (a bancada mostra a barra, onde estão o erro e "Tentar de novo"). */
+  onFalhou?: () => void;
 }
 
 type Estado =
@@ -38,7 +40,12 @@ function estadoDeErro(e: unknown): Estado {
  * Barra de geração da ata: o que falta, para quem vai, progresso, cancelar, erro e confirmação
  * antes de substituir uma ata já gerada. O rascunho só muda no sucesso.
  */
-export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: GenerateBarProps) {
+export function GenerateBar({
+  onConfigurarChaves,
+  opcoesCadeia,
+  onGerada,
+  onFalhou,
+}: GenerateBarProps) {
   const { state, dispatch } = useDraft();
   const keys = useKeys();
   const { mostrar } = useToast();
@@ -87,6 +94,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
       },
       erro: (e) => {
         setEstado(estadoDeErro(e));
+        onFalhou?.();
       },
     });
   };

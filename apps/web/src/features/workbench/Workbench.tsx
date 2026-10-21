@@ -19,6 +19,7 @@ import { TipoBlock } from '../form/TipoBlock';
 import { TranscricaoBlock } from '../form/TranscricaoBlock';
 import { KeysModal } from '../keys/KeysModal';
 import { A4Preview } from '../preview/A4Preview';
+import { GeracaoNoDocumento } from './GeracaoNoDocumento';
 import styles from './workbench.module.css';
 
 const MENSAGEM_NOVA_ATA = 'Nova ata iniciada. Tipo e tom mantidos.';
@@ -183,6 +184,10 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
             setAba('documento');
             setGeracoes((g) => g + 1);
           }}
+          onFalhou={() => {
+            // No celular, quem esperava na aba Documento vê o erro (e "Tentar de novo") no Editar.
+            setAba('editar');
+          }}
           {...opcoes}
         />
       </div>
@@ -191,6 +196,7 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
 
   const documento = (
     <div ref={documentoRef} className={styles.documento} tabIndex={-1}>
+      {largo ? null : <GeracaoNoDocumento />}
       <A4Preview key={rodada} {...opcoes} />
     </div>
   );

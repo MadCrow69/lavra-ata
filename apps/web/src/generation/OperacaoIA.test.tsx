@@ -63,6 +63,36 @@ describe('OperacaoIA', () => {
     expect(result.current.operacao).toEqual({ tipo: 'ata' });
   });
 
+  it('cancelarAtual cancela pela pessoa a operação de qualquer dono, sem liberar a vez', () => {
+    const { result } = renderHook(() => useOperacaoIA(), { wrapper: envolver });
+    let controle = null as AbortController | null;
+    act(() => {
+      controle = result.current.iniciar({ tipo: 'ata' });
+    });
+    if (!controle) throw new Error('sem controle');
+    const c = controle;
+    expect(result.current.foiCancelada(c)).toBe(false);
+    act(() => {
+      result.current.cancelarAtual();
+    });
+    expect(c.signal.aborted).toBe(true);
+    expect(result.current.foiCancelada(c)).toBe(true);
+    expect(result.current.operacao).toEqual({ tipo: 'ata' });
+  });
+
+  it('interromper não conta como cancelamento pela pessoa', () => {
+    const { result } = renderHook(() => useOperacaoIA(), { wrapper: envolver });
+    let controle = null as AbortController | null;
+    act(() => {
+      controle = result.current.iniciar({ tipo: 'ata' });
+    });
+    act(() => {
+      result.current.interromper();
+    });
+    if (!controle) throw new Error('sem controle');
+    expect(result.current.foiCancelada(controle)).toBe(false);
+  });
+
   it('cancelar com o controle de uma operação que já acabou não aborta a atual', () => {
     const { result } = renderHook(() => useOperacaoIA(), { wrapper: envolver });
     let antigo: AbortController | null = null;

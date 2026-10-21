@@ -28,6 +28,14 @@ interface OperacaoIAApi {
    */
   cancelar: (controle: AbortController) => void;
   /**
+   * A pessoa cancelou a operação em andamento, seja de quem for (ex.: o Cancelar da aba
+   * Documento no celular, para a geração que a barra iniciou). Como `cancelar`: a vez só é
+   * liberada quando quem a iniciou chamar `concluir`.
+   */
+  cancelarAtual: () => void;
+  /** `controle` foi cancelado pela pessoa (`cancelar`/`cancelarAtual`), não interrompido por fora. */
+  foiCancelada: (controle: AbortController) => boolean;
+  /**
    * Aborta a operação em andamento, seja de quem for, e libera a vez na hora (ex.: "Nova ata").
    * Quem a iniciou descarta o resultado tardio; o `concluir` dele vira nada (o controle já não é o
    * da vez).
@@ -52,6 +60,7 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
   const [operacao, setOperacao] = useState<OperacaoIA | null>(null);
   // A recusa não pode esperar o próximo render: dois cliques na mesma rodada chegam aqui juntos.
   const ativaRef = useRef<Ativa | null>(null);
+  const canceladasRef = useRef(new WeakSet<AbortController>());
 
   const iniciar = useCallback((nova: OperacaoIA) => {
     if (ativaRef.current !== null) return null;
@@ -69,8 +78,19 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
 
   const cancelar = useCallback((controle: AbortController) => {
     if (ativaRef.current?.controle !== controle) return;
+    canceladasRef.current.add(controle);
     controle.abort();
   }, []);
+
+  const cancelarAtual = useCallback(() => {
+    const ativa = ativaRef.current;
+    if (ativa) cancelar(ativa.controle);
+  }, [cancelar]);
+
+  const foiCancelada = useCallback(
+    (controle: AbortController) => canceladasRef.current.has(controle),
+    [],
+  );
 
   const interromper = useCallback(() => {
     const ativa = ativaRef.current;
@@ -89,8 +109,8 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
   );
 
   const api = useMemo(
-    () => ({ operacao, iniciar, concluir, cancelar, interromper }),
-    [operacao, iniciar, concluir, cancelar, interromper],
+    () => ({ operacao, iniciar, concluir, cancelar, cancelarAtual, foiCancelada, interromper }),
+    [operacao, iniciar, concluir, cancelar, cancelarAtual, foiCancelada, interromper],
   );
   return <OperacaoIAContext value={api}>{children}</OperacaoIAContext>;
 }

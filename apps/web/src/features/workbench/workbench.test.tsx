@@ -336,6 +336,67 @@ describe('Workbench: estados depois de gerar', () => {
     expect(document.getElementById('painel-documento')?.firstElementChild).toHaveFocus();
   });
 
+  it('no celular, a aba Documento mostra a geração em andamento e cancela por ali', async () => {
+    simularLargura(false);
+    salvarRascunho(completo());
+    let sinal: AbortSignal | null = null;
+    const { user } = renderizar({
+      store: comChave(),
+      gerar: (_cfg, req) => {
+        sinal = req.signal;
+        return new Promise((_resolve, reject) => {
+          req.signal.addEventListener('abort', () => {
+            reject(erroProvedor('cancelado', 'openai'));
+          });
+        });
+      },
+    });
+    await user.click(botaoGerar());
+    await user.click(screen.getByRole('tab', { name: 'Documento' }));
+
+    const painel = screen.getByRole('tabpanel', { name: 'Documento' });
+    expect(within(painel).getByRole('progressbar', { name: 'Gerando a ata' })).toBeVisible();
+    expect(within(painel).getByText(/Gerando a ata — pode levar até 2 minutos/)).toBeVisible();
+    await user.click(within(painel).getByRole('button', { name: 'Cancelar geração da ata' }));
+
+    expect((sinal as AbortSignal | null)?.aborted).toBe(true);
+    expect(within(painel).queryByRole('progressbar')).not.toBeInTheDocument();
+    // Cancelar por aqui é cancelar pela pessoa: a barra registra e a ata não muda.
+    expect(within(painel).getByText('Geração cancelada. A ata não foi alterada.')).toBeVisible();
+    expect(within(folha()).queryByText(`Reembolso a ${CPF}.`)).not.toBeInTheDocument();
+  });
+
+  it('no celular, se a geração falha com a pessoa no Documento, volta ao Editar com o erro', async () => {
+    simularLargura(false);
+    salvarRascunho(completo());
+    let falhar: () => void = () => undefined;
+    const { user } = renderizar({
+      store: comChave(),
+      gerar: () =>
+        new Promise((_resolve, reject) => {
+          falhar = () => {
+            reject(erroProvedor('recusa', 'openai'));
+          };
+        }),
+    });
+    await user.click(botaoGerar());
+    await user.click(screen.getByRole('tab', { name: 'Documento' }));
+    await act(async () => {
+      falhar();
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole('alert')).toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Editar' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('em tela larga, a geração em andamento aparece só na barra (sem repetir no Documento)', async () => {
+    simularLargura(true);
+    salvarRascunho(completo());
+    const { user } = renderizar({ store: comChave(), gerar: () => new Promise(() => undefined) });
+    await user.click(botaoGerar());
+    expect(screen.getAllByRole('progressbar', { name: 'Gerando a ata' })).toHaveLength(1);
+  });
+
   it('no celular, 200 participantes não afastam a transcrição e o "Gerar ata": a lista começa recolhida', () => {
     simularCelular();
     salvarRascunho(

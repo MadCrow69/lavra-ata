@@ -54,13 +54,11 @@ export function useChamadaIA(
   focoAoTerminar: () => HTMLElement | null,
   opcoesCadeia?: OpcoesCadeia,
 ): ChamadaIA {
-  const { operacao, iniciar, concluir, cancelar } = useOperacaoIA();
+  const { operacao, iniciar, concluir, cancelar, foiCancelada } = useOperacaoIA();
   const keys = useKeys();
   const ocupada = mesmaOperacao(operacao, alvo);
   /** Controle da chamada desta instância: distingue a minha operação da de outra e o resultado tardio. */
   const controleRef = useRef<AbortController | null>(null);
-  /** Controle que a pessoa cancelou aqui; abortado sem isso = interrompido por fora ("Nova ata"). */
-  const canceladoAquiRef = useRef<AbortController | null>(null);
   const cancelarRef = useRef<HTMLButtonElement>(null);
   const focoRef = useRef(focoAoTerminar);
   useEffect(() => {
@@ -109,8 +107,9 @@ export function useChamadaIA(
       desfechos.sucesso(r);
     } catch (e) {
       if (controleRef.current !== controle) return;
-      // Interrompida por fora: a ata em que ela valia já não existe; nada a avisar aqui.
-      if (controle.signal.aborted && canceladoAquiRef.current !== controle) return;
+      // Interrompida por fora ("Nova ata"): a ata em que ela valia já não existe; nada a avisar.
+      // Cancelada pela pessoa (aqui ou em outro ponto, como a aba Documento) é avisada.
+      if (controle.signal.aborted && !foiCancelada(controle)) return;
       if (e instanceof ErroProvedor && e.tipo === 'cancelado') desfechos.cancelado();
       else desfechos.erro(e);
     } finally {
@@ -121,9 +120,7 @@ export function useChamadaIA(
 
   const cancelarAqui = () => {
     const controle = controleRef.current;
-    if (!controle) return;
-    canceladoAquiRef.current = controle;
-    cancelar(controle);
+    if (controle) cancelar(controle);
   };
 
   return { operacao, ocupada, executar, cancelar: cancelarAqui, cancelarRef };
