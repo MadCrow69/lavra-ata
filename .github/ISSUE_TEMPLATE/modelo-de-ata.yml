@@ -1,0 +1,49 @@
+name: Corrigir modelo de ata
+description: Erro ou lacuna jurídica em um dos modelos de ata.
+title: '[Modelo de ata] '
+labels: ['documentation']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Correções jurídicas precisam citar o artigo ou item da norma e uma fonte oficial. O Lavra gerará um rascunho e não substituirá a revisão de um profissional habilitado.
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo de ata
+      options:
+        - Reunião corporativa
+        - CIPA (NR-5)
+        - Condomínio
+        - Sócios (Ltda)
+        - Outro
+    validations:
+      required: true
+  - type: textarea
+    id: trecho
+    attributes:
+      label: Trecho do modelo
+      description: Cole o trecho atual do modelo (sem dados reais) e, se possível, a redação proposta.
+    validations:
+      required: true
+  - type: input
+    id: norma
+    attributes:
+      label: Artigo ou norma
+      placeholder: 'Ex.: art. 1.350 do Código Civil, item 5.8 da NR-5'
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link da fonte oficial
+      placeholder: https://www.planalto.gov.br/
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmacoes
+    attributes:
+      label: Confirmações
+      options:
+        - label: Não incluí dados reais nem chaves de API.
+          required: true
