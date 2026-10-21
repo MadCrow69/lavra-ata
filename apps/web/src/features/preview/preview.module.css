@@ -1,0 +1,276 @@
+/*
+ * Folha A4: papel claro com tinta escura nos dois temas (tokens `--cor-folha-*`), tipografia
+ * serifada e proporção 210×297. A largura segue o painel; a altura é o mínimo da proporção e
+ * cresce com o conteúdo (nada é cortado). O corpo escala com a largura do painel (`cqi`), com
+ * piso legível no celular.
+ */
+
+.area {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  min-width: 0;
+}
+
+/* ---------- Acima da folha ---------- */
+
+.avisosGerais {
+  margin: 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-destaque);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-destaque-texto);
+  font-size: 0.9375rem;
+  list-style: none;
+}
+
+.avisosGerais li + li {
+  margin-top: var(--espaco-2);
+}
+
+.barra {
+  margin: 0;
+}
+
+.contador {
+  min-height: 44px;
+  padding: 0 var(--espaco-4);
+  border: 2px solid var(--cor-destaque);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-destaque-texto);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.contador:hover {
+  background: var(--cor-fundo);
+}
+
+/* ---------- Folha ---------- */
+
+.folha {
+  width: 100%;
+  max-width: 56rem;
+  margin: 0 auto;
+  /* Proporção A4 como altura mínima (aspect-ratio não deixa a folha crescer com o conteúdo). */
+  min-height: calc(min(100cqi, 56rem) * 297 / 210);
+  padding: clamp(1rem, 8cqi, 3.5rem);
+  border: 1px solid var(--cor-borda);
+  border-radius: 2px;
+  background: var(--cor-folha);
+  box-shadow: 0 2px 10px var(--cor-sombra);
+  color: var(--cor-folha-tinta);
+  font-family: var(--fonte-titulo);
+  font-size: clamp(0.9375rem, 0.45rem + 1.4cqi, 1.125rem);
+  line-height: 1.55;
+  hyphens: auto;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.cabecalho {
+  display: flex;
+  gap: var(--espaco-4);
+  align-items: flex-start;
+  margin-bottom: var(--espaco-6);
+}
+
+.logo {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: clamp(4.5rem, 20cqi, 8rem);
+  aspect-ratio: 3 / 2;
+  border: 1px dashed var(--cor-folha-borda);
+  color: var(--cor-folha-suave);
+  font-family: var(--fonte-interface);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.logoReserva {
+  padding: var(--espaco-1);
+}
+
+.logoImagem {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.linhas {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--cor-folha-suave);
+  font-size: 0.9em;
+  text-align: right;
+}
+
+.linha {
+  margin: 0;
+}
+
+.titulo {
+  margin: 0 0 var(--espaco-6);
+  padding-bottom: var(--espaco-3);
+  border-bottom: 2px solid var(--cor-folha-tinta);
+  font-size: 1.5em;
+  text-align: center;
+}
+
+.subtitulo {
+  margin: var(--espaco-6) 0 var(--espaco-2);
+  font-size: 1.1em;
+}
+
+.paragrafo {
+  margin: 0 0 var(--espaco-3);
+  text-align: justify;
+}
+
+.lista {
+  margin: 0 0 var(--espaco-3);
+  padding-left: 1.5em;
+}
+
+.lista li + li {
+  margin-top: var(--espaco-1);
+}
+
+/* ---------- Seções ---------- */
+
+.secao {
+  margin-top: var(--espaco-4);
+}
+
+.secao > .subtitulo {
+  margin-top: 0;
+}
+
+.secaoPendente {
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px dashed var(--cor-folha-borda);
+  color: var(--cor-folha-suave);
+  font-style: italic;
+}
+
+/* ---------- Lacunas ---------- */
+
+.lacuna {
+  padding: 0 0.2em;
+  border: 1px dashed var(--cor-folha-lacuna);
+  border-radius: 3px;
+  background: var(--cor-folha-lacuna-fundo);
+  color: var(--cor-folha-lacuna);
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* ---------- Tabelas ---------- */
+
+.tabelaRolavel {
+  margin: 0 0 var(--espaco-4);
+  overflow-x: auto;
+  /* Sombras nas bordas que aparecem só quando há mais colunas fora da vista. */
+  background:
+    linear-gradient(to right, var(--cor-folha) 30%, transparent) left center / 2rem 100% no-repeat
+      local,
+    linear-gradient(to left, var(--cor-folha) 30%, transparent) right center / 2rem 100% no-repeat
+      local,
+    radial-gradient(farthest-side at 0 50%, var(--cor-sombra), transparent) left center / 0.75rem
+      100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--cor-sombra), transparent) right center /
+      0.75rem 100% no-repeat scroll;
+}
+
+.tabela {
+  width: 100%;
+  min-width: 20rem;
+  border-collapse: collapse;
+  hyphens: manual;
+  overflow-wrap: normal;
+  font-family: var(--fonte-interface);
+  font-size: 0.875em;
+  line-height: 1.4;
+}
+
+.tabelaLarga {
+  min-width: 30rem;
+}
+
+.tabela th,
+.tabela td {
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-folha-borda);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tabela th {
+  border-bottom: 2px solid var(--cor-folha-tinta);
+  color: var(--cor-folha-tinta);
+  font-weight: 700;
+}
+
+/* ---------- Presença: ícone + texto ---------- */
+
+.iconePresenca {
+  display: inline-block;
+  margin-right: 0.3em;
+  vertical-align: -0.1em;
+}
+
+.presencaRotulo {
+  font-weight: 700;
+}
+
+/* ---------- Assinaturas e aviso ---------- */
+
+.assinaturas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--espaco-8) var(--espaco-6);
+  margin-top: var(--espaco-8);
+}
+
+.assinatura {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.linhaAssinatura {
+  width: 100%;
+  margin-bottom: var(--espaco-1);
+  border-top: 1px solid var(--cor-folha-tinta);
+}
+
+.assinaturaNome {
+  font-weight: 700;
+}
+
+.assinaturaPapel {
+  color: var(--cor-folha-suave);
+  font-size: 0.9em;
+}
+
+.aviso {
+  margin: var(--espaco-8) 0 0;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid var(--cor-folha-borda);
+  color: var(--cor-folha-suave);
+  font-family: var(--fonte-interface);
+  font-size: 0.8125em;
+  line-height: 1.45;
+}
+
+@media print {
+  .logoReserva {
+    display: none;
+  }
+}

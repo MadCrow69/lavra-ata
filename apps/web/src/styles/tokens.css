@@ -8,6 +8,8 @@
  *            escuro/primária 7,50 · destaque-texto/fundo 8,54
  *   erro   - claro: borda 6,48 (fundo) / 7,18 (superfície) · texto 7,05 / 7,80
  *            escuro: borda 8,09 / 7,28 · texto 8,74 / 7,86
+ *   folha  - tinta/folha 17,40 · suave/folha 7,58 · lacuna/folha 8,36 · lacuna/fundo da lacuna 7,16
+ *            borda/folha 3,62
  * `--cor-destaque` (#b5643c) só é decorativa (3,84:1 no creme, ok para gráficos >= 3:1);
  * texto terracota usa `--cor-destaque-texto`.
  */
@@ -37,6 +39,17 @@
   --cor-foco: #1d4e5f;
   --cor-sombra: rgb(31 42 55 / 12%);
   --cor-fundo-modal: rgb(0 0 0 / 55%);
+
+  /*
+   * Folha A4: o documento é papel e fica igual nos temas claro e escuro (como sairia impresso),
+   * por isso estes tokens não são redefinidos no escuro.
+   */
+  --cor-folha: #ffffff;
+  --cor-folha-tinta: #1a1a1a;
+  --cor-folha-suave: #4a5563;
+  --cor-folha-borda: #8c867a;
+  --cor-folha-lacuna: #7a3d1c;
+  --cor-folha-lacuna-fundo: #fbebd9;
 
   --fonte-titulo: 'Source Serif 4 Variable', georgia, 'Times New Roman', serif;
   --fonte-interface:

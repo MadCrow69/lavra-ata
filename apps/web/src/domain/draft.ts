@@ -41,6 +41,14 @@ export const STATUS_ENCAMINHAMENTO = [
 ] as const;
 export type StatusEncaminhamento = (typeof STATUS_ENCAMINHAMENTO)[number];
 
+/** Nome de cada status de encaminhamento exibido ao usuário e no documento. */
+export const ROTULO_STATUS: Record<StatusEncaminhamento, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em andamento',
+  concluido: 'Concluído',
+  cancelado: 'Cancelado',
+};
+
 export interface Encaminhamento {
   acao: string;
   responsavel: string;
