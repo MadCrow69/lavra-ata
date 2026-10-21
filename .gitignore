@@ -23,3 +23,6 @@ Thumbs.db
 
 # Mockups locais do brainstorming
 .superpowers/
+
+# Cache do Vitest
+.vitest/
