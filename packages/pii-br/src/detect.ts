@@ -21,8 +21,9 @@ interface Candidate {
 
 /**
  * Detecta identificadores brasileiros no texto. Saída ordenada por `start` e sem
- * sobreposição: em conflito vence quem começa antes, depois o trecho mais longo, depois
- * o detector de maior precedência (ordem de `DETECTORS`).
+ * sobreposição. Candidatos são avaliados por início, depois trecho mais longo, depois
+ * precedência (ordem de `DETECTORS`); o primeiro define tipo e `valid`. Quem fica contido
+ * nele é descartado; quem o ultrapassa em parte estende o trecho (união, sem vazar o resto).
  */
 export function detect(text: string, options: DetectOptions = {}): Finding[] {
   const scan = toScanText(text);
@@ -38,6 +39,10 @@ export function detect(text: string, options: DetectOptions = {}): Finding[] {
       const start = match.index;
       const verdict = detector.accept(raw, scan, start);
       if (verdict.ok) {
+        // Cartão: janelas sobrepostas também são coletadas (`start + 1`), para que um
+        // grupo de 4 dígitos antes do cartão não esconda o cartão real nem deixe
+        // dígitos finais de fora. Os demais tipos retomam no fim do casamento.
+        if (detector.type === 'CARTAO') pattern.lastIndex = start + 1;
         const end = start + raw.length;
         candidates.push({
           finding: {
@@ -61,13 +66,16 @@ export function detect(text: string, options: DetectOptions = {}): Finding[] {
     (a, b) => a.finding.start - b.finding.start || b.finding.end - a.finding.end || a.rank - b.rank,
   );
 
+  // Fail-closed: contido no último aceito é descartado; sobreposição parcial ESTENDE o
+  // último aceito até o fim do candidato (união), em vez de largar o resto sem máscara.
   const accepted: Finding[] = [];
-  let lastEnd = 0;
   for (const { finding } of candidates) {
-    // Ordenado por start: basta comparar com o fim do último aceito.
-    if (finding.start >= lastEnd) {
+    const last = accepted.at(-1);
+    if (!last || finding.start >= last.end) {
       accepted.push(finding);
-      lastEnd = finding.end;
+    } else if (finding.end > last.end) {
+      last.end = finding.end;
+      last.value = text.slice(last.start, last.end);
     }
   }
   return accepted;

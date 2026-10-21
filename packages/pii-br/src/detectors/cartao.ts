@@ -2,6 +2,9 @@ import { isValidLuhn } from '../check-digits';
 import { normalizeValue } from '../normalize';
 import type { Detector } from './types';
 
+// Um espaço, ou um hífen com espaço opcional de cada lado (`4111 - 1111`).
+const S = String.raw`(?: ?- ?| )`;
+
 /**
  * Agrupamentos reais de cartão, com separador (espaço ou hífen), ou
  * 13 a 19 dígitos colados. Não há "dígito solto" opcional: um número grande demais
@@ -11,8 +14,6 @@ import type { Detector } from './types';
  * casa só os 16 dígitos. Consequência assumida: cartão de 19 dígitos agrupado
  * 4-4-4-4-3 não é distinguível de 16 + CVV; só o formato colado cobre 19.
  */
-// Um espaço, ou um hífen com espaço opcional de cada lado (`4111 - 1111`).
-const S = String.raw`(?: ?- ?| )`;
 const CARD_FORMS = [
   String.raw`\d{4}${S}\d{4}${S}\d{4}${S}\d{4}`, // 4-4-4-4 (16)
   String.raw`\d{4}${S}\d{6}${S}\d{5}`, // 4-6-5 (15, Amex)

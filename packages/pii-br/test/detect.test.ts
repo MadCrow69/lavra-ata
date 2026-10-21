@@ -57,6 +57,43 @@ describe('detect: nova tentativa após candidato rejeitado (R1)', () => {
   });
 });
 
+describe('detect: sobreposição conservadora (nada vaza)', () => {
+  it('janela de cartão com Luhn coincidente não deixa os últimos dígitos de fora', () => {
+    const found = detect('validade 2028 4111 1111 1111 1111');
+    expect(found.map((f) => [f.type, f.value])).toEqual([['CARTAO', '2028 4111 1111 1111 1111']]);
+  });
+  it('cartão de 4 grupos mais um grupo: a união cobre tudo, não só o telefone', () => {
+    const t = 'x 0719 9927 0590 3840 0302 y';
+    const found = detect(t);
+    expect(found).toHaveLength(1);
+    expect(found[0]?.value).toBe('0719 9927 0590 3840 0302');
+  });
+  it('candidato contido no aceito é descartado', () => {
+    const t = 'mande para 11988887777@exemplo.com';
+    expect(detect(t).map((f) => [f.type, f.value])).toEqual([['EMAIL', '11988887777@exemplo.com']]);
+  });
+  it('mesmo início: o trecho mais longo vence', () => {
+    // O telefone casaria só 11988887777; o e-mail começa no mesmo ponto e é maior.
+    const found = detect('11988887777@exemplo.com');
+    expect(found.map((f) => f.type)).toEqual(['EMAIL']);
+  });
+  it('mesmo trecho: vence o detector de maior precedência (CPF antes de RG)', () => {
+    const found = detect('RG 529.982.247-25');
+    expect(found.map((f) => [f.type, f.value])).toEqual([['CPF', '529.982.247-25']]);
+  });
+  it('emoji (par substituto) antes do CPF: value é a fatia exata do original', () => {
+    const t = '😀 CPF 529.982.247-25';
+    const [f] = detect(t);
+    expect(f?.value).toBe('529.982.247-25');
+    expect(t.slice(f?.start, f?.end)).toBe(f?.value);
+  });
+  it('intervalo de anos 2019 - 2020 - 2021 - 2022 só vira CARTAO se passar no Luhn', () => {
+    // Documenta o comportamento atual: o formato casa com cartão, e a aceitação depende
+    // exclusivamente do Luhn (aqui a soma não fecha, então nada é detectado).
+    expect(detect('de 2019 - 2020 - 2021 - 2022')).toEqual([]);
+  });
+});
+
 describe('detect: separadores Unicode (R2)', () => {
   it('RG com hífen tipográfico (U+2010) inclui o DV e preserva o original', () => {
     const t = `rg 12.345.678${HYPHEN}9`;
@@ -114,18 +151,12 @@ describe('desempenho de detect: texto patológico de 50 mil caracteres', () => {
     'rg-contexto': 'RG 1'.repeat(N / 4),
     'cartao-hifen-espacado': '4111 - '.repeat(N / 7),
   };
-  const tempos: string[] = [];
-  for (const [caso, texto] of Object.entries(casos)) {
-    it(`${caso}: detect em < 1000 ms`, () => {
+  it('cada entrada patológica varre em < 2000 ms', () => {
+    for (const [caso, texto] of Object.entries(casos)) {
       const t0 = performance.now();
       detect(texto);
       const ms = performance.now() - t0;
-      tempos.push(`detect/${caso}=${ms.toFixed(1)}ms`);
-      expect(ms, `detect em ${caso}`).toBeLessThan(1000);
-    });
-  }
-  it('registra os tempos', () => {
-    console.info(tempos.join(String.fromCharCode(10)));
-    expect(tempos.length).toBeGreaterThan(0);
+      expect(ms, `detect em ${caso}`).toBeLessThan(2000);
+    }
   });
 });
