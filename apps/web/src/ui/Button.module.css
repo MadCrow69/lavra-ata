@@ -39,11 +39,11 @@
 
 .perigo {
   background: transparent;
-  border-color: var(--cor-destaque-texto);
-  color: var(--cor-destaque-texto);
+  border-color: var(--cor-erro);
+  color: var(--cor-erro-texto);
 }
 
 .perigo:hover:not(:disabled) {
-  background: var(--cor-destaque-fundo);
-  color: var(--cor-sobre-destaque);
+  background: var(--cor-erro-texto);
+  color: var(--cor-fundo);
 }

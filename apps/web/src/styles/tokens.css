@@ -6,6 +6,8 @@
  *            branco/primária 9,10 · destaque-texto/fundo 5,87 · branco/destaque-fundo 5,85
  *   escuro - texto/fundo 14,48 · texto/superfície 13,02 · suave/fundo 8,79 · primária/fundo 8,16
  *            escuro/primária 7,50 · destaque-texto/fundo 8,54
+ *   erro   - claro: borda 6,48 (fundo) / 7,18 (superfície) · texto 7,05 / 7,80
+ *            escuro: borda 8,09 / 7,28 · texto 8,74 / 7,86
  * `--cor-destaque` (#b5643c) só é decorativa (3,84:1 no creme, ok para gráficos >= 3:1);
  * texto terracota usa `--cor-destaque-texto`.
  */
@@ -28,6 +30,9 @@
   --cor-destaque-texto: #8f4a27;
   --cor-destaque-fundo: #9a512c;
   --cor-sobre-destaque: #ffffff;
+
+  --cor-erro: #a3281c;
+  --cor-erro-texto: #9b2318;
 
   --cor-foco: #1d4e5f;
   --cor-sombra: rgb(31 42 55 / 12%);
@@ -68,6 +73,9 @@
     --cor-destaque-fundo: #e8a47e;
     --cor-sobre-destaque: #1a0f09;
 
+    --cor-erro: #ff8f84;
+    --cor-erro-texto: #ff9a90;
+
     --cor-foco: #7fb8c9;
     --cor-sombra: rgb(0 0 0 / 40%);
   }
@@ -92,6 +100,9 @@
   --cor-destaque-texto: #e8a47e;
   --cor-destaque-fundo: #e8a47e;
   --cor-sobre-destaque: #1a0f09;
+
+  --cor-erro: #ff8f84;
+  --cor-erro-texto: #ff9a90;
 
   --cor-foco: #7fb8c9;
   --cor-sombra: rgb(0 0 0 / 40%);

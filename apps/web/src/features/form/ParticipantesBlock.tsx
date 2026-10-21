@@ -1,13 +1,20 @@
-import { memo, useMemo, useState, type Dispatch } from 'react';
+import { memo, useId, useMemo, useRef, useState, type Dispatch, type SubmitEvent } from 'react';
 import { camposFaltando } from '../../ata-types/registry';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
-import { LIMITE_PARTICIPANTES, PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
+import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
 import { useDraft } from '../../domain/DraftContext';
+import { calcularAdicao } from '../../domain/participantes';
 import { PRESENCAS, type DraftAction, type Participante, type Presenca } from '../../domain/draft';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { FormBlock } from './FormBlock';
-import { analisarLista, normalizarBusca } from './lista-participantes';
+import {
+  analisarLista,
+  contarRepetidos,
+  descreverAdicao,
+  normalizarBusca,
+  type LinhaParticipante,
+} from './lista-participantes';
 import styles from './form.module.css';
 
 const ROTULO_PRESENCA: Record<Presenca, string> = {
@@ -73,7 +80,9 @@ const Linha = memo(function Linha({ participante: p, posicao, tipo, dispatch }: 
   const atualizar = (patch: Partial<Participante>) => {
     dispatch({ type: 'atualizarParticipante', id: p.id, patch });
   };
-  const quem = p.nome.trim() === '' ? `participante ${String(posicao)}` : p.nome;
+  const nomeVazio = p.nome.trim() === '';
+  const quem = nomeVazio ? `participante ${String(posicao)}` : p.nome;
+  const erroNomeId = useId();
 
   return (
     <tr data-id={p.id}>
@@ -81,12 +90,19 @@ const Linha = memo(function Linha({ participante: p, posicao, tipo, dispatch }: 
         <input
           type="text"
           aria-label={`Nome do participante ${String(posicao)}`}
-          aria-invalid={p.nome.trim() === ''}
+          aria-invalid={nomeVazio}
+          aria-describedby={nomeVazio ? erroNomeId : undefined}
           value={p.nome}
           onChange={(e) => {
             atualizar({ nome: e.target.value });
           }}
         />
+        {nomeVazio ? (
+          <p id={erroNomeId} className={styles.erroLinha}>
+            <span aria-hidden="true">⚠ </span>
+            Informe o nome.
+          </p>
+        ) : null}
       </td>
       <td data-rotulo={tipo.rotuloPapel}>
         <input
@@ -160,13 +176,24 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const { participantes } = state;
   const [colando, setColando] = useState(false);
   const [texto, setTexto] = useState('');
-  const [aviso, setAviso] = useState<string | null>(null);
+  // `base` = lista de participantes logo após a ação; se a lista mudar por outro caminho
+  // (editar, remover), o aviso sai de cena para nunca afirmar uma contagem velha.
+  const [aviso, setAviso] = useState<{ texto: string; base: Participante[] | null } | null>(null);
+  const [novoNome, setNovoNome] = useState('');
+  const [novoPapel, setNovoPapel] = useState('');
+  const [erroNovo, setErroNovo] = useState<string | undefined>(undefined);
+  const novoNomeRef = useRef<HTMLInputElement>(null);
   const [busca, setBusca] = useState('');
   const [emEdicao, setEmEdicao] = useState<string | null>(null);
 
   const faltando = camposFaltando(state, tipo)
     .filter((f) => f.bloco === 'participantes')
     .map((f) => f.rotulo);
+
+  if (aviso) {
+    if (aviso.base === null) setAviso({ texto: aviso.texto, base: participantes });
+    else if (aviso.base !== participantes) setAviso(null);
+  }
 
   const total = participantes.length;
   const presentes = participantes.filter((p) => p.presenca === 'presente').length;
@@ -183,33 +210,50 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       );
   }, [participantes, termo, emEdicao]);
 
-  const adicionar = () => {
-    const linhas = analisarLista(texto);
-    if (linhas.length === 0) {
-      setAviso('Nenhum nome encontrado no texto colado. Escreva um nome por linha.');
-      return;
-    }
-    const vagas = Math.max(0, LIMITE_PARTICIPANTES - total);
-    const adicionados = Math.min(linhas.length, vagas);
-    const ignorados = linhas.length - adicionados;
+  /** Adiciona as linhas, avisa o resultado e devolve quantas entraram. */
+  const registrar = (linhas: LinhaParticipante[]): number => {
+    const { adicionados, ignorados } = calcularAdicao(total, linhas.length);
+    const repetidos = contarRepetidos(
+      linhas.slice(0, adicionados).map((l) => l.nome),
+      participantes.map((p) => p.nome),
+    );
     dispatch({
       type: 'adicionarParticipantes',
       nomes: linhas.map((l) => l.nome),
       papeis: linhas.map((l) => l.papel),
     });
-    const partes = [
-      adicionados === 0
-        ? 'Nenhum nome foi adicionado.'
-        : `${String(adicionados)} ${plural(adicionados, 'participante adicionado', 'participantes adicionados')}.`,
-    ];
-    if (ignorados > 0) {
-      partes.push(
-        `${String(ignorados)} ${plural(ignorados, 'nome ignorado', 'nomes ignorados')}: o limite é ${String(LIMITE_PARTICIPANTES)} participantes.`,
-      );
+    setAviso({ texto: descreverAdicao({ adicionados, ignorados, repetidos }), base: null });
+    return adicionados;
+  };
+
+  const adicionarLista = () => {
+    const linhas = analisarLista(texto);
+    if (linhas.length === 0) {
+      setAviso({
+        texto: 'Nenhum nome encontrado no texto colado. Escreva um nome por linha.',
+        base: participantes,
+      });
+      return;
     }
-    setAviso(partes.join(' '));
+    registrar(linhas);
     setTexto('');
     setColando(false);
+  };
+
+  const adicionarUm = (e: SubmitEvent) => {
+    e.preventDefault();
+    const nome = novoNome.trim();
+    if (nome === '') {
+      setErroNovo('Informe o nome do participante.');
+      novoNomeRef.current?.focus();
+      return;
+    }
+    if (registrar([{ nome, papel: novoPapel.trim() }]) > 0) {
+      setNovoNome('');
+      setNovoPapel('');
+    }
+    setErroNovo(undefined);
+    novoNomeRef.current?.focus();
   };
 
   const marcarTodosPresentes = () => {
@@ -217,9 +261,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     for (const p of alvo) {
       dispatch({ type: 'atualizarParticipante', id: p.id, patch: { presenca: 'presente' } });
     }
-    setAviso(
-      `${String(alvo.length)} ${plural(alvo.length, 'participante marcado', 'participantes marcados')} como presente${alvo.length === 1 ? '' : 's'}.`,
-    );
+    setAviso({
+      texto: `${String(alvo.length)} ${plural(alvo.length, 'participante marcado', 'participantes marcados')} como presente${alvo.length === 1 ? '' : 's'}.`,
+      base: null,
+    });
   };
 
   return (
@@ -243,12 +288,43 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </div>
       </div>
 
+      <form className={styles.novoParticipante} onSubmit={adicionarUm} noValidate>
+        <Field rotulo="Nome do novo participante" obrigatorio erro={erroNovo}>
+          {(controle) => (
+            <input
+              {...controle}
+              ref={novoNomeRef}
+              type="text"
+              value={novoNome}
+              onChange={(e) => {
+                setNovoNome(e.target.value);
+                setErroNovo(undefined);
+              }}
+            />
+          )}
+        </Field>
+        <Field rotulo={`${tipo.rotuloPapel} (opcional)`}>
+          {(controle) => (
+            <input
+              {...controle}
+              type="text"
+              value={novoPapel}
+              onChange={(e) => {
+                setNovoPapel(e.target.value);
+              }}
+            />
+          )}
+        </Field>
+        <div className={styles.novoParticipanteBotao}>
+          <Button type="submit" variante="primario">
+            Adicionar participante
+          </Button>
+        </div>
+      </form>
+
       {colando ? (
         <div className={styles.painelColar}>
-          <Field
-            rotulo="Nomes, um por linha"
-            ajuda="Aceita “Nome — Cargo”. Para adicionar só uma pessoa, digite o nome."
-          >
+          <Field rotulo="Nomes, um por linha" ajuda="Aceita “Nome — Cargo”.">
             {(controle) => (
               <textarea
                 {...controle}
@@ -261,7 +337,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             )}
           </Field>
           <div className={styles.acoesBarra}>
-            <Button variante="primario" onClick={adicionar}>
+            <Button variante="primario" onClick={adicionarLista}>
               Adicionar à lista
             </Button>
             <Button
@@ -275,15 +351,16 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </div>
       ) : null}
 
-      {aviso ? (
+      {aviso !== null && (aviso.base === null || aviso.base === participantes) ? (
         <p role="status" className={styles.aviso}>
-          {aviso}
+          {aviso.texto}
         </p>
       ) : null}
 
       {total === 0 ? (
         <p className={styles.vazio}>
-          Nenhum participante ainda. Use “Colar lista” para adicionar quem participou da reunião.
+          Nenhum participante ainda. Digite um nome acima e tecle Enter, ou use “Colar lista” para
+          adicionar vários de uma vez.
         </p>
       ) : (
         <>

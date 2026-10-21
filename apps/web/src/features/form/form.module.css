@@ -194,8 +194,14 @@
 }
 
 .tabelaRolagem[data-rolagem='true'] {
-  max-height: 24rem;
   overflow-y: auto;
+}
+
+/* Rolagem própria só na tabela larga; nos cartões (tela estreita) a página rola, sem rolagem dentro de rolagem. */
+@media (min-width: 40.01rem) {
+  .tabelaRolagem[data-rolagem='true'] {
+    max-height: 24rem;
+  }
 }
 
 .tabela {
@@ -232,8 +238,36 @@
 }
 
 .tabela input[aria-invalid='true'] {
-  border-color: var(--cor-destaque-texto);
+  border-color: var(--cor-erro);
   border-width: 2px;
+}
+
+.erroLinha {
+  margin: var(--espaco-1) 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cor-erro-texto);
+}
+
+.novoParticipante {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  gap: var(--espaco-3);
+  align-items: start;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+/* Alinha o botão com os campos, compensando a linha do rótulo que fica acima deles. */
+.novoParticipanteBotao {
+  margin-top: calc(0.875rem * 1.5 + var(--espaco-1));
+}
+
+@media (max-width: 40rem) {
+  .novoParticipanteBotao {
+    margin-top: 0;
+  }
 }
 
 .justificativa {
@@ -251,12 +285,12 @@
   border: 1px solid var(--cor-borda-forte);
   border-radius: var(--raio);
   background: var(--cor-superficie);
-  color: var(--cor-destaque-texto);
+  color: var(--cor-erro-texto);
   cursor: pointer;
 }
 
 .botaoRemover:hover {
-  border-color: var(--cor-destaque-texto);
+  border-color: var(--cor-erro);
 }
 
 .somenteLeitor {

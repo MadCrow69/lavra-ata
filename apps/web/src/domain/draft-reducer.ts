@@ -1,5 +1,5 @@
 import { TIPO_PADRAO_ID } from '../ata-types/registry';
-import { LIMITE_PARTICIPANTES } from '../config/limits';
+import { calcularAdicao } from './participantes';
 import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } from './draft';
 
 /** Chave de seção usada para `avisos`, `atribuicao` e `editadas` dos encaminhamentos. */
@@ -59,12 +59,11 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
     case 'definirPauta':
       return { ...state, pauta: action.itens };
     case 'adicionarParticipantes': {
-      const vagas = Math.max(0, LIMITE_PARTICIPANTES - state.participantes.length);
-      const novos = action.nomes
+      const validos = action.nomes
         .map((nome, i) => ({ nome: nome.trim(), papel: (action.papeis?.[i] ?? '').trim() }))
-        .filter((p) => p.nome !== '')
-        .slice(0, vagas)
-        .map((p) => novoParticipante(p.nome, p.papel));
+        .filter((p) => p.nome !== '');
+      const { adicionados } = calcularAdicao(state.participantes.length, validos.length);
+      const novos = validos.slice(0, adicionados).map((p) => novoParticipante(p.nome, p.papel));
       return novos.length === 0
         ? state
         : { ...state, participantes: [...state.participantes, ...novos] };

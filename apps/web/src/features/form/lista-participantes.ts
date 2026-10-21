@@ -1,3 +1,5 @@
+import { LIMITE_PARTICIPANTES } from '../../config/limits';
+
 export interface LinhaParticipante {
   nome: string;
   papel: string;
@@ -31,4 +33,41 @@ export function analisarLista(texto: string): LinhaParticipante[] {
 /** Minúsculas e sem acento, para a busca achar "João" digitando "joao". */
 export function normalizarBusca(texto: string): string {
   return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/** Quantos dos nomes novos já constam na lista (sem diferenciar caixa nem acento). */
+export function contarRepetidos(novos: string[], existentes: string[]): number {
+  const conhecidos = new Set(existentes.map(normalizarBusca));
+  return novos.filter((nome) => conhecidos.has(normalizarBusca(nome))).length;
+}
+
+function plural(n: number, singular: string, pluralForma: string): string {
+  return n === 1 ? singular : pluralForma;
+}
+
+export interface ResumoAdicao {
+  adicionados: number;
+  ignorados: number;
+  /** Dos adicionados, quantos já estavam na lista. */
+  repetidos: number;
+}
+
+/** Texto do aviso que a pessoa lê depois de adicionar nomes. */
+export function descreverAdicao({ adicionados, ignorados, repetidos }: ResumoAdicao): string {
+  const partes: string[] = [];
+  if (adicionados === 0) {
+    partes.push('Nenhum nome foi adicionado.');
+  } else {
+    let frase = `${String(adicionados)} ${plural(adicionados, 'participante adicionado', 'participantes adicionados')}`;
+    if (repetidos > 0) {
+      frase += ` · ${String(repetidos)} ${plural(repetidos, 'já estava', 'já estavam')} na lista (${plural(repetidos, 'mantido', 'mantidos')} em duplicidade — remova se não for o caso)`;
+    }
+    partes.push(`${frase}.`);
+  }
+  if (ignorados > 0) {
+    partes.push(
+      `${String(ignorados)} ${plural(ignorados, 'nome ignorado', 'nomes ignorados')}: o limite é ${String(LIMITE_PARTICIPANTES)} participantes.`,
+    );
+  }
+  return partes.join(' ');
 }

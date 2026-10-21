@@ -18,7 +18,7 @@
   margin: 0;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--cor-destaque-texto);
+  color: var(--cor-erro-texto);
 }
 
 .ajuda {
@@ -44,6 +44,6 @@
 }
 
 .campo :is(input, select, textarea)[aria-invalid='true'] {
-  border-color: var(--cor-destaque-texto);
+  border-color: var(--cor-erro);
   border-width: 2px;
 }

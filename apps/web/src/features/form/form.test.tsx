@@ -268,6 +268,103 @@ describe('ParticipantesBlock', () => {
     );
   });
 
+  it('adicionar um participante: nome + Enter cria a linha, limpa o campo e devolve o foco', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+
+    const nome = screen.getByLabelText(/^Nome do novo participante/);
+    await user.type(nome, 'Ana Souza{Enter}');
+
+    expect(screen.getByLabelText('Nome do participante 1')).toHaveValue('Ana Souza');
+    expect(screen.getByText('1 participante · 1 presente')).toBeVisible();
+    expect(nome).toHaveValue('');
+    expect(nome).toHaveFocus();
+    expect(screen.getByRole('status')).toHaveTextContent('1 participante adicionado.');
+
+    await user.type(nome, 'Bruno Lima');
+    await user.type(screen.getByLabelText(/^Cargo \/ empresa \(opcional\)/), 'Analista');
+    await user.click(screen.getByRole('button', { name: 'Adicionar participante' }));
+    expect(screen.getByLabelText('Nome do participante 2')).toHaveValue('Bruno Lima');
+    expect(screen.getByLabelText('Cargo / empresa do participante 2')).toHaveValue('Analista');
+    expect(nome).toHaveFocus();
+  });
+
+  it('adicionar com nome vazio mostra o erro sob o campo e não cria linha', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+
+    const nome = screen.getByLabelText(/^Nome do novo participante/);
+    await user.click(nome);
+    await user.keyboard('{Enter}');
+    expect(screen.getByText('Informe o nome do participante.')).toBeVisible();
+    expect(nome).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('0 participantes · 0 presentes')).toBeVisible();
+
+    await user.type(nome, 'Ana');
+    expect(screen.queryByText('Informe o nome do participante.')).not.toBeInTheDocument();
+  });
+
+  it('lista cheia: adicionar um nome avisa o limite e não apaga o que foi digitado', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(LIMITE_PARTICIPANTES));
+    const nome = screen.getByLabelText(/^Nome do novo participante/);
+    await user.type(nome, 'Ana{Enter}');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Nenhum nome foi adicionado. 1 nome ignorado: o limite é 500 participantes.',
+    );
+    expect(nome).toHaveValue('Ana');
+  });
+
+  it('o estado vazio ensina a digitar um nome ou colar a lista', () => {
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+    expect(screen.getByText(/Digite um nome acima e tecle Enter/)).toBeVisible();
+  });
+
+  it('avisa quantos nomes colados já estavam na lista, sem diferenciar caixa e acento', async () => {
+    const user = userEvent.setup();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(2, (i) => (i === 1 ? { nome: 'João da Conceição' } : {})),
+    );
+    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+      target: { value: 'JOAO DA CONCEICAO\nPessoa 2\nMaria Nova' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '3 participantes adicionados · 2 já estavam na lista (mantidos em duplicidade — remova se não for o caso).',
+    );
+    expect(screen.getByText('5 participantes · 5 presentes')).toBeVisible();
+  });
+
+  it('o aviso some quando a lista muda por outro caminho (editar ou remover)', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+    const nome = screen.getByLabelText(/^Nome do novo participante/);
+
+    await user.type(nome, 'Ana{Enter}');
+    expect(screen.getByRole('status')).toBeVisible();
+    await user.type(screen.getByLabelText('Nome do participante 1'), 'x');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    await user.type(nome, 'Bia{Enter}');
+    expect(screen.getByRole('status')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Remover Bia' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('linha com nome apagado mostra o texto "Informe o nome." ligado ao campo', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(2));
+    const campo = screen.getByLabelText('Nome do participante 2');
+    expect(screen.queryByText('Informe o nome.')).not.toBeInTheDocument();
+
+    await user.clear(campo);
+    expect(screen.getByText('Informe o nome.')).toBeVisible();
+    expect(campo).toHaveAccessibleDescription('Informe o nome.');
+  });
+
   it('busca só aparece com mais de 20 linhas e ignora acento e caixa', async () => {
     const user = userEvent.setup();
     const { unmount } = renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(20));
