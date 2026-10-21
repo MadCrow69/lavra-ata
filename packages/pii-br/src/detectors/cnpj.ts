@@ -8,14 +8,18 @@ const FULLY_FORMATTED = /^[0-9A-Za-z]{2}\.[0-9A-Za-z]{3}\.[0-9A-Za-z]{3}\/[0-9A-
 
 export const cnpj: Detector = {
   type: 'CNPJ',
-  // Numérico ou alfanumérico (letras aceitas em minúsculas). Cada pontuação (`.`, `.`, `/`,
-  // `-`) é opcional e independente: cobre formatado, colado e parcial (`11222333/0001-81`).
+  // Numérico ou alfanumérico (letras aceitas em minúsculas). Cada separador é opcional e
+  // independente: entre os grupos `.`, `,` ou espaço; antes da filial `/` (com espaço opcional
+  // de cada lado) ou o mesmo conjunto; antes do DV ` - ` ou o mesmo conjunto. Cobre formatado,
+  // colado, parcial (`11222333/0001-81`) e misto (`11.222.333 / 0001 - 81`).
   pattern:
-    /(?<![0-9A-Za-z])[0-9A-Za-z]{2}\.?[0-9A-Za-z]{3}\.?[0-9A-Za-z]{3}\/?[0-9A-Za-z]{4}-?\d{2}(?![0-9A-Za-z])/g,
+    /(?<![0-9A-Za-z])[0-9A-Za-z]{2}[ .,]?[0-9A-Za-z]{3}[ .,]?[0-9A-Za-z]{3}(?: ?\/ ?|[ .,]?)[0-9A-Za-z]{4}(?: ?- ?|[ .,]?)\d{2}(?![0-9A-Za-z])/g,
   accept(raw, text, start) {
     const valid = isValidCnpj(normalizeValue('CNPJ', raw));
     // Só o totalmente formatado dispensa DV e contexto; o parcial/colado exige um dos dois.
+    // Com espaço (grupos de letras e números soltos na frase) só o contexto basta.
     const formatted = FULLY_FORMATTED.test(raw);
-    return { ok: formatted || valid || hasContext(text, start, CONTEXT), valid };
+    const spaced = raw.includes(' ');
+    return { ok: formatted || (!spaced && valid) || hasContext(text, start, CONTEXT), valid };
   },
 };
