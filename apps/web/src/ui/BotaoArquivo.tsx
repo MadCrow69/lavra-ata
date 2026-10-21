@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react';
-import { Button, type ButtonProps } from './Button';
+import { Button } from './Button';
 
 export interface BotaoArquivoProps {
   children: ReactNode;
@@ -9,7 +9,6 @@ export interface BotaoArquivoProps {
   rotuloArquivo: string;
   onArquivo: (arquivo: File) => void;
   disabled?: boolean;
-  variante?: ButtonProps['variante'];
 }
 
 /**
@@ -23,13 +22,11 @@ export function BotaoArquivo({
   rotuloArquivo,
   onArquivo,
   disabled = false,
-  variante,
 }: BotaoArquivoProps) {
   const entradaRef = useRef<HTMLInputElement>(null);
   return (
     <>
       <Button
-        {...(variante ? { variante } : {})}
         disabled={disabled}
         onClick={() => {
           entradaRef.current?.click();
