@@ -251,7 +251,8 @@
 
 .novoParticipante {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  /* Dois campos que dividem a largura e o botão no tamanho do rótulo (sem quebrar em duas linhas). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: var(--espaco-3);
   align-items: start;
   padding: var(--espaco-3);
@@ -264,7 +265,15 @@
   margin-top: calc(0.875rem * 1.5 + var(--espaco-1));
 }
 
+.novoParticipanteBotao button {
+  white-space: nowrap;
+}
+
 @media (max-width: 40rem) {
+  .novoParticipante {
+    grid-template-columns: 1fr;
+  }
+
   .novoParticipanteBotao {
     margin-top: 0;
   }
