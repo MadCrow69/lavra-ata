@@ -1,6 +1,6 @@
 # Lavra
 
-Gerador de atas de reunião brasileiras a partir de transcrição, direto no navegador: sem servidor, com a sua própria chave de IA e com dados pessoais mascarados antes de qualquer envio.
+Gerador de atas de reunião brasileiras a partir de transcrição, projetado para rodar direto no navegador: sem servidor, com a sua própria chave de IA e com dados pessoais mascarados antes de qualquer envio.
 
 > **Status:** em construção. Este README é provisório e será substituído pela versão completa.
 

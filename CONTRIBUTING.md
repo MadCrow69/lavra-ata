@@ -62,10 +62,10 @@ Em issues, PRs, testes, exemplos e capturas de tela, **use somente dados fictíc
 
 ## Propor correção jurídica em modelo de ata
 
-Os modelos de ata (CIPA, condomínio, sócios de Ltda e reunião corporativa) seguem a legislação brasileira. Se encontrar um erro ou uma lacuna, abra uma issue com o formulário **Corrigir modelo de ata** ou um PR, sempre indicando:
+Os modelos de ata previstos (CIPA, condomínio, sócios de Ltda e reunião corporativa) devem seguir a legislação brasileira. Se encontrar um erro ou uma lacuna, abra uma issue com o formulário **Corrigir modelo de ata** ou um PR, sempre indicando:
 
 - o **artigo ou item da norma** (por exemplo, artigo do Código Civil ou item da NR-5);
 - a **fonte oficial** com link (Planalto, Ministério do Trabalho e Emprego, DREI etc.);
 - o trecho do modelo atual e a redação proposta.
 
-Opinião sem fonte oficial não será incorporada. O Lavra gera um rascunho e não substitui a revisão de um profissional habilitado.
+Opinião sem fonte oficial não será incorporada. O Lavra gerará um rascunho e não substituirá a revisão de um profissional habilitado.
