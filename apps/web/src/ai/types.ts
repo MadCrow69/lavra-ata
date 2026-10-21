@@ -29,18 +29,21 @@ export interface ProviderConfig {
   chave: string;
 }
 
-export type ErroTipo =
-  | 'chave_invalida'
-  | 'limite'
-  | 'instavel'
-  | 'cortado'
-  | 'json_invalido'
-  | 'recusa'
-  | 'rede'
-  | 'parametro'
-  | 'muito_longo'
-  | 'inesperado'
-  | 'cancelado';
+/** Tipos de erro de uma chamada (lista em tempo de execução para validar o rascunho salvo). */
+export const ERRO_TIPOS = [
+  'chave_invalida',
+  'limite',
+  'instavel',
+  'cortado',
+  'json_invalido',
+  'recusa',
+  'rede',
+  'parametro',
+  'muito_longo',
+  'inesperado',
+  'cancelado',
+] as const;
+export type ErroTipo = (typeof ERRO_TIPOS)[number];
 
 export interface ProviderAdapter {
   id: ProviderId;

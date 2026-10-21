@@ -16,7 +16,7 @@ function rascunhoCompleto(): AtaDraft {
     resultado: {
       secoes: { resumo: [{ tipo: 'paragrafo', texto: 'Resumo', itens: [] }] },
       encaminhamentos: [],
-      atribuicao: { resumo: { provedor: 'openai', modelo: 'm', fallbackDe: [] } },
+      atribuicao: { resumo: { provedor: 'openai', modelo: 'm', falhas: [] } },
       avisos: {},
       editadas: [],
     },
@@ -115,7 +115,27 @@ describe('persistência do rascunho', () => {
     ],
     [
       'atribuição com provedor inválido',
-      comResultado({ atribuicao: { resumo: { provedor: 'x', modelo: 'm', fallbackDe: [] } } }),
+      comResultado({ atribuicao: { resumo: { provedor: 'x', modelo: 'm', falhas: [] } } }),
+    ],
+    [
+      'falha anterior com motivo desconhecido',
+      comResultado({
+        atribuicao: {
+          resumo: { provedor: 'gemini', modelo: 'm', falhas: [{ provedor: 'openai', erro: 'x' }] },
+        },
+      }),
+    ],
+    [
+      'falha anterior com provedor inválido',
+      comResultado({
+        atribuicao: {
+          resumo: { provedor: 'gemini', modelo: 'm', falhas: [{ provedor: 'x', erro: 'limite' }] },
+        },
+      }),
+    ],
+    [
+      'atribuição sem falhas nem fallbackDe',
+      comResultado({ atribuicao: { resumo: { provedor: 'gemini', modelo: 'm' } } }),
     ],
     ['avisos com número', comResultado({ avisos: { resumo: [1] } })],
     ['editadas que não é lista', comResultado({ editadas: 'resumo' })],
@@ -177,6 +197,34 @@ describe('persistência do rascunho', () => {
     };
     salvarRascunho(d);
     expect(carregarRascunho()).toEqual(d);
+  });
+
+  it('atribuição com o motivo de cada falha faz ida e volta', () => {
+    const d = comResultado({
+      atribuicao: {
+        resumo: {
+          provedor: 'gemini',
+          modelo: 'm',
+          falhas: [{ provedor: 'openai', erro: 'limite' }],
+        },
+      },
+    }) as AtaDraft;
+    salvarRascunho(d);
+    expect(carregarRascunho()).toEqual(d);
+  });
+
+  it('rascunho de versão anterior (só `fallbackDe`) carrega, com a falha sem motivo', () => {
+    const antigo = comResultado({
+      atribuicao: {
+        resumo: { provedor: 'gemini', modelo: 'm', fallbackDe: ['openai'] },
+        decisoes: { provedor: 'openai', modelo: 'm', fallbackDe: [] },
+      },
+    });
+    sessionStorage.setItem(RASCUNHO, JSON.stringify(antigo));
+    expect(carregarRascunho()?.resultado?.atribuicao).toEqual({
+      resumo: { provedor: 'gemini', modelo: 'm', falhas: [{ provedor: 'openai' }] },
+      decisoes: { provedor: 'openai', modelo: 'm', falhas: [] },
+    });
   });
 
   it('a chave de API nunca aparece no JSON salvo', () => {

@@ -157,7 +157,11 @@ function desmascararEncaminhamentos(itens: Encaminhamento[], mapa: MaskMap): Enc
 }
 
 function atribuicaoDe(r: ResultadoCadeia<unknown>): Atribuicao {
-  return { provedor: r.provedor, modelo: r.modelo, fallbackDe: r.falhas.map((f) => f.provedor) };
+  return {
+    provedor: r.provedor,
+    modelo: r.modelo,
+    falhas: r.falhas.map(({ provedor, erro }) => ({ provedor, erro })),
+  };
 }
 
 /** A resposta chegou, mas a pessoa já cancelou: descarta (o rascunho não muda). */

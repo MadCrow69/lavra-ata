@@ -102,7 +102,7 @@ describe('gerarAta', () => {
     expect(resultado.atribuicao.resumo).toEqual({
       provedor: 'openai',
       modelo: 'gpt-6-luna',
-      fallbackDe: [],
+      falhas: [],
     });
     expect(resultado.atribuicao.encaminhamentos?.provedor).toBe('openai');
     expect(Object.values(resultado.avisos).flat()).toEqual([]);
@@ -205,7 +205,7 @@ describe('gerarAta', () => {
     expect(r.resultado.atribuicao.resumo).toEqual({
       provedor: 'gemini',
       modelo: 'gemini-3.8-flash',
-      fallbackDe: ['openai'],
+      falhas: [{ provedor: 'openai', erro: 'json_invalido' }],
     });
     expect(r.falhas.map((f) => [f.provedor, f.erro])).toEqual([['openai', 'json_invalido']]);
   });
@@ -311,7 +311,7 @@ describe('regerarSecao', () => {
     expect(r.avisos).toEqual([]);
     expect(r.mapa.markers['[CPF_1]']).toBe(CPF);
     expect(r.mapa.markers['[CPF_2]']).toBe(CPF_2);
-    expect(r.atribuicao).toEqual({ provedor: 'openai', modelo: 'gpt-6-luna', fallbackDe: [] });
+    expect(r.atribuicao).toEqual({ provedor: 'openai', modelo: 'gpt-6-luna', falhas: [] });
   });
 
   it('marcador inventado que já estava no texto atual continua avisado ao regerar', async () => {

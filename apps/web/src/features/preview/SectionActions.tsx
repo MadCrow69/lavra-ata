@@ -7,6 +7,7 @@ import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
 import type { Bloco, Encaminhamento } from '../../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
+import { textoDaFalha } from '../../generation/atribuicao';
 import { descreverErroDeGeracao, type ErroDeGeracao } from '../../generation/erro-geracao';
 import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
 import { regerarSecao } from '../../generation/pipeline';
@@ -158,7 +159,7 @@ export function SectionActions({
           setInstrucao('');
           mostrar({
             titulo: `Seção “${titulo}” regerada por ${ROTULO_CURTO[r.atribuicao.provedor]} · ${r.atribuicao.modelo}`,
-            detalhes: r.atribuicao.fallbackDe.map((p) => `${ROTULO_CURTO[p]} falhou antes.`),
+            detalhes: r.atribuicao.falhas.map(textoDaFalha),
           });
         },
         cancelado: () => {

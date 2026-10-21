@@ -1,13 +1,12 @@
 import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import type { ProviderId } from '../../ai/types';
-import { ROTULO_CURTO } from '../../config/models';
 import { construirDocumento, contarPreencher, dividirPreencher } from '../../document/build-model';
 import type { DocBloco, Inline } from '../../document/model';
 import { useDraft } from '../../domain/DraftContext';
-import type { Presenca } from '../../domain/draft';
+import type { Atribuicao, Presenca } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
+import { textoDeGeracao } from '../../generation/atribuicao';
 import { chavesUnicas } from './chaves';
 import { EncaminhamentosEditor } from './EncaminhamentosEditor';
 import styles from './preview.module.css';
@@ -217,15 +216,13 @@ function assinaturaDoBloco(bloco: DocBloco): string {
 
 type DocSecao = Extract<DocBloco, { tipo: 'secao' }>;
 
-/** "Gerado por Gemini · modelo" ou "Editado por você" (a edição à mão mantém a autoria, mas manda). */
-function textoDeAtribuicao(
-  atribuicao: { provedor: ProviderId; modelo: string } | undefined,
-  editada: boolean,
-): string | null {
+/**
+ * "Gerado por Gemini · modelo" (com quem falhou antes, se houve fallback) ou "Editado por você"
+ * (a edição à mão mantém a autoria, mas manda).
+ */
+function textoDeAtribuicao(atribuicao: Atribuicao | undefined, editada: boolean): string | null {
   if (editada) return 'Editado por você';
-  return atribuicao
-    ? `Gerado por ${ROTULO_CURTO[atribuicao.provedor]} · ${atribuicao.modelo}`
-    : null;
+  return atribuicao ? textoDeGeracao(atribuicao) : null;
 }
 
 /**

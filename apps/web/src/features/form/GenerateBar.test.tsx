@@ -225,7 +225,7 @@ describe('GenerateBar', () => {
     });
     await user.click(botaoGerar());
     expect(await screen.findByText('Ata gerada por Gemini · gemini-3.8-flash')).toBeVisible();
-    expect(screen.getByText('OpenAI falhou: limite de uso')).toBeVisible();
+    expect(screen.getByText('OpenAI falhou (limite de uso)')).toBeVisible();
     // Avisa a bancada (que leva a pessoa à folha) uma vez, só no sucesso.
     expect(onGerada).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('espiao')).toHaveTextContent(`Reembolso a ${CPF}.`);

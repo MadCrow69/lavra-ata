@@ -1,10 +1,10 @@
 import { useId, useRef, useState } from 'react';
 import { camposFaltando, obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import { resumoDoErro } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
+import { textoDaFalha } from '../../generation/atribuicao';
 import { descreverErroDeGeracao } from '../../generation/erro-geracao';
 import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
 import { gerarAta } from '../../generation/pipeline';
@@ -74,9 +74,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
         setEstado({ fase: 'parado' });
         mostrar({
           titulo: `Ata gerada por ${ROTULO_CURTO[r.atribuicao.provedor]} · ${r.atribuicao.modelo}`,
-          detalhes: r.falhas.map(
-            (f) => `${ROTULO_CURTO[f.provedor]} falhou: ${resumoDoErro(f.erro)}`,
-          ),
+          detalhes: r.falhas.map(textoDaFalha),
         });
         onGerada?.();
       },

@@ -13,7 +13,7 @@ import styles from './Toast.module.css';
 
 export interface ToastDados {
   titulo: string;
-  /** Linhas complementares (ex.: "OpenAI falhou: limite de uso"). Texto puro. */
+  /** Linhas complementares (ex.: "OpenAI falhou (limite de uso)"). Texto puro. */
   detalhes?: string[];
 }
 

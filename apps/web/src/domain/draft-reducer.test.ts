@@ -10,7 +10,7 @@ const MAPA: MaskMap = {
   keys: {},
   counters: {},
 };
-const ATRIB: Atribuicao = { provedor: 'openai', modelo: 'm', fallbackDe: [] };
+const ATRIB: Atribuicao = { provedor: 'openai', modelo: 'm', falhas: [] };
 
 function resultado(): ResultadoAta {
   return {
@@ -194,7 +194,11 @@ describe('draftReducer', () => {
         chave: 'resumo',
         blocos: [{ tipo: 'paragrafo', texto: 'novo', itens: [] }],
         avisos: ['aviso'],
-        atribuicao: { ...ATRIB, provedor: 'gemini', fallbackDe: ['openai'] },
+        atribuicao: {
+          ...ATRIB,
+          provedor: 'gemini',
+          falhas: [{ provedor: 'openai', erro: 'limite' }],
+        },
         mapa: { ...MAPA, counters: { CPF: 1 } },
       });
       expect(d.resultado?.secoes.resumo?.[0]?.texto).toBe('novo');

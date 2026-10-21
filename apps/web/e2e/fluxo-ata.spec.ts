@@ -288,7 +288,15 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     await expect(page.getByText('Ata gerada por Gemini · gemini-3.8-flash')).toBeVisible({
       timeout: FOLGA_FALLBACK_MS,
     });
-    await expect(page.getByText('OpenAI falhou: limite de uso')).toBeVisible();
+    await expect(
+      page.getByRole('region', { name: 'Notificações' }).getByText('OpenAI falhou (limite de uso)'),
+    ).toBeVisible();
+    // A troca também fica registrada em cada seção, não só no aviso que some (spec 8.1.1).
+    await expect(
+      folha(page)
+        .getByText('Gerado por Gemini · gemini-3.8-flash — OpenAI falhou (limite de uso)')
+        .first(),
+    ).toBeVisible();
 
     // A folha tem todas as seções, os encaminhamentos e o CPF restaurado.
     const documento = folha(page);

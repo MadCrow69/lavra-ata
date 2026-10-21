@@ -1,5 +1,5 @@
 import type { MaskMap } from '@lavra/pii-br';
-import type { ProviderId } from '../ai/types';
+import type { ErroTipo, ProviderId } from '../ai/types';
 
 export const PRESENCAS = ['presente', 'ausente', 'justificado'] as const;
 export type Presenca = (typeof PRESENCAS)[number];
@@ -56,10 +56,20 @@ export interface Encaminhamento {
   status: StatusEncaminhamento;
 }
 
+/**
+ * Provedor que falhou antes do que gerou, e por quê (spec 8.1.1: nada de troca silenciosa).
+ * `erro` ausente só em rascunho salvo por versão anterior, que não gravava o motivo.
+ */
+export interface FalhaAnterior {
+  provedor: ProviderId;
+  erro?: ErroTipo;
+}
+
 export interface Atribuicao {
   provedor: ProviderId;
   modelo: string;
-  fallbackDe: ProviderId[];
+  /** Provedores que falharam antes, na ordem da fila. */
+  falhas: FalhaAnterior[];
 }
 
 /**

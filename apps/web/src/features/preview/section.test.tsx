@@ -45,7 +45,7 @@ const GEMINI: ChaveProvedor = {
   estado: 'ok',
 };
 
-const ATRIBUICAO_OPENAI: Atribuicao = { provedor: 'openai', modelo: 'gpt-6-luna', fallbackDe: [] };
+const ATRIBUICAO_OPENAI: Atribuicao = { provedor: 'openai', modelo: 'gpt-6-luna', falhas: [] };
 
 function resultado(parcial: Partial<ResultadoAta> = {}): ResultadoAta {
   return {
@@ -184,6 +184,37 @@ describe('revisão por seção: ações e atribuição', () => {
     const editada = secao('Discussão por item de pauta');
     expect(within(editada).getByText('Editado por você')).toBeVisible();
     expect(within(editada).queryByText(/Gerado por/)).not.toBeInTheDocument();
+  });
+
+  it('fallback: a atribuição da seção diz quem falhou e por quê (spec 8.1.1)', () => {
+    renderizar({
+      inicial: rascunho({
+        resultado: resultado({
+          atribuicao: {
+            ...resultado().atribuicao,
+            resumo: {
+              provedor: 'gemini',
+              modelo: 'gemini-3.8-flash',
+              falhas: [{ provedor: 'openai', erro: 'limite' }],
+            },
+            decisoes: {
+              provedor: 'gemini',
+              modelo: 'gemini-3.8-flash',
+              falhas: [{ provedor: 'openai' }],
+            },
+          },
+        }),
+      }),
+    });
+    expect(
+      within(secao('Resumo')).getByText(
+        'Gerado por Gemini · gemini-3.8-flash — OpenAI falhou (limite de uso)',
+      ),
+    ).toBeVisible();
+    // Rascunho de versão anterior: sem o motivo gravado, diz só que falhou.
+    expect(
+      within(secao('Decisões')).getByText('Gerado por Gemini · gemini-3.8-flash — OpenAI falhou'),
+    ).toBeVisible();
   });
 
   it('avisos de validação aparecem na seção certa, com ícone e texto', () => {
@@ -326,12 +357,39 @@ describe('revisão por seção: regerar e ajustar', () => {
     expect(r.atribuicao.resumo).toEqual({
       provedor: 'gemini',
       modelo: 'gemini-3.8-flash',
-      fallbackDe: [],
+      falhas: [],
     });
     expect(r.atribuicao.discussao).toEqual(ATRIBUICAO_OPENAI);
     expect(r.editadas).toEqual([]);
     expect(within(s).getByText('Gerado por Gemini · gemini-3.8-flash')).toBeVisible();
     expect(screen.getByText(/Seção “Resumo” regerada por Gemini/)).toBeVisible();
+  });
+
+  it('regerar com fallback: a seção e o toast dizem quem falhou e o motivo', async () => {
+    const { user } = renderizar({
+      chaves: [
+        { provedor: 'openai', chave: 'sk-teste-ficticia-1', modelo: 'gpt-6-luna', estado: 'ok' },
+        GEMINI,
+      ],
+      impl: {
+        openai: () => Promise.reject(erroProvedor('limite', 'openai')),
+        gemini: () => Promise.resolve(respostaBlocos('Resumo do segundo provedor.')),
+      },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    expect(await within(s).findByText('Resumo do segundo provedor.')).toBeVisible();
+    expect(lerResultado().atribuicao.resumo).toEqual({
+      provedor: 'gemini',
+      modelo: 'gemini-3.8-flash',
+      falhas: [{ provedor: 'openai', erro: 'limite' }],
+    });
+    expect(
+      within(s).getByText('Gerado por Gemini · gemini-3.8-flash — OpenAI falhou (limite de uso)'),
+    ).toBeVisible();
+    expect(screen.getByRole('region', { name: 'Notificações' })).toHaveTextContent(
+      'OpenAI falhou (limite de uso)',
+    );
   });
 
   it('seção editada pede confirmação antes de regerar; cancelar não chama a IA', async () => {

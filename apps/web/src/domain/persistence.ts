@@ -1,6 +1,13 @@
 import { RASCUNHO } from '../config/storage-keys';
-import { PROVEDORES } from '../ai/types';
-import { PRESENCAS, STATUS_ENCAMINHAMENTO, TIPOS_BLOCO, TONS, type AtaDraft } from './draft';
+import { ERRO_TIPOS, PROVEDORES, type ProviderId } from '../ai/types';
+import {
+  PRESENCAS,
+  STATUS_ENCAMINHAMENTO,
+  TIPOS_BLOCO,
+  TONS,
+  type AtaDraft,
+  type Atribuicao,
+} from './draft';
 
 type Obj = Record<string, unknown>;
 
@@ -54,14 +61,43 @@ function ehEncaminhamento(v: unknown): boolean {
   );
 }
 
-function ehAtribuicao(v: unknown): boolean {
+function ehFalhaAnterior(v: unknown): boolean {
   return (
-    ehObjeto(v) && ehUm(PROVEDORES, v.provedor) && ehTexto(v.modelo) && ehFallback(v.fallbackDe)
+    ehObjeto(v) &&
+    ehUm(PROVEDORES, v.provedor) &&
+    (v.erro === undefined || ehUm(ERRO_TIPOS, v.erro))
   );
 }
 
-function ehFallback(v: unknown): boolean {
+/** Formato de versão anterior: `fallbackDe` com quem falhou, sem o motivo. */
+function ehFallbackAntigo(v: unknown): v is ProviderId[] {
   return Array.isArray(v) && v.every((p) => ehUm(PROVEDORES, p));
+}
+
+function ehAtribuicao(v: unknown): boolean {
+  if (!ehObjeto(v) || !ehUm(PROVEDORES, v.provedor) || !ehTexto(v.modelo)) return false;
+  return v.falhas === undefined
+    ? ehFallbackAntigo(v.fallbackDe)
+    : Array.isArray(v.falhas) && v.falhas.every(ehFalhaAnterior);
+}
+
+/** Atribuição de versão anterior (`fallbackDe`) vira `falhas` sem motivo; a atual passa intacta. */
+function migrarAtribuicao(a: Atribuicao): Atribuicao {
+  const bruto = a as unknown as Obj;
+  if (bruto.falhas !== undefined || !ehFallbackAntigo(bruto.fallbackDe)) return a;
+  return {
+    provedor: a.provedor,
+    modelo: a.modelo,
+    falhas: bruto.fallbackDe.map((provedor) => ({ provedor })),
+  };
+}
+
+function migrar(d: AtaDraft): AtaDraft {
+  if (!d.resultado) return d;
+  const atribuicao = Object.fromEntries(
+    Object.entries(d.resultado.atribuicao).map(([chave, a]) => [chave, migrarAtribuicao(a)]),
+  );
+  return { ...d, resultado: { ...d.resultado, atribuicao } };
 }
 
 function ehResultado(v: unknown): boolean {
@@ -122,7 +158,7 @@ export function carregarRascunho(): AtaDraft | null {
     const bruto = sessionStorage.getItem(RASCUNHO);
     if (bruto === null) return null;
     const dado: unknown = JSON.parse(bruto);
-    return ehRascunho(dado) ? dado : null;
+    return ehRascunho(dado) ? migrar(dado) : null;
   } catch {
     return null;
   }
