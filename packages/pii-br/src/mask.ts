@@ -94,7 +94,12 @@ function collectReserved(base: MaskMap, text: string): Map<PiiType, Set<string>>
 
 /**
  * Troca identificadores por marcadores `[TIPO_N]`. Não muta `options.map`: devolve um mapa
- * novo. O mesmo valor normalizado reaproveita o marcador; `markers` guarda o primeiro texto
+ * novo.
+ *
+ * ATENÇÃO: passe sempre o texto SEM máscara. Remascarar um texto que ainda contém marcadores
+ * (`[CPF_1]`) com o mapa reaproveitado os faz colidir com os novos e virar `[CPF#1]` (e
+ * `collisions`); sem o mapa, viram literais do usuário que o `unmask` não restaura.
+ * Para regerar ou ajustar, mascare o ORIGINAL de novo reaproveitando o mapa. O mesmo valor normalizado reaproveita o marcador; `markers` guarda o primeiro texto
  * original visto, e `unmask` restaura nesse formato (não no de cada ocorrência).
  *
  * Texto do usuário que já tem forma de marcador de um dos 9 tipos (`[CPF_1]`, `[cpf 1]`):

@@ -124,8 +124,9 @@ Nome do pacote: `@lavra/pii-br` **[decisão do Claude]** (só no workspace; npm 
 - `detect(text, options?)` → lista de achados `{ type, value, start, end, valid }`.
 - `mask(text, options?)` → `{ masked, map }`; marcadores no formato `[CPF_1]`, `[TELEFONE_2]` etc. **O mesmo valor recebe sempre o mesmo marcador** dentro de uma sessão (normalizar antes de comparar: CPF com e sem pontuação é o mesmo CPF). O mapa pode ser reaproveitado entre chamadas (regerar/ajustar usam o mesmo mapa).
 - `unmask(text, map)` → texto reidratado.
-- `validateOutput(output, map, originalInput)` → relatório com: marcadores desconhecidos (que não estão no mapa — IA inventou), marcadores alterados/quebrados (ex.: `[CPF 1]`), e **identificadores novos** detectados na saída que não existiam na entrada (IA inventou um CPF/telefone).
-- Opções: quais tipos detectar; exigir DV válido ou aceitar formato.
+- `validateOutput(output, map, sentInput)` → relatório com: marcadores desconhecidos (que não estão no mapa — IA inventou), marcadores alterados/quebrados (ex.: `[CPF 1]`, `CPF_1`), e **identificadores novos** detectados na saída que não existiam na entrada (IA inventou um CPF/telefone). `sentInput` é o texto **mascarado** exatamente como enviado ao modelo (não o original: com o original, um CPF cru vazado na saída pareceria já presente na entrada).
+- `findMarkers(text)` → marcadores dos 9 tipos no texto (tipo, número, trecho, posições), na mesma forma tolerante do `unmask`; serve à prévia de privacidade da app.
+- Opções: quais tipos detectar. A opção "exigir DV válido ou aceitar formato" foi substituída pela regra de aceitação da privacidade primeiro (ver decisão 11 da seção 14).
 
 ### 6.2 Detectores do MVP
 
@@ -348,3 +349,4 @@ Biblioteca de UI/estilo (CSS próprio com tokens é suficiente; nada de kit pesa
 8. Spike de conectividade como primeiro marco; sem proxy em caso de falha.
 9. Página inicial = a própria bancada (sem landing separada).
 10. Anthropic como terceiro provedor (único com chamada do navegador documentada oficialmente); fallback sequencial, nunca paralelo; fallback sempre declarado na tela.
+11. `pii-br`: a opção "exigir DV válido ou aceitar formato" foi substituída pela regra de aceitação da privacidade primeiro — mascara se o formato estiver completo **ou** houver palavra de contexto **ou** o DV conferir (CPF, CNPJ e PIS; cartão exige Luhn sempre). Aceita falsos positivos para não vazar.
