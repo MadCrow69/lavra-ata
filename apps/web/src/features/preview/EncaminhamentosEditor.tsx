@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import {
   ROTULO_STATUS,
   STATUS_ENCAMINHAMENTO,
@@ -43,6 +43,108 @@ function vazia(l: Linha): boolean {
   return l.acao.trim() === '' && l.responsavel.trim() === '' && l.prazo.trim() === '';
 }
 
+interface LinhaEncaminhamentoProps {
+  linha: Linha;
+  /** Posição exibida (1, 2, …): muda ao remover uma linha acima. */
+  numero: number;
+  /** Prefixo dos ids dos campos (estável por linha). */
+  prefixo: string;
+  invalida: boolean;
+  ajudaPrazoId: string;
+  onAlterar: (id: number, patch: Partial<Omit<Linha, 'id'>>) => void;
+  onRemover: (id: number) => void;
+}
+
+/** Uma linha do editor. Memoizada: digitar numa linha não redesenha as outras (centenas de campos). */
+const LinhaEncaminhamento = memo(function LinhaEncaminhamento({
+  linha: l,
+  numero,
+  prefixo,
+  invalida,
+  ajudaPrazoId,
+  onAlterar,
+  onRemover,
+}: LinhaEncaminhamentoProps) {
+  const n = String(numero);
+  return (
+    <fieldset className={styles.linha} data-linha={l.id}>
+      <legend className={styles.legenda}>{`Encaminhamento ${n}`}</legend>
+      <div className={styles.celulaAcao}>
+        <label htmlFor={`${prefixo}-acao`} className={styles.rotulo}>
+          Ação
+        </label>
+        <input
+          id={`${prefixo}-acao`}
+          data-campo="acao"
+          className={styles.campo}
+          value={l.acao}
+          aria-invalid={invalida}
+          onChange={(e) => {
+            onAlterar(l.id, { acao: e.target.value });
+          }}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${prefixo}-responsavel`} className={styles.rotulo}>
+          Responsável
+        </label>
+        <input
+          id={`${prefixo}-responsavel`}
+          className={styles.campo}
+          value={l.responsavel}
+          onChange={(e) => {
+            onAlterar(l.id, { responsavel: e.target.value });
+          }}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${prefixo}-prazo`} className={styles.rotulo}>
+          Prazo
+        </label>
+        <input
+          id={`${prefixo}-prazo`}
+          className={styles.campo}
+          value={l.prazo}
+          placeholder="AAAA-MM-DD ou texto"
+          aria-describedby={ajudaPrazoId}
+          onChange={(e) => {
+            onAlterar(l.id, { prazo: e.target.value });
+          }}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${prefixo}-status`} className={styles.rotulo}>
+          Status
+        </label>
+        <select
+          id={`${prefixo}-status`}
+          className={styles.campo}
+          value={l.status}
+          onChange={(e) => {
+            const status = STATUS_ENCAMINHAMENTO.find((s) => s === e.target.value);
+            if (status) onAlterar(l.id, { status });
+          }}
+        >
+          {STATUS_ENCAMINHAMENTO.map((s) => (
+            <option key={s} value={s}>
+              {ROTULO_STATUS[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Button
+        variante="perigo"
+        aria-label={`Remover encaminhamento ${n}`}
+        onClick={() => {
+          onRemover(l.id);
+        }}
+      >
+        Remover
+      </Button>
+    </fieldset>
+  );
+});
+
 /**
  * Editor de linhas dos encaminhamentos (ação, responsável, prazo e status). O prazo é um campo de
  * texto: vale `AAAA-MM-DD` (vira `dd/mm/aaaa` na folha) ou texto livre, como "na próxima reunião"
@@ -80,11 +182,12 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
     focarAcao(id);
   }, [linhas]);
 
-  const alterar = (id: number, patch: Partial<Omit<Linha, 'id'>>) => {
+  // Estáveis entre renderizações: com 200 linhas, digitar numa só redesenha só ela (`memo`).
+  const alterar = useCallback((id: number, patch: Partial<Omit<Linha, 'id'>>) => {
     setLinhas((atual) => atual.map((l) => (l.id === id ? { ...l, ...patch } : l)));
     setErro(null);
     setInvalida(null);
-  };
+  }, []);
 
   const adicionar = () => {
     const id = proximoIdRef.current++;
@@ -95,12 +198,12 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
     ]);
   };
 
-  const remover = (id: number) => {
+  const remover = useCallback((id: number) => {
     setLinhas((atual) => atual.filter((l) => l.id !== id));
     setErro(null);
     setInvalida(null);
     adicionarRef.current?.focus();
-  };
+  }, []);
 
   const salvar = () => {
     if (ataOcupada) return;
@@ -149,87 +252,18 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
       className={styles.editor}
       onKeyDown={aoTeclar}
     >
-      {linhas.map((l, i) => {
-        const n = String(i + 1);
-        const prefixo = `${baseId}-${String(l.id)}`;
-        return (
-          <fieldset key={l.id} className={styles.linha} data-linha={l.id}>
-            <legend className={styles.legenda}>{`Encaminhamento ${n}`}</legend>
-            <div className={styles.celulaAcao}>
-              <label htmlFor={`${prefixo}-acao`} className={styles.rotulo}>
-                Ação
-              </label>
-              <input
-                id={`${prefixo}-acao`}
-                data-campo="acao"
-                className={styles.campo}
-                value={l.acao}
-                aria-invalid={invalida === l.id}
-                onChange={(e) => {
-                  alterar(l.id, { acao: e.target.value });
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor={`${prefixo}-responsavel`} className={styles.rotulo}>
-                Responsável
-              </label>
-              <input
-                id={`${prefixo}-responsavel`}
-                className={styles.campo}
-                value={l.responsavel}
-                onChange={(e) => {
-                  alterar(l.id, { responsavel: e.target.value });
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor={`${prefixo}-prazo`} className={styles.rotulo}>
-                Prazo
-              </label>
-              <input
-                id={`${prefixo}-prazo`}
-                className={styles.campo}
-                value={l.prazo}
-                placeholder="AAAA-MM-DD ou texto"
-                aria-describedby={ajudaPrazoId}
-                onChange={(e) => {
-                  alterar(l.id, { prazo: e.target.value });
-                }}
-              />
-            </div>
-            <div>
-              <label htmlFor={`${prefixo}-status`} className={styles.rotulo}>
-                Status
-              </label>
-              <select
-                id={`${prefixo}-status`}
-                className={styles.campo}
-                value={l.status}
-                onChange={(e) => {
-                  const status = STATUS_ENCAMINHAMENTO.find((s) => s === e.target.value);
-                  if (status) alterar(l.id, { status });
-                }}
-              >
-                {STATUS_ENCAMINHAMENTO.map((s) => (
-                  <option key={s} value={s}>
-                    {ROTULO_STATUS[s]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button
-              variante="perigo"
-              aria-label={`Remover encaminhamento ${n}`}
-              onClick={() => {
-                remover(l.id);
-              }}
-            >
-              Remover
-            </Button>
-          </fieldset>
-        );
-      })}
+      {linhas.map((l, i) => (
+        <LinhaEncaminhamento
+          key={l.id}
+          linha={l}
+          numero={i + 1}
+          prefixo={`${baseId}-${String(l.id)}`}
+          invalida={invalida === l.id}
+          ajudaPrazoId={ajudaPrazoId}
+          onAlterar={alterar}
+          onRemover={remover}
+        />
+      ))}
       <p id={ajudaPrazoId} className={styles.ajuda}>
         {AJUDA_PRAZO}
       </p>
