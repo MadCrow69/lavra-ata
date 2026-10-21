@@ -30,3 +30,29 @@ export const LARGURAS_ENCAMINHAMENTOS = [50, 20, 15, 15] as const;
 
 /** Responsável do encaminhamento quando a transcrição não deixa claro quem fará. */
 export const RESPONSAVEL_A_DEFINIR = 'A definir';
+
+/** Página A4 do PDF e do DOCX (pt). Fonte única para os dois formatos. */
+export const PAGINA_DOCUMENTO = { margemPt: 56, margemInferiorPt: 64 } as const;
+
+/** Tamanhos de texto (pt) do PDF e do DOCX. */
+export const TIPOGRAFIA_DOCUMENTO = {
+  corpoPt: 10.5,
+  tituloPt: 16,
+  secaoPt: 12.5,
+  subtituloPt: 11,
+  cabecalhoPt: 9.5,
+  avisoPt: 8.5,
+  rodapePt: 8,
+} as const;
+
+/** Caixa (pt) em que a logo cabe no documento; a logo nunca é ampliada. */
+export const LOGO_CAIXA_PT = { largura: 180, altura: 48 } as const;
+
+/** Cor do texto no PDF e no DOCX: grafite (folha sóbria). */
+export const COR_TEXTO_DOCUMENTO = '#1f2a37';
+
+/** Fundo das lacunas `[PREENCHER: …]` no PDF e no DOCX. */
+export const COR_FUNDO_PREENCHER = '#f3dcc9';
+
+/** Famílias do DOCX: o Word as resolve no computador de quem abre (nada é embutido). */
+export const FONTES_DOCX = { titulo: 'Cambria', corpo: 'Calibri' } as const;

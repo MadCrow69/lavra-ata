@@ -10,6 +10,7 @@ import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-r
 import { textoDeGeracao } from '../../generation/atribuicao';
 import { useLogo } from '../../logo/LogoContext';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
+import { plural } from '../../ui/plural';
 import { useToast } from '../../ui/Toast';
 import { chavesUnicas } from './chaves';
 import { EncaminhamentosEditor } from './EncaminhamentosEditor';
@@ -23,10 +24,6 @@ import { comSecoesVazias } from './secoes-vazias';
 const ATRIBUTO_LACUNA = 'data-preencher';
 
 const PREFIXO_ID_SECAO = 'ata-secao-';
-
-function plural(n: number, singular: string, pluralForma: string): string {
-  return n === 1 ? singular : pluralForma;
-}
 
 function juntar(...classes: (string | undefined)[]): string {
   return classes.filter((c) => c !== undefined).join(' ');
