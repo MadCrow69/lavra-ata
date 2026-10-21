@@ -29,9 +29,3 @@ export const REGRAS_COMUNS: readonly string[] = [
   'Não escreva títulos de seção, nem HTML, nem Markdown: os títulos vêm do modelo do documento e o conteúdo é texto puro.',
   'Responda somente com o JSON no formato pedido, sem texto antes ou depois.',
 ];
-
-/** Aviso de minuta impresso em todas as atas, ao final do documento. */
-export const AVISO_MINUTA =
-  'Minuta elaborada com auxílio de inteligência artificial a partir de transcrição. ' +
-  'Revise integralmente antes de assinar. Não substitui assessoria jurídica; ' +
-  'a validade depende de convocação, quórum e assinaturas, que não foram verificados.';

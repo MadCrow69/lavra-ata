@@ -2,6 +2,7 @@ import { PAPEL_DA_IA, REGRAS_COMUNS, REGRAS_TOM } from '../ata-types/regras-comu
 import { ehVisivel, rotuloDoCampo } from '../ata-types/registry';
 import { dataOuNulo, horaOuNulo, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef, SecaoDef } from '../ata-types/types';
+import { TITULO_ENCAMINHAMENTOS } from '../config/documento';
 import {
   ROTULO_PRESENCA,
   STATUS_ENCAMINHAMENTO,
@@ -25,8 +26,6 @@ export interface Prompt {
 }
 
 const NAO_INFORMADO = 'não informada';
-
-const TITULO_ENCAMINHAMENTOS = 'Encaminhamentos';
 
 const INSTRUCAO_ENCAMINHAMENTOS = `Liste cada ação combinada na reunião como um objeto com "acao", "responsavel", "prazo" e "status" (um destes valores: ${STATUS_ENCAMINHAMENTO.join(', ')}). Sem ação clara, não crie o item.`;
 

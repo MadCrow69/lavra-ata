@@ -1,5 +1,5 @@
 import type { AtaTypeDefinition } from '../../ata-types/types';
-import { TITULO_ENCAMINHAMENTOS } from '../../document/build-model';
+import { TITULO_ENCAMINHAMENTOS } from '../../config/documento';
 import type { DocBloco } from '../../document/model';
 import { CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 

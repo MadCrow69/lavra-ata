@@ -13,6 +13,9 @@ export const TEXTO_SECOES_PENDENTES = 'As seções aparecem aqui depois de gerar
  */
 export const RODAPE_PAGINADO = 'Página {pagina} de {total}';
 
+/** Título da seção de encaminhamentos (folha, documentos e prompt da IA). */
+export const TITULO_ENCAMINHAMENTOS = 'Encaminhamentos';
+
 /** Texto da célula quando o dado não foi informado (nome, cargo, prazo…). */
 export const CELULA_VAZIA = '—';
 

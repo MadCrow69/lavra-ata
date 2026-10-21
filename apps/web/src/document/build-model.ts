@@ -7,6 +7,7 @@ import {
   RESPONSAVEL_A_DEFINIR,
   RODAPE_PAGINADO,
   TEXTO_SECOES_PENDENTES,
+  TITULO_ENCAMINHAMENTOS,
 } from '../config/documento';
 import {
   ROTULO_PRESENCA,
@@ -27,7 +28,6 @@ const CHAVE_SECOES_PENDENTES = 'pendente';
 
 const TITULO_PARTICIPANTES = 'Participantes';
 const TITULO_PAUTA = 'Pauta';
-export const TITULO_ENCAMINHAMENTOS = 'Encaminhamentos';
 const TITULO_SECOES_PENDENTES = 'Seções da ata';
 const COLUNAS_ENCAMINHAMENTOS = ['Ação', 'Responsável', 'Prazo', 'Status'];
 
