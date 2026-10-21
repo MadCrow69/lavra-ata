@@ -1,8 +1,17 @@
+import { KeysProvider } from './ai/KeysContext';
+import { Workbench } from './features/workbench/Workbench';
+import { AvisoContextoInseguro, contextoInseguro, LimiteDeErro } from './shell/LimiteDeErro';
+import { ToastProvider } from './ui/Toast';
+
 export function App() {
+  if (contextoInseguro()) return <AvisoContextoInseguro />;
   return (
-    <main>
-      <h1>Lavra</h1>
-      <p>Em construção: gerador de atas de reunião com privacidade verificável.</p>
-    </main>
+    <LimiteDeErro>
+      <KeysProvider>
+        <ToastProvider>
+          <Workbench />
+        </ToastProvider>
+      </KeysProvider>
+    </LimiteDeErro>
   );
 }

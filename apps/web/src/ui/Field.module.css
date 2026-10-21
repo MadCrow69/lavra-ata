@@ -1,0 +1,49 @@
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  min-width: 0;
+}
+
+.rotulo {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.asterisco {
+  color: var(--cor-destaque-texto);
+}
+
+.erro {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cor-erro-texto);
+}
+
+.ajuda {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--cor-texto-suave);
+}
+
+/* Estilo comum dos controles: use em <input>, <select> e <textarea> dentro de um Field. */
+.campo :is(input, select, textarea) {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+}
+
+.campo textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.campo :is(input, select, textarea)[aria-invalid='true'] {
+  border-color: var(--cor-erro);
+  border-width: 2px;
+}

@@ -1,0 +1,371 @@
+/* ---------- Bloco recolhível ---------- */
+
+.bloco {
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  min-width: 0;
+}
+
+.blocoTitulo {
+  margin: 0;
+  font-family: var(--fonte-interface);
+  font-size: 1rem;
+}
+
+.blocoCabecalho {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 0;
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--cor-texto);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.blocoNumero {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+  font-size: 0.875rem;
+}
+
+.blocoNome {
+  flex: none;
+}
+
+.statusOk,
+.statusFalta {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.statusOk {
+  color: var(--cor-primaria);
+}
+
+.statusFalta {
+  color: var(--cor-destaque-texto);
+}
+
+.seta {
+  flex: none;
+  color: var(--cor-texto-suave);
+}
+
+.blocoConteudo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  padding: var(--espaco-2) var(--espaco-4) var(--espaco-4);
+}
+
+.blocoConteudo[hidden] {
+  display: none;
+}
+
+/* ---------- Grade de campos ---------- */
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: var(--espaco-4);
+  align-items: start;
+}
+
+.linhaInteira {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Tipo de ata ---------- */
+
+.grupo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.grupoLegenda {
+  padding: 0;
+  margin-bottom: var(--espaco-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.opcaoTipo {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+  min-height: 44px;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+.opcaoTipo:has(input:checked) {
+  border-color: var(--cor-primaria);
+  border-width: 2px;
+}
+
+.opcaoTipo input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.125rem 0 0;
+  flex: none;
+}
+
+.opcaoDescricao {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--cor-texto-suave);
+}
+
+/* ---------- Participantes ---------- */
+
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3) var(--espaco-4);
+}
+
+.contador {
+  margin: 0;
+  font-weight: 600;
+}
+
+.acoesBarra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.painelColar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3);
+  border: 1px dashed var(--cor-borda-forte);
+  border-radius: var(--raio);
+}
+
+.aviso {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-primaria);
+  background: var(--cor-fundo);
+  font-size: 0.9375rem;
+}
+
+.vazio {
+  margin: 0;
+  color: var(--cor-texto-suave);
+}
+
+.busca {
+  max-width: 24rem;
+}
+
+.tabelaRolagem {
+  overflow-x: auto;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+.tabelaRolagem[data-rolagem='true'] {
+  overflow-y: auto;
+}
+
+/* Rolagem própria só na tabela larga; nos cartões (tela estreita) a página rola, sem rolagem dentro de rolagem. */
+@media (min-width: 40.01rem) {
+  .tabelaRolagem[data-rolagem='true'] {
+    max-height: 24rem;
+  }
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--espaco-2) var(--espaco-3);
+  background: var(--cor-superficie);
+  border-bottom: 2px solid var(--cor-borda-forte);
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.tabela td {
+  padding: var(--espaco-1) var(--espaco-2);
+  border-bottom: 1px solid var(--cor-borda);
+  vertical-align: top;
+}
+
+.tabela :is(input, select) {
+  width: 100%;
+  min-width: 8rem;
+  min-height: 44px;
+  padding: var(--espaco-1) var(--espaco-2);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+}
+
+.tabela input[aria-invalid='true'] {
+  border-color: var(--cor-erro);
+  border-width: 2px;
+}
+
+.erroLinha {
+  margin: var(--espaco-1) 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--cor-erro-texto);
+}
+
+.novoParticipante {
+  display: grid;
+  /* Dois campos que dividem a largura e o botão no tamanho do rótulo (sem quebrar em duas linhas). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--espaco-3);
+  align-items: start;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+/* Alinha o botão com os campos, compensando a linha do rótulo que fica acima deles. */
+.novoParticipanteBotao {
+  margin-top: calc(0.875rem * 1.5 + var(--espaco-1));
+}
+
+.novoParticipanteBotao button {
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .novoParticipante {
+    grid-template-columns: 1fr;
+  }
+
+  .novoParticipanteBotao {
+    margin-top: 0;
+  }
+}
+
+.alternarLista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+}
+
+.alternarLista p {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
+.justificativa {
+  margin-top: var(--espaco-1);
+}
+
+.celulaAcao {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.botaoRemover {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-erro-texto);
+  cursor: pointer;
+}
+
+.botaoRemover:hover {
+  border-color: var(--cor-erro);
+}
+
+.somenteLeitor {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Telas estreitas: cada participante vira um cartão, com o rótulo de cada campo à vista. O valor
+ * espelha `LARGURA_CARTOES_REM` (config/ui.ts), que recolhe a lista longa nesta mesma largura.
+ */
+@media (max-width: 40rem) {
+  .tabela,
+  .tabela tbody,
+  .tabela tr,
+  .tabela td {
+    display: block;
+  }
+
+  .tabela thead {
+    display: none;
+  }
+
+  .tabela tr {
+    padding: var(--espaco-2);
+    border-bottom: 2px solid var(--cor-borda-forte);
+  }
+
+  .tabela td {
+    border-bottom: 0;
+  }
+
+  .tabela td::before {
+    content: attr(data-rotulo);
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--cor-texto-suave);
+  }
+
+  .tabela td[data-rotulo='Ação']::before {
+    content: none;
+  }
+
+  .tabela :is(input, select) {
+    min-width: 0;
+  }
+
+  .celulaAcao {
+    width: auto;
+  }
+}

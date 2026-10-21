@@ -1,0 +1,30 @@
+.tela {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--espaco-4);
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  font-family: var(--fonte-interface);
+}
+
+.caixa {
+  display: grid;
+  gap: var(--espaco-4);
+  max-width: 36rem;
+  padding: var(--espaco-6);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+}
+
+.titulo {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 1.375rem;
+}
+
+.texto {
+  margin: 0;
+  line-height: 1.5;
+}

@@ -10,5 +10,12 @@
     "checkJs": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "csp.config.js", "scripts"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "csp.config.js",
+    "scripts",
+    "e2e"
+  ]
 }

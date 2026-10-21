@@ -1,0 +1,287 @@
+/*
+ * Revisão por seção, desenhada sobre a folha A4: a folha é papel nos dois temas, então os
+ * controles usam os tokens `--cor-folha-*` (tinta, borda, lacuna) em vez dos da interface.
+ * Os botões do componente <Button> mantêm as cores da interface e continuam legíveis no papel.
+ */
+
+/* ---------- Seção revisável ---------- */
+
+.secaoRevisavel {
+  position: relative;
+}
+
+/* ---------- Seção sem conteúdo (marcador só da tela) ---------- */
+
+.secaoVazia {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px dashed var(--cor-folha-borda);
+  color: var(--cor-folha-suave);
+  font-family: var(--fonte-interface);
+  font-size: 0.875em;
+  font-style: italic;
+}
+
+/* ---------- Avisos acima da seção: ícone + texto ---------- */
+
+.avisos {
+  margin: 0 0 var(--espaco-2);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-folha-lacuna);
+  border-left-width: 4px;
+  background: var(--cor-folha-lacuna-fundo);
+  color: var(--cor-folha-lacuna);
+  font-family: var(--fonte-interface);
+  font-size: 0.8125em;
+  line-height: 1.45;
+}
+
+.avisos ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.avisos li + li {
+  margin-top: var(--espaco-1);
+}
+
+/* ---------- Rodapé da seção: atribuição + ações ---------- */
+
+.revisao {
+  margin-top: var(--espaco-2);
+  font-family: var(--fonte-interface);
+  font-size: 0.8125em;
+  line-height: 1.4;
+  text-align: left;
+  hyphens: manual;
+}
+
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2) var(--espaco-4);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.atribuicao {
+  margin: 0;
+  color: var(--cor-folha-suave);
+}
+
+.acoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  align-items: flex-end;
+  /* Escondidas no repouso, mas continuam na ordem de Tab: o foco as revela. */
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.secaoRevisavel:hover .acoes,
+.secaoRevisavel:focus-within .acoes,
+.acoes[data-fixa] {
+  opacity: 1;
+}
+
+/* Sem passar o mouse (toque) as ações ficam sempre à vista. */
+@media (hover: none) {
+  .acoes {
+    opacity: 1;
+  }
+}
+
+.botoesAcao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  justify-content: flex-end;
+}
+
+.acao {
+  min-height: 32px;
+  padding: 0 var(--espaco-3);
+  border: 1px solid var(--cor-folha-borda);
+  border-radius: var(--raio);
+  background: transparent;
+  color: var(--cor-folha-tinta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.acao:hover:not(:disabled) {
+  border-color: var(--cor-folha-tinta);
+  background: var(--cor-folha-lacuna-fundo);
+}
+
+.acao:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.acao:focus-visible {
+  outline: 3px solid var(--cor-folha-tinta);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .acao {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+.motivo {
+  max-width: 24rem;
+  margin: 0;
+  color: var(--cor-folha-suave);
+  text-align: right;
+}
+
+/* ---------- Campos (editores e instrução) ---------- */
+
+.editor,
+.ajuste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin-top: var(--espaco-2);
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-folha-borda);
+  border-radius: var(--raio);
+  background: var(--cor-folha);
+  color: var(--cor-folha-tinta);
+  font-family: var(--fonte-interface);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: left;
+  hyphens: manual;
+}
+
+.rotulo {
+  display: block;
+  font-weight: 600;
+}
+
+.campo {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-folha-borda);
+  border-radius: var(--raio);
+  background: var(--cor-folha);
+  color: var(--cor-folha-tinta);
+}
+
+textarea.campo {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.campo:focus-visible {
+  outline: 3px solid var(--cor-folha-tinta);
+  outline-offset: 1px;
+}
+
+.campo[aria-invalid='true'] {
+  border-color: var(--cor-folha-lacuna);
+  border-width: 2px;
+}
+
+.ajuda,
+.contador {
+  margin: 0;
+  color: var(--cor-folha-suave);
+  font-size: 0.8125rem;
+}
+
+.contador {
+  text-align: right;
+}
+
+.erroCampo {
+  margin: 0;
+  color: var(--cor-folha-lacuna);
+  font-weight: 600;
+}
+
+.botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+/* ---------- Linhas do editor de encaminhamentos ---------- */
+
+.linha {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--espaco-2) var(--espaco-3);
+  align-items: end;
+  min-width: 0;
+  margin: 0;
+  padding: var(--espaco-3);
+  border: 1px solid var(--cor-folha-borda);
+  border-radius: var(--raio);
+}
+
+.legenda {
+  padding: 0 var(--espaco-1);
+  color: var(--cor-folha-suave);
+  font-weight: 600;
+}
+
+.celulaAcao {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Progresso, status e erro ---------- */
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  align-items: flex-start;
+}
+
+.status:empty {
+  display: none;
+}
+
+.progresso {
+  width: 100%;
+  height: 0.5rem;
+  accent-color: var(--cor-folha-tinta);
+}
+
+.statusTexto {
+  margin: 0;
+  color: var(--cor-folha-suave);
+}
+
+.erro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  margin-top: var(--espaco-2);
+  padding: var(--espaco-3);
+  border-left: 4px solid var(--cor-folha-lacuna);
+  background: var(--cor-folha-lacuna-fundo);
+  color: var(--cor-folha-lacuna);
+}
+
+.erroTitulo {
+  margin: 0;
+  font-weight: 700;
+}
+
+.erroDetalhes {
+  margin: 0;
+  padding-left: var(--espaco-4);
+}
+
+p.erroDetalhes {
+  padding-left: 0;
+}

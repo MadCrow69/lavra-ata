@@ -1,0 +1,147 @@
+.casca {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ---------- Cabeçalho ---------- */
+
+.cabecalho {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-4);
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.marca {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--espaco-3);
+  min-width: 0;
+}
+
+.nome {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--cor-primaria);
+}
+
+.slogan {
+  font-size: 0.875rem;
+  color: var(--cor-texto-suave);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-4);
+}
+
+.botaoPrimario {
+  min-height: 44px;
+  padding: 0 var(--espaco-4);
+  border: 0;
+  border-radius: var(--raio);
+  background: var(--cor-primaria);
+  color: var(--cor-sobre-primaria);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botaoPrimario:hover {
+  background: var(--cor-primaria-hover);
+}
+
+/* ---------- Abas (tela estreita) ---------- */
+
+.abas {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--cor-fundo);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.aba {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 0 var(--espaco-4);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--cor-texto-suave);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aba[aria-selected='true'] {
+  border-bottom-color: var(--cor-destaque);
+  color: var(--cor-texto);
+}
+
+/* Contador de avisos na aba: texto além da cor. */
+.indicador {
+  margin-left: var(--espaco-2);
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-destaque);
+  color: var(--cor-destaque-texto);
+  font-size: 0.8125rem;
+}
+
+/* ---------- Painéis ---------- */
+
+.umaColuna,
+.duasColunas {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--largura-maxima);
+  margin: 0 auto;
+  padding: var(--espaco-4);
+}
+
+.duasColunas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espaco-6);
+  align-items: start;
+}
+
+.painel {
+  min-width: 0;
+}
+
+.painel[hidden] {
+  display: none;
+}
+
+/* ---------- Rodapé ---------- */
+
+.rodape {
+  padding: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+  background: var(--cor-superficie);
+  color: var(--cor-texto-suave);
+  font-size: 0.875rem;
+}
+
+.listaRodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--espaco-1) var(--espaco-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
