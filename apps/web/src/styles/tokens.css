@@ -121,3 +121,33 @@
   --cor-foco: #7fb8c9;
   --cor-sombra: rgb(0 0 0 / 40%);
 }
+
+/*
+ * Dentro da folha (papel branco nos dois temas) os controles voltam à paleta clara: no escuro, o
+ * botão "Remover" (vermelho claro) e o "Salvar" (azul claro) ficariam quase ilegíveis sobre o
+ * branco. Mesmos valores do tema claro, com os contrastes medidos no topo deste arquivo.
+ */
+[data-folha] {
+  color-scheme: light;
+
+  --cor-fundo: #f6f1e7;
+  --cor-superficie: #fffdf8;
+  --cor-texto: #1f2a37;
+  --cor-texto-suave: #4a5563;
+  --cor-borda: #d9d0bd;
+  --cor-borda-forte: #7a7f78;
+
+  --cor-primaria: #1d4e5f;
+  --cor-primaria-hover: #163d4a;
+  --cor-sobre-primaria: #ffffff;
+
+  --cor-destaque: #b5643c;
+  --cor-destaque-texto: #8f4a27;
+  --cor-destaque-fundo: #9a512c;
+  --cor-sobre-destaque: #ffffff;
+
+  --cor-erro: #a3281c;
+  --cor-erro-texto: #9b2318;
+
+  --cor-foco: #1d4e5f;
+}
