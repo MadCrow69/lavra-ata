@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createMaskMap, mask, MARKER_PATTERN, unmask } from '../src/mask';
-import { CORPUS } from './corpus';
-
-// Montado por código: o arquivo não carrega caractere invisível.
-const ZWSP = String.fromCharCode(0x200b);
+import { detect } from '../src/detect';
+import { normalizeValue } from '../src/normalize';
+import { CORPUS, FALSOS_POSITIVOS } from './corpus';
 
 describe('mask / unmask', () => {
   it('troca por marcadores e reidrata', () => {
@@ -38,6 +37,32 @@ describe('mask / unmask', () => {
   it('ida e volta preserva corpus inteiro', () => {
     expect(CORPUS.length).toBeGreaterThanOrEqual(20);
     for (const t of CORPUS) expect(unmask(mask(t).masked, mask(t).map)).toBe(t);
+  });
+  it('falsos positivos clássicos passam intactos', () => {
+    for (const t of FALSOS_POSITIVOS) {
+      const r = mask(t);
+      expect(r.masked).toBe(t);
+      expect(r.findings).toEqual([]);
+    }
+  });
+  it('um único mapa compartilhado pelo corpus inteiro reidrata com o mesmo significado', () => {
+    // Formato do restaurado = primeiro visto; compara-se o valor normalizado, não o texto.
+    const chaves = (t: string): string[] =>
+      detect(t).map((f) => `${f.type}:${normalizeValue(f.type, f.value)}`);
+    let map = createMaskMap();
+    const mascarados: string[] = [];
+    const todasColisoes: string[] = [];
+    for (const t of CORPUS) {
+      const r = mask(t, { map });
+      map = r.map;
+      mascarados.push(r.masked);
+      todasColisoes.push(...r.collisions);
+    }
+    CORPUS.forEach((t, i) => {
+      expect(chaves(unmask(mascarados[i] ?? '', map))).toEqual(chaves(t));
+    });
+    // O único literal que colide é o `[CPF_1]` da frase de exemplo (CPF_1 já alocado antes).
+    expect(todasColisoes).toEqual(['[CPF_1]']);
   });
   it('corpus: nenhum valor sensível sobra no texto mascarado', () => {
     for (const t of CORPUS) {
@@ -122,33 +147,64 @@ describe('unmask: robustez', () => {
 });
 
 describe('mask: texto do usuário com forma de marcador', () => {
-  it('marcador literal do usuário nunca é trocado por dado de outra pessoa', () => {
-    const a = mask('cliente 529.982.247-25');
-    const entrada = 'o usuário escreveu [CPF_1] literalmente';
-    const { masked, map } = mask(entrada, { map: a.map });
-    expect(masked).not.toMatch(MARKER_PATTERN); // o LLM não vê marcador falso
-    expect(unmask(masked, map)).toBe(entrada);
-    expect(unmask(masked, map)).not.toContain('529.982.247-25');
-  });
-  it('literal escapado convive com marcador real no mesmo texto', () => {
+  it('literal + CPF real na mesma chamada: o real pula o número do literal, sem caractere invisível', () => {
     const entrada = '[CPF_1] e 529.982.247-25';
-    const { masked, map } = mask(entrada);
-    expect(masked).toBe(`[${ZWSP}CPF_1] e [CPF_1]`);
+    const { masked, map, collisions } = mask(entrada);
+    expect(masked).toBe('[CPF_1] e [CPF_2]');
+    expect(collisions).toEqual([]);
+    expect(map.counters.CPF).toBe(2);
+    expect(Object.keys(map.markers)).toEqual(['[CPF_2]']); // o literal nunca entra no mapa
     expect(unmask(masked, map)).toBe(entrada);
+    expect(masked).toMatch(/^[ -~]*$/); // só ASCII visível
   });
-  it('grafias tolerantes do usuário também são escapadas', () => {
-    for (const lit of ['[cpf_1]', '[CPF 1]', '[ CPF-1 ]']) {
-      const { masked, map } = mask(`x ${lit} y`);
-      expect(unmask(masked, map)).toBe(`x ${lit} y`);
+  it('eco do LLM com o literal continua literal', () => {
+    const { map } = mask('[CPF_1] e 529.982.247-25');
+    expect(unmask('o LLM repetiu [CPF_1] e também [cpf 1] e [CPF_2]', map)).toBe(
+      'o LLM repetiu [CPF_1] e também [cpf 1] e 529.982.247-25',
+    );
+  });
+  it('variantes de grafia reservam o mesmo número; zeros à esquerda são outro número', () => {
+    for (const lit of ['[cpf 1]', '[ CPF-1 ]', '[Cpf' + String.fromCharCode(10) + '1]']) {
+      const { masked, map } = mask(`${lit} 529.982.247-25`);
+      expect(masked).toBe(`${lit} [CPF_2]`);
+      expect(unmask(masked, map)).toBe(`${lit} 529.982.247-25`);
     }
+    // [CPF_01] != [CPF_1]: não reserva o 1
+    expect(mask('[CPF_01] 529.982.247-25').masked).toBe('[CPF_01] [CPF_1]');
+    // reserva vale por tipo e pula números consecutivos
+    expect(
+      mask('[cpf 3] [CPF_1] [TELEFONE_1] 529.982.247-25 111.444.777-35 (11) 98888-7777').masked,
+    ).toBe('[cpf 3] [CPF_1] [TELEFONE_1] [CPF_2] [CPF_4] [TELEFONE_2]');
   });
-  it('texto do usuário que já contém o escape também faz ida e volta', () => {
-    for (const lit of [`[${ZWSP}CPF_1]`, `[${ZWSP}${ZWSP}CPF_1]`]) {
-      const { masked, map } = mask(`a ${lit} b 529.982.247-25`);
-      expect(unmask(masked, map)).toBe(`a ${lit} b 529.982.247-25`);
-    }
+  it('número gigante não passa por Number', () => {
+    const lit = '[CPF_99999999999999999999]';
+    const { masked, map } = mask(`${lit} 529.982.247-25`);
+    expect(masked).toBe(`${lit} [CPF_1]`);
+    expect(unmask(masked, map)).toBe(`${lit} 529.982.247-25`);
   });
-  it('não escapa colchetes que não têm forma de marcador', () => {
-    expect(mask('lista [a, b] e [item 3x] e [1]').masked).toBe('lista [a, b] e [item 3x] e [1]');
+  it('colisão com marcador já alocado: vira [CPF#1], visível, e é reportada', () => {
+    const a = mask('cliente 529.982.247-25');
+    const entrada = 'o usuário escreveu [CPF_1] e [cpf 1] literalmente; novo 111.444.777-35';
+    const { masked, map, collisions } = mask(entrada, { map: a.map });
+    expect(masked).toBe('o usuário escreveu [CPF#1] e [cpf#1] literalmente; novo [CPF_2]');
+    expect(collisions).toEqual(['[CPF_1]', '[cpf 1]']);
+    const volta = unmask(masked, map);
+    expect(volta).not.toContain('529.982.247-25'); // nada do cliente anterior
+    expect(volta).toBe('o usuário escreveu [CPF#1] e [cpf#1] literalmente; novo 111.444.777-35');
+  });
+  it('unmask deixa [CPF#1] em paz (o # não é aceito pela forma tolerante)', () => {
+    const { map } = mask('529.982.247-25');
+    expect(unmask('[CPF#1] [cpf#1] [CPF # 1]', map)).toBe('[CPF#1] [cpf#1] [CPF # 1]');
+  });
+  it('sem colisão, collisions vem vazio', () => {
+    expect(mask('529.982.247-25').collisions).toEqual([]);
+  });
+  it('colchetes de outros tipos passam intactos', () => {
+    const t = 'ver [Anexo 2] e [item 3x] e [1] e [lista a, b] e [XYZ_1]';
+    const { masked, map } = mask(t);
+    expect(masked).toBe(t);
+    expect(unmask(masked, map)).toBe(t);
+    // mesmo com mapa que tenha marcador homônimo de tipo desconhecido, nada é reservado/pulado
+    expect(mask('[Anexo 2] 529.982.247-25').masked).toBe('[Anexo 2] [CPF_1]');
   });
 });

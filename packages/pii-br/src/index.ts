@@ -2,3 +2,4 @@ export type { DetectOptions, Finding, MaskMap, OutputReport, PiiType } from './t
 export { isValidCnpj, isValidCpf, isValidLuhn, isValidPis } from './check-digits';
 export { detect } from './detect';
 export { createMaskMap, mask, unmask, MARKER_PATTERN } from './mask';
+export type { MaskResult } from './mask';
