@@ -4,4 +4,3 @@ coverage/
 .vitest/
 .superpowers/
 pnpm-lock.yaml
-docs/superpowers/

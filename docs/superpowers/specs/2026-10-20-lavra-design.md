@@ -27,6 +27,7 @@ Diferenciais (o que o separa de "mais um resumo de reunião"):
 ## 3. Objetivos, não-objetivos, anti-objetivos
 
 **Objetivos (MVP)**
+
 - 4 tipos de ata: corporativa, CIPA, condomínio, sócios (Ltda). **Sem prazo [decisão do autor]: qualidade antes de data** — os 4 tipos entram, Ltda é o último marco.
 - Entrada de transcrição por colar texto ou enviar `.txt` / `.vtt`.
 - Proteção de dados pessoais com prévia "o que vai para a IA".
@@ -39,6 +40,7 @@ Diferenciais (o que o separa de "mais um resumo de reunião"):
 - Deploy no GitHub Pages; README em português (versão em inglês depois).
 
 **Não-objetivos (fora do MVP, vão para o roadmap do README)**
+
 - Contratos ou outros documentos não-ata **[decisão do autor]** — a arquitetura de "registro de tipos" deixa isso como módulo futuro.
 - Assembleia de S.A. e reunião de conselho de administração **[decisão do autor]** (exigem publicação, livro de presença e qualificação completa — alto risco jurídico).
 - Transcrição de áudio.
@@ -46,6 +48,7 @@ Diferenciais (o que o separa de "mais um resumo de reunião"):
 - Provedores além de OpenAI, Gemini e Anthropic; interface em inglês; publicação da biblioteca no npm.
 
 **Anti-objetivos (se acontecer, falhou mesmo que "funcione")**
+
 - Qualquer byte de transcrição ou chave indo para um servidor que não seja o provedor escolhido pela pessoa.
 - Prometer "anonimização": **nomes de pessoas não são removidos** (a ata precisa deles) e a página diz isso com todas as letras **[decisão do autor, R1]**.
 - A IA declarar aprovação, quórum ou unanimidade que não está explícita na transcrição **[decisão do autor, R2]**.
@@ -94,6 +97,7 @@ transcrição ──► pii-br.mask() ──► texto mascarado ──► prompt
 ```
 
 Princípio: **a IA só escreve o que só a transcrição sabe.** Cabeçalho, título formal, lista de presença, tabela de participantes, blocos de assinatura, fórmula de encerramento e aviso de minuta vêm do **formulário + template**, nunca da IA. Consequências:
+
 - Identificadores do formulário (CNPJ da empresa, quotas, unidades) **nem vão para a IA**.
 - A IA não consegue "inventar" presença, mesa ou data.
 - O que a IA devolve é narrativa + itens estruturados (deliberações, encaminhamentos, pendências).
@@ -101,6 +105,7 @@ Princípio: **a IA só escreve o que só a transcrição sabe.** Cabeçalho, tí
 ### 5.3 Registro de tipos de documento
 
 Cada tipo de ata é um módulo declarativo com:
+
 - `id`, rótulo, descrição curta, ícone;
 - **schema do formulário** (campos, obrigatoriedade, máscaras, campos extras de participante);
 - **seções** que a IA preenche (chave, título, instrução específica, se é narrativa ou lista);
@@ -124,17 +129,17 @@ Nome do pacote: `@lavra/pii-br` **[decisão do Claude]** (só no workspace; npm 
 
 ### 6.2 Detectores do MVP
 
-| Tipo | Regra |
-|---|---|
-| CPF | 11 dígitos com/sem máscara, **DV validado** |
-| CNPJ | numérico e **alfanumérico** (vigente desde jul/2026: 12 posições `[0-9A-Z]` + 2 DV; valor de cada caractere = ASCII − 48; pesos 5..2,9..2 e 6..2,9..2; mod 11), com/sem máscara, DV validado |
-| E-mail | regex pragmática |
-| Telefone | fixo e celular BR, com/sem +55, DDD, parênteses, hífen, espaços |
-| CEP | `00000-000` / `00000000` (só com hífen ou contexto "CEP", para evitar falso positivo com números quaisquer) |
-| Placa | antiga `AAA-9999`/`AAA9999` e Mercosul `AAA9A99` |
-| PIS/PASEP/NIT | 11 dígitos com DV validado (pesos 3,2,9,8,7,6,5,4,3,2) |
-| RG | **só com contexto** ("RG", "identidade") — não há padrão nacional; sem DV |
-| Cartão de crédito | 13–19 dígitos com Luhn **[decisão do Claude]** |
+| Tipo              | Regra                                                                                                                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CPF               | 11 dígitos com/sem máscara, **DV validado**                                                                                                                                                  |
+| CNPJ              | numérico e **alfanumérico** (vigente desde jul/2026: 12 posições `[0-9A-Z]` + 2 DV; valor de cada caractere = ASCII − 48; pesos 5..2,9..2 e 6..2,9..2; mod 11), com/sem máscara, DV validado |
+| E-mail            | regex pragmática                                                                                                                                                                             |
+| Telefone          | fixo e celular BR, com/sem +55, DDD, parênteses, hífen, espaços                                                                                                                              |
+| CEP               | `00000-000` / `00000000` (só com hífen ou contexto "CEP", para evitar falso positivo com números quaisquer)                                                                                  |
+| Placa             | antiga `AAA-9999`/`AAA9999` e Mercosul `AAA9A99`                                                                                                                                             |
+| PIS/PASEP/NIT     | 11 dígitos com DV validado (pesos 3,2,9,8,7,6,5,4,3,2)                                                                                                                                       |
+| RG                | **só com contexto** ("RG", "identidade") — não há padrão nacional; sem DV                                                                                                                    |
+| Cartão de crédito | 13–19 dígitos com Luhn **[decisão do Claude]**                                                                                                                                               |
 
 Ordem de precedência para sobreposição (ex.: número que casa com CPF e com PIS) é decisão do construtor, documentada e testada.
 
@@ -177,23 +182,27 @@ Comum a todos: cabeçalho (logo, título, organização, data, hora de início e
 Formatação brasileira: datas no corpo formal por extenso ("Aos catorze dias do mês de outubro de dois mil e vinte e seis") e na tabela `dd/mm/aaaa`; horários `14h30`. **Datas nunca passam por `Date` com fuso** — formatar a partir da string `AAAA-MM-DD` (armadilha conhecida: dia −1 no fuso de Brasília).
 
 **a) Reunião corporativa**
+
 - Campos: organização*, título/assunto*, data*, início*, fim, modalidade*, local/plataforma, condução, redator; participantes: nome*, cargo/empresa, presença*.
 - Seções da IA: resumo; discussão por item de pauta; decisões; encaminhamentos; pendências (inclui acompanhamento de pendências anteriores, se mencionadas); riscos (opcional, vazio se não houver); próxima reunião (se mencionada).
 - Fecho simples; assinaturas opcionais (condução e redator).
 
 **b) CIPA — reunião ordinária/extraordinária (NR-5, Portaria MTP 422/2021)**
+
 - Campos: empresa*, estabelecimento, gestão/mandato*, número da reunião, natureza* (ordinária / extraordinária — se extraordinária, motivo: acidente grave ou fatal, ou solicitação de representação, item 5.6.4), data*, horário*, local*, modalidade*, presidente*, secretário designado* (5.6.5); participantes: nome*, representação* (empregador/empregados), condição* (titular/suplente), presença* + justificativa.
 - Seções da IA: abertura; leitura/aprovação da ata anterior (se houve); acompanhamento de pendências anteriores; discussão por item de pauta (acidentes, riscos, inspeções, assédio etc. conforme a conversa); deliberações — **registrar se foi por consenso ou votação conforme dito; sem consenso explícito, `[PREENCHER: forma de deliberação]`** (5.6.8); encaminhamentos; encerramento.
 - Assinaturas: **todos os presentes** (5.6.3). Nota no rodapé da ata: disponibilizar aos membros e divulgar deliberações aos empregados (5.6.3.1/5.6.3.2) **[decisão do Claude]**.
 - Ata de eleição/posse **não** é coberta (documento diferente).
 
 **c) Condomínio — assembleia geral ordinária/extraordinária (CC arts. 1.347–1.356; Lei 4.591/64)**
+
 - Campos: condomínio*, CNPJ, endereço*, natureza* (AGO/AGE), convocação (data do edital, 1ª ou 2ª convocação, horário), data*, horário*, local ou plataforma*, modalidade* (presencial/eletrônica/híbrida — art. 1.354-A), presidente da mesa*, secretário*; participantes: nome*, unidade*, condição* (proprietário/procurador/locatário), fração ideal (opcional), presença.
 - Seções da IA: abertura e instalação (registra o quórum **declarado** na reunião; nunca calcula); eleição da mesa (se ocorreu); para cada item da ordem do dia: discussão + **resultado da votação como declarado** (a favor/contra/abstenções se ditos; senão `[PREENCHER: resultado da votação]`); encaminhamentos; encerramento.
 - Fecho formal com lavratura, leitura e aprovação. Assinaturas: presidente e secretário (+ campo opcional "assinaturas dos presentes" conforme convenção).
 - **O app nunca calcula quórum nem fração ideal**, nem declara validade de deliberação.
 
 **d) Sócios de Ltda — reunião ou assembleia (CC arts. 1.071–1.080-A; Manual DREI de Ltda)** — último marco
+
 - Campos: razão social*, CNPJ*, NIRE, sede*, forma* (reunião/assembleia), data*, horário*, local*, modalidade* (presencial/digital/semipresencial), convocação* (dispensada pela presença de todos / dispensada por ciência escrita / edital publicado — com datas e veículo), presidente*, secretário*; sócios: nome*, participação no capital (% ou quotas)*, presença, representado por procurador (nome).
 - O app pode **somar** as participações dos presentes informadas no formulário e mostrar "capital presente informado: X%" (aritmética sobre dado do usuário). **Não** declara se o quórum foi atingido.
 - Seções da IA: deliberações por item da ordem do dia, com votos **como declarados** (inclusive dissidências e abstenções); encaminhamentos; encerramento.
@@ -272,6 +281,7 @@ WCAG 2.2 AA; navegação completa por teclado; foco visível; `<label>` em todo 
 ### 8.2 Adaptador comum
 
 Interface única (`gerar(prompt, schema, opções, abortSignal)` → JSON validado | erro tipado). Cada provedor implementa:
+
 - **OpenAI:** Responses API (`POST /v1/responses`) com `text.format` `json_schema` `strict: true` (todo objeto com `additionalProperties: false` e todas as propriedades em `required`). Tratar item de recusa antes do parse. Truncamento: `status: "incomplete"` + `incomplete_details.reason: "max_output_tokens"`.
 - **Gemini:** endpoint e formato de schema **a confirmar com chamada real** (a doc de out/2026 marca `generateContent` como "legacy" e promove a Interactions API; os nomes do campo de schema estão conflitantes). Header `x-goog-api-key`, nunca `?key=`. Truncamento: `finishReason: "MAX_TOKENS"` ou `status: "incomplete"`.
 - **Orçamento de saída:** o raciocínio/"thinking" consome o mesmo limite de saída nos dois provedores — usar esforço de raciocínio baixo/mínimo e um teto de saída folgado; corte **sempre** vira erro explícito, nunca sucesso parcial.
