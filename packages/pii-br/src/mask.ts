@@ -16,7 +16,7 @@ const TOLERANT_SOURCE = '\\[\\s*([A-Za-z]+)[\\s_-]?(\\d+)\\s*\\]';
 
 const PII_TYPE_NAMES: ReadonlySet<string> = new Set(DETECTORS.map((d) => d.type));
 
-const isPiiType = (name: string): name is PiiType => PII_TYPE_NAMES.has(name);
+export const isPiiType = (name: string): name is PiiType => PII_TYPE_NAMES.has(name);
 
 export interface MaskResult {
   masked: string;
@@ -35,7 +35,7 @@ export function createMaskMap(): MaskMap {
 }
 
 /** Aplica `fn` a cada texto com forma de marcador (tolerante); regex nova por chamada. */
-function mapMarkerLiterals(
+export function mapMarkerLiterals(
   text: string,
   fn: (literal: string, type: string, n: string) => string,
 ): string {
