@@ -1,4 +1,15 @@
-import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  createContext,
+  memo,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { LOGO_ACCEPT } from '../../config/logo';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
@@ -12,6 +23,7 @@ import { useLogo } from '../../logo/LogoContext';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { plural } from '../../ui/plural';
 import { useToast } from '../../ui/Toast';
+import { ExportBar } from '../export/ExportBar';
 import { chavesUnicas } from './chaves';
 import { EncaminhamentosEditor } from './EncaminhamentosEditor';
 import styles from './preview.module.css';
@@ -24,6 +36,9 @@ import { comSecoesVazias } from './secoes-vazias';
 const ATRIBUTO_LACUNA = 'data-preencher';
 
 const PREFIXO_ID_SECAO = 'ata-secao-';
+
+/** Cada seção avisa à folha quando abre ou fecha o editor (a barra de exportação avisa quem baixa). */
+const EdicaoContext = createContext<(chave: string, aberta: boolean) => void>(() => undefined);
 
 function juntar(...classes: (string | undefined)[]): string {
   return classes.filter((c) => c !== undefined).join(' ');
@@ -266,6 +281,15 @@ function SecaoGerada({ bloco, opcoesCadeia }: { bloco: DocSecao; opcoesCadeia?: 
     setEditando(false);
   };
 
+  // O texto de um editor aberto e não salvo não está no modelo: a folha precisa saber que há um.
+  const avisarEdicao = use(EdicaoContext);
+  useEffect(() => {
+    avisarEdicao(chave, editando);
+    return () => {
+      avisarEdicao(chave, false);
+    };
+  }, [avisarEdicao, chave, editando]);
+
   return (
     <section
       id={id}
@@ -461,6 +485,18 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
   const avisosGerais = resultado?.avisos[CHAVE_AVISOS_GERAIS] ?? [];
   const chavesAvisos = chavesUnicas(avisosGerais);
 
+  // Chaves das seções com o editor aberto: o arquivo exportado não leva o texto ainda não salvo.
+  const [secoesEditando, setSecoesEditando] = useState<ReadonlySet<string>>(() => new Set());
+  const avisarEdicao = useCallback((chave: string, aberta: boolean) => {
+    setSecoesEditando((atual) => {
+      if (atual.has(chave) === aberta) return atual;
+      const proximo = new Set(atual);
+      if (aberta) proximo.add(chave);
+      else proximo.delete(chave);
+      return proximo;
+    });
+  }, []);
+
   /** Cada clique vai à lacuna seguinte à anterior (a primeira no começo e depois do fim). */
   function irParaLacuna() {
     const alvos = Array.from(
@@ -474,8 +510,20 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
     proximo.focus({ preventScroll: true });
   }
 
+  /** Da barra de exportação: recomeça o ciclo, para ir sempre à PRIMEIRA lacuna. */
+  function irParaPrimeiraLacuna() {
+    ultimaLacunaRef.current = -1;
+    irParaLacuna();
+  }
+
   return (
     <div className={styles.area}>
+      <ExportBar
+        modelo={modelo}
+        lacunas={lacunas}
+        onIrParaLacuna={irParaPrimeiraLacuna}
+        editoresAbertos={secoesEditando.size}
+      />
       {avisosGerais.length > 0 ? (
         <ul className={styles.avisosGerais}>
           {avisosGerais.map((aviso, i) => (
@@ -539,11 +587,13 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
         <h2 className={styles.titulo}>
           <Texto texto={modelo.titulo} />
         </h2>
-        <Blocos
-          blocos={blocosDaTela}
-          rotulo={modelo.titulo}
-          {...(opcoesCadeia ? { opcoesCadeia } : {})}
-        />
+        <EdicaoContext value={avisarEdicao}>
+          <Blocos
+            blocos={blocosDaTela}
+            rotulo={modelo.titulo}
+            {...(opcoesCadeia ? { opcoesCadeia } : {})}
+          />
+        </EdicaoContext>
         {modelo.rodapeInterno === null ? null : (
           <footer className={styles.rodapeInterno}>{modelo.rodapeInterno}</footer>
         )}

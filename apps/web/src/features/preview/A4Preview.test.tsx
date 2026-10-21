@@ -285,3 +285,67 @@ describe('A4Preview contador de campos para preencher', () => {
     expect(screen.getByRole('button', { name: '4 campos para preencher' })).toBeInTheDocument();
   });
 });
+
+describe('A4Preview barra de exportação', () => {
+  const comLacunas = rascunho({
+    resultado: resultado({
+      secoes: {
+        ...resultado().secoes,
+        resumo: [
+          {
+            tipo: 'paragrafo',
+            texto: 'Reunião em [PREENCHER: local] com [PREENCHER: valor].',
+            itens: [],
+          },
+        ],
+      },
+    }),
+  });
+
+  it('fica acima da folha, parada com o motivo antes de gerar e liberada depois', () => {
+    const { unmount } = renderizar(rascunho());
+    const barra = screen.getByRole('group', { name: 'Exportar a ata' });
+    const folha = screen.getByRole('article', { name: 'Prévia da ata' });
+    expect(barra.compareDocumentPosition(folha) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Baixar PDF' })).toBeDisabled();
+    expect(screen.getByText('Gere a ata para baixar o PDF ou o DOCX.')).toBeInTheDocument();
+    unmount();
+
+    renderizar(rascunho({ resultado: resultado() }));
+    expect(screen.getByRole('button', { name: 'Baixar PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Baixar DOCX' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Copiar tarefas por responsável' })).toBeEnabled();
+  });
+
+  it('"Ir até o primeiro" recomeça o ciclo: vai à primeira lacuna e o foco fica nela', async () => {
+    const usuario = userEvent.setup();
+    renderizar(comLacunas);
+    // O contador já levou o foco à primeira e à segunda lacuna.
+    const contador = screen.getByRole('button', { name: '2 campos para preencher' });
+    await usuario.click(contador);
+    await usuario.click(contador);
+    expect(screen.getByLabelText('Campo para preencher: valor')).toHaveFocus();
+
+    await usuario.click(screen.getByRole('button', { name: 'Baixar PDF' }));
+    const modal = await screen.findByRole('dialog', {
+      name: 'A ata ainda tem campos para preencher',
+    });
+    await usuario.click(within(modal).getByRole('button', { name: 'Ir até o primeiro' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Campo para preencher: local')).toHaveFocus();
+  });
+
+  it('editor de seção aberto: baixar avisa que o texto não salvo não entra no arquivo', async () => {
+    const usuario = userEvent.setup();
+    renderizar(rascunho({ resultado: resultado() }));
+    await usuario.click(screen.getByRole('button', { name: 'Editar seção Resumo' }));
+    await usuario.click(screen.getByRole('button', { name: 'Baixar PDF' }));
+    const modal = await screen.findByRole('dialog');
+    expect(
+      within(modal).getByText(/Há 1 editor de seção aberto\. O texto que ainda não foi salvo/),
+    ).toBeInTheDocument();
+    // Nada foi baixado: o modal pede a decisão primeiro.
+    expect(within(modal).getByRole('button', { name: 'Baixar mesmo assim' })).toBeInTheDocument();
+  });
+});

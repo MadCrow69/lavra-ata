@@ -36,5 +36,10 @@ export default defineConfig({
     // base64 vai para o VFS do pdfmake dentro do chunk sob demanda (sem fetch: connect-src não
     // tem 'self').
     assetsInlineLimit: 0,
+    // O Vite avisa de chunk acima de 500 kB. O ÚNICO acima disso é o do gerador de PDF (pdfmake +
+    // fontes em base64, ~1,25 MB), carregado por `import()` só na primeira exportação, fora da carga
+    // inicial (o bundle principal tem ~375 kB). O teto sobe só até cobri-lo; se o bundle principal
+    // passar de 500 kB, reduza este valor para o aviso voltar a valer.
+    chunkSizeWarningLimit: 1300,
   },
 });
