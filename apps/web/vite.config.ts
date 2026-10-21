@@ -25,6 +25,10 @@ function cspMeta(): Plugin {
 export default defineConfig({
   base: '/lavra-ata/',
   plugins: [react(), cspMeta()],
+  define: {
+    // SHA do commit do CI; 'dev' em qualquer outro lugar.
+    __COMMIT_SHA__: JSON.stringify(process.env.GITHUB_SHA ?? 'dev'),
+  },
   build: {
     // Nenhum asset vira data: URI — img-src/font-src exigem arquivos reais.
     assetsInlineLimit: 0,

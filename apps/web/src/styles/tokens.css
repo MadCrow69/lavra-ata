@@ -1,0 +1,98 @@
+/*
+ * Identidade "Cartório moderno": papel creme, tinta azul-petróleo, terracota e grafite.
+ * Única fonte de cores do app; nenhum outro arquivo usa hex cru.
+ * Contrastes (WCAG 2.1) medidos para os pares principais:
+ *   claro  - texto/fundo 12,91 · texto/superfície 14,30 · suave/fundo 6,73 · primária/fundo 8,09
+ *            branco/primária 9,10 · destaque-texto/fundo 5,87 · branco/destaque-fundo 5,85
+ *   escuro - texto/fundo 14,48 · texto/superfície 13,02 · suave/fundo 8,79 · primária/fundo 8,16
+ *            escuro/primária 7,50 · destaque-texto/fundo 8,54
+ * `--cor-destaque` (#b5643c) só é decorativa (3,84:1 no creme, ok para gráficos >= 3:1);
+ * texto terracota usa `--cor-destaque-texto`.
+ */
+
+:root {
+  color-scheme: light;
+
+  --cor-fundo: #f6f1e7;
+  --cor-superficie: #fffdf8;
+  --cor-texto: #1f2a37;
+  --cor-texto-suave: #4a5563;
+  --cor-borda: #d9d0bd;
+  --cor-borda-forte: #7a7f78;
+
+  --cor-primaria: #1d4e5f;
+  --cor-primaria-hover: #163d4a;
+  --cor-sobre-primaria: #ffffff;
+
+  --cor-destaque: #b5643c;
+  --cor-destaque-texto: #8f4a27;
+  --cor-destaque-fundo: #9a512c;
+  --cor-sobre-destaque: #ffffff;
+
+  --cor-foco: #1d4e5f;
+  --cor-sombra: rgb(31 42 55 / 12%);
+
+  --fonte-titulo: 'Source Serif 4 Variable', georgia, 'Times New Roman', serif;
+  --fonte-interface:
+    'Inter Variable', system-ui, -apple-system, 'Segoe UI', roboto, 'Helvetica Neue', arial,
+    sans-serif;
+
+  --raio: 8px;
+  --espaco-1: 0.25rem;
+  --espaco-2: 0.5rem;
+  --espaco-3: 0.75rem;
+  --espaco-4: 1rem;
+  --espaco-6: 1.5rem;
+  --espaco-8: 2rem;
+  --largura-maxima: 90rem;
+}
+
+/* Escuro automático (preferência do sistema), a menos que a pessoa force o claro. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --cor-fundo: #12181f;
+    --cor-superficie: #1a222b;
+    --cor-texto: #ece7dc;
+    --cor-texto-suave: #aeb7c1;
+    --cor-borda: #2d3945;
+    --cor-borda-forte: #6b7684;
+
+    --cor-primaria: #7fb8c9;
+    --cor-primaria-hover: #9ccbd9;
+    --cor-sobre-primaria: #0e2229;
+
+    --cor-destaque: #e8a47e;
+    --cor-destaque-texto: #e8a47e;
+    --cor-destaque-fundo: #e8a47e;
+    --cor-sobre-destaque: #1a0f09;
+
+    --cor-foco: #7fb8c9;
+    --cor-sombra: rgb(0 0 0 / 40%);
+  }
+}
+
+/* Escuro forçado (seletor de tema futuro): mesmos valores do bloco acima. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --cor-fundo: #12181f;
+  --cor-superficie: #1a222b;
+  --cor-texto: #ece7dc;
+  --cor-texto-suave: #aeb7c1;
+  --cor-borda: #2d3945;
+  --cor-borda-forte: #6b7684;
+
+  --cor-primaria: #7fb8c9;
+  --cor-primaria-hover: #9ccbd9;
+  --cor-sobre-primaria: #0e2229;
+
+  --cor-destaque: #e8a47e;
+  --cor-destaque-texto: #e8a47e;
+  --cor-destaque-fundo: #e8a47e;
+  --cor-sobre-destaque: #1a0f09;
+
+  --cor-foco: #7fb8c9;
+  --cor-sombra: rgb(0 0 0 / 40%);
+}
