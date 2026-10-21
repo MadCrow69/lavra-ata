@@ -43,7 +43,7 @@ describe('detectarFormato (pela assinatura, nunca pela extensão)', () => {
 
   it('reconhece SVG, inclusive com BOM, <?xml, comentário e DOCTYPE antes', () => {
     expect(detectarFormato(bytesTexto(SVG))).toBe('svg');
-    expect(detectarFormato(bytesTexto('﻿  \n' + SVG))).toBe('svg');
+    expect(detectarFormato(bytesTexto('\uFEFF  \n' + SVG))).toBe('svg');
     const longo =
       '<?xml version="1.0" encoding="UTF-8"?>\n<!-- gerado por um editor -->\n' +
       '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n' +

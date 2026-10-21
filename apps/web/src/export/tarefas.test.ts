@@ -96,7 +96,11 @@ describe('agruparPorResponsavel', () => {
   });
 
   it('formatação invisível (hífen suave, marca de direção) também não separa: um grupo só', () => {
-    const grupos = agruparPorResponsavel([tarefa('Maria'), tarefa('Ma­ria'), tarefa('Maria‎')]);
+    const grupos = agruparPorResponsavel([
+      tarefa('Maria'),
+      tarefa('Ma\u00ADria'),
+      tarefa('Maria\u200E'),
+    ]);
     expect(grupos).toHaveLength(1);
     expect(grupos[0]?.responsavel).toBe('Maria');
     expect(grupos[0]?.itens).toHaveLength(3);

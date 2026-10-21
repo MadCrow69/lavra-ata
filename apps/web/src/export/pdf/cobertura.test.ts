@@ -75,7 +75,7 @@ describe('prepararTextoPdf', () => {
 
   it('cada troca vai de algo sem glifo para algo desenhado nas duas famílias', () => {
     for (const [origem, destino] of SUBSTITUICOES_PDF) {
-      // Nenhuma família desenha a origem (basta uma desenhar para a troca ser desnecessária).
+      // Nenhuma família desenha a origem (corpo e título); se alguma desenhasse, a troca sobraria.
       expect(desenha('corpo', origem) || desenha('titulo', origem), origem.toString(16)).toBe(
         false,
       );
