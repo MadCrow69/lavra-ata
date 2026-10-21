@@ -136,4 +136,45 @@ describe('vttParaTexto', () => {
     ].join('\n');
     expect(vttParaTexto(vtt)).toBe('Ana Lima: Vamos votar. Resumo da pauta: aprovada.');
   });
+
+  it('tag <v.> malformada gigante é processada em tempo linear, sem lançar', () => {
+    const vtt = ['WEBVTT', '', '00:00:01.000 --> 00:00:03.000', '<v.' + '!.'.repeat(50_000)].join(
+      '\n',
+    );
+    const inicio = performance.now();
+    expect(() => vttParaTexto(vtt)).not.toThrow();
+    expect(performance.now() - inicio).toBeLessThan(200);
+  });
+
+  it('tags aninhadas não reconstroem uma tag após a limpeza', () => {
+    const vtt = ['WEBVTT', '', '00:00:01.000 --> 00:00:03.000', '<scr<b>ipt>x'].join('\n');
+    const saida = vttParaTexto(vtt);
+    expect(saida).not.toContain('<script');
+    expect(saida).toBe('x');
+  });
+
+  it('muitos "<" sem fechamento não degradam e o "<" literal é preservado', () => {
+    const vtt = ['WEBVTT', '', '00:00:01.000 --> 00:00:03.000', '<'.repeat(50_000)].join('\n');
+    const inicio = performance.now();
+    expect(vttParaTexto(vtt)).toBe('<'.repeat(50_000));
+    expect(performance.now() - inicio).toBeLessThan(200);
+  });
+
+  it('entidades &lt; e &gt; viram caracteres literais (texto puro)', () => {
+    const vtt = ['WEBVTT', '', '00:00:01.000 --> 00:00:03.000', 'a &lt; b e c &gt; d'].join('\n');
+    expect(vttParaTexto(vtt)).toBe('a < b e c > d');
+  });
+
+  it('aceita <v.classe Nome> e <v.a.b Nome>', () => {
+    const vtt = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:03.000',
+      '<v.loud Ana Lima>Oi.</v>',
+      '',
+      '00:00:04.000 --> 00:00:06.000',
+      '<v.a.b João Pereira>Olá.</v>',
+    ].join('\n');
+    expect(vttParaTexto(vtt)).toBe('Ana Lima: Oi.\nJoão Pereira: Olá.');
+  });
 });

@@ -2,7 +2,7 @@
 const LINHA_TEMPO = /^(?:\d+:)?\d{1,2}:\d{2}[.,]\d{3}\s*-->\s*(?:\d+:)?\d{1,2}:\d{2}[.,]\d{3}/;
 
 /** `<v Nome>fala` — o fechamento `</v>` é opcional na especificação. */
-const FALANTE_TAG = /^\s*<v(?:\.[^\s>]+)*\s+([^>]+)>/;
+const FALANTE_TAG = /^\s*<v(?:\.[^\s.>]+)*\s+([^>\s][^>]*)>/;
 
 /** `Nome: fala` — nome curto, só letras, espaço, ponto, hífen e apóstrofo (até 5 palavras). */
 const FALANTE_PREFIXO = /^(\p{L}[\p{L}\p{M}.'’ -]{0,59}?):\s+(\S.*)$/u;
@@ -19,9 +19,30 @@ const ENTIDADES: Record<string, string> = {
   '&rlm;': '',
 };
 
+/**
+ * Remove tags `<...>` em uma passada linear, inclusive aninhadas (`<scr<b>ipt>` vira vazio): equivale
+ * a repetir "remover a tag mais interna" até estabilizar, sem custo quadrático. Um `<` sem `>`
+ * depois dele fica como texto ("a < b" é preservado); um `>` solto também.
+ */
+function removerTags(texto: string): string {
+  const saida: string[] = [];
+  const abertas: number[] = []; // posições, em `saida`, dos `<` ainda sem `>`
+  for (const c of texto) {
+    if (c === '<') {
+      abertas.push(saida.length);
+      saida.push(c);
+    } else if (c === '>' && abertas.length > 0) {
+      saida.length = abertas.pop() ?? 0;
+    } else {
+      saida.push(c);
+    }
+  }
+  return saida.join('');
+}
+
 function limparMarcacao(texto: string): string {
-  return texto
-    .replace(/<[^>]*>/g, '')
+  // A saída é texto puro, exibido como nós de texto do React (nunca HTML): o `<` decodificado é seguro.
+  return removerTags(texto)
     .replace(/&(?:amp|lt|gt|quot|#39|nbsp|lrm|rlm);/g, (e) => ENTIDADES[e] ?? e)
     .replace(/\s+/g, ' ')
     .trim();
