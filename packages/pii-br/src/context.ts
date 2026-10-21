@@ -37,3 +37,12 @@ export function hasContext(
     return false;
   });
 }
+
+/**
+ * O trecho que termina em `end` continua como número maior (`.` ou `-` seguido de dígito)?
+ * `12345678901.50` e `52998224725-3` são valor/código, não um CPF ou PIS seguido de resto;
+ * já o ponto final de uma frase (`...-25.`) não conta.
+ */
+export function continuesAsLargerNumber(text: string, end: number): boolean {
+  return /^[.-]\d/.test(text.slice(end, end + 2));
+}

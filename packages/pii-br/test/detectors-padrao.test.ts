@@ -341,3 +341,38 @@ describe('desempenho: texto patológico de 50 mil caracteres', () => {
     expect(tempos.length).toBeGreaterThan(0);
   });
 });
+
+describe('telefone local com 9 inicial destacado (com contexto)', () => {
+  it.each(['meu zap 9 8888 7777', 'tel 9 8888-7777', 'celular 9 8888 - 7777'])(
+    'número inteiro, incluindo o 9: %s',
+    (text) => {
+      const number = text.replace(/^.* (?=9 )/, '');
+      expect(run(telefone, text)).toEqual([[number, true]]);
+    },
+  );
+  it('sem contexto não é telefone', () => {
+    expect(run(telefone, 'pedido 9 8888 7777')).toEqual([]);
+    expect(run(telefone, 'capítulo 9 2026 2027')).toEqual([]);
+  });
+  it('9XXXX XXXX colado continua como antes', () => {
+    expect(run(telefone, 'meu zap é 98888 7777')).toEqual([['98888 7777', true]]);
+  });
+});
+
+describe('telefone com separador duplicado', () => {
+  it.each([
+    '(11) 98888 -- 7777',
+    '(11) 98888 - - 7777',
+    '11 98888--7777',
+    `(11) 98888 ${EN_DASH}${EN_DASH} 7777`,
+  ])('casa o número inteiro: %s', (t) => {
+    expect(run(telefone, `fale no ${t}.`)).toEqual([[t, true]]);
+  });
+  it('prosa próxima não vira telefone: intervalos, horários e valores', () => {
+    expect(run(telefone, 'turma 12 2024 -- 2025')).toEqual([]);
+    expect(run(telefone, 'das 14h30 -- 16h30 e 14 / 10 / 2026, R$ 1.234 -- 5.678,90')).toEqual([]);
+  });
+  it('três separadores seguidos não formam telefone', () => {
+    expect(run(telefone, '(11) 98888 --- 7777')).toEqual([]);
+  });
+});

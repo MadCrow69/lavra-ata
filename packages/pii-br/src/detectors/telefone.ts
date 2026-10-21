@@ -19,9 +19,10 @@ const CONTEXT = [
 // padrão: o arquivo fica ASCII, sem caracteres invisíveis.
 const DASH = String.raw`-\u2013\u2010`;
 const SP = String.raw`[ \u00a0]`;
-// Separador entre blocos: até 2 espaços, um traço/ponto opcional, até 2 espaços
-// (`98888 - 7777`, `(11)  98888-7777`). Limitado: nada de repetição ilimitada (ReDoS).
-const SEP = String.raw`${SP}{0,2}[${DASH}.]?${SP}{0,2}`;
+// Separador entre blocos: até 2 espaços e até 2 traços/pontos, cada um com até 2 espaços
+// depois (`98888 - 7777`, `(11)  98888-7777`, `98888 -- 7777`, `98888 - - 7777`). Limitado:
+// nada de repetição ilimitada (ReDoS).
+const SEP = String.raw`${SP}{0,2}(?:[${DASH}.]${SP}{0,2}){0,2}`;
 // Separador do número local (sem DDD): obrigatório, traço ou espaço.
 const LOCAL_SEP = String.raw`(?:${SP}?[${DASH}]${SP}?|${SP})`;
 
@@ -33,8 +34,9 @@ const LOCAL_SEP = String.raw`(?:${SP}?[${DASH}]${SP}?|${SP})`;
 const WITH_DDD =
   String.raw`(?:\+?55${SEP})?(?:\(0?[1-9]\d\)${SEP}|0?[1-9]\d${SEP})` +
   String.raw`(?:9${SEP}\d{4}|[2-8]\d{3})${SEP}\d{4}`;
-// Sem DDD: celular `9XXXX-XXXX` | fixo `XXXX-XXXX` (traço ou espaço).
-const WITHOUT_DDD = String.raw`9\d{4}${LOCAL_SEP}\d{4}|[2-8]\d{3}${LOCAL_SEP}\d{4}`;
+// Sem DDD: celular `9XXXX-XXXX` (o 9 pode vir destacado: `9 XXXX XXXX`) | fixo `XXXX-XXXX`
+// (traço ou espaço).
+const WITHOUT_DDD = String.raw`9${SP}?\d{4}${LOCAL_SEP}\d{4}|[2-8]\d{3}${LOCAL_SEP}\d{4}`;
 
 // Bordas: nem letra/dígito colado, nem "dígito + . ou traço" antes/depois (evita pegar
 // um pedaço de CPF, CNPJ ou número maior pontuado).
@@ -42,6 +44,8 @@ const PATTERN = String.raw`(?<![0-9A-Za-z]|\d[${DASH}.])(?:${WITH_DDD}|${WITHOUT
 
 /** Sem nenhuma formatação: só celular (`DDD` + `9` + 8 dígitos), com `55` ou `0` opcional. */
 const UNFORMATTED = /^(?:55|0)?[1-9]{2}9\d{8}$/;
+/** Celular local com o 9 destacado (`9 8888 7777`): sempre exige contexto. */
+const DETACHED_NINE = /^9\s\d{4}\D+\d{4}$/;
 /** Número local (sem DDD): `[5 ou 4 dígitos][separador][4 dígitos]`. */
 const LOCAL = new RegExp(String.raw`^(\d{4,5})(\D+)(\d{4})$`);
 const HAS_DASH = new RegExp(`[${DASH}]`);
@@ -53,6 +57,7 @@ export const telefone: Detector = {
   pattern: new RegExp(PATTERN, 'g'),
   accept(raw, text, start) {
     if (/^\d+$/.test(raw)) return { ok: UNFORMATTED.test(raw), valid: true };
+    if (DETACHED_NINE.test(raw)) return { ok: hasContext(text, start, CONTEXT), valid: true };
     const local = LOCAL.exec(raw);
     if (local) {
       // `9XXXX-XXXX` com traço é inconfundível (aceito sempre, mesmo `pedido 98765-4321`:

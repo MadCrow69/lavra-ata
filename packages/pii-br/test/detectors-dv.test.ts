@@ -153,8 +153,10 @@ describe('detector de cartão', () => {
       ['4111 1111 1111 1111', true],
     ]);
   });
-  it('cartão seguido de CVV separado por espaço é detectado exatamente', () => {
-    expect(run(cartao, 'cartão 4111 1111 1111 1111 123')).toEqual([['4111 1111 1111 1111', true]]);
+  it('cartão seguido de CVV separado por espaço leva o CVV junto', () => {
+    expect(run(cartao, 'cartão 4111 1111 1111 1111 123')).toEqual([
+      ['4111 1111 1111 1111 123', true],
+    ]);
   });
   it('cartão colado seguido de validade e CVV', () => {
     expect(run(cartao, '4111111111111111 12 28 123')).toEqual([['4111111111111111', true]]);
@@ -224,5 +226,101 @@ describe('hasContext', () => {
   });
   it('não casa palavra no meio de outra', () => {
     expect(hasContext('comunitário 123', 12, ['nit'])).toBe(false);
+  });
+});
+
+describe('cartão: grupo de 3 a 4 dígitos anexo (CVV) e lacunas de agrupamento', () => {
+  it.each([
+    'cartão 4111-1111-1111-1111-123',
+    'cartão 4111 1111 1111 1111 123',
+    'cartão 4111-1111-1111-1111-1111',
+    'cartão 4111 1111 1111 1111 1234',
+    'cartão 3782 822463 10005 1234',
+  ])('o grupo anexo entra no trecho: %s', (text) => {
+    const tail = text.replace('cartão ', '');
+    expect(run(cartao, text)).toEqual([[tail, true]]);
+  });
+  it('ano em prosa separado por palavra não é engolido', () => {
+    expect(run(cartao, '4111 1111 1111 1111 em 2026')).toEqual([['4111 1111 1111 1111', true]]);
+  });
+  it('grupo de 2 dígitos (validade) e grupo de 5+ dígitos não são anexados', () => {
+    expect(run(cartao, '4111 1111 1111 1111 12 28')).toEqual([['4111 1111 1111 1111', true]]);
+    expect(run(cartao, '4111 1111 1111 1111 12345')).toEqual([['4111 1111 1111 1111', true]]);
+  });
+  it('cartão de 19 dígitos agrupado 4-4-4-4-3 com Luhn válido é detectado inteiro', () => {
+    expect(run(cartao, 'cartão 4111 1111 1111 1111 110')).toEqual([
+      ['4111 1111 1111 1111 110', true],
+    ]);
+  });
+  it('Visa de 13 dígitos agrupado 4-4-4-1', () => {
+    expect(run(cartao, 'cartão 4222 2222 2222 2')).toEqual([['4222 2222 2222 2', true]]);
+    expect(run(cartao, 'cartão 4222-2222-2222-2')).toEqual([['4222-2222-2222-2', true]]);
+  });
+  it('4-4-4-1 sem Luhn válido não é cartão', () => {
+    expect(run(cartao, 'cartão 4222 2222 2222 3')).toEqual([]);
+  });
+  it('espaços duplos entre os grupos', () => {
+    expect(run(cartao, 'cartão 4111  1111  1111  1111')).toEqual([
+      ['4111  1111  1111  1111', true],
+    ]);
+  });
+  it('três espaços entre os grupos não formam cartão', () => {
+    expect(run(cartao, 'cartão 4111   1111   1111   1111')).toEqual([]);
+  });
+});
+
+describe('CNPJ com pontuação parcial', () => {
+  it.each(['11222333/0001-81', '11.222.333000181', '11222333000181', '12.ABC.345/01DE35'])(
+    '%s com DV válido é detectado',
+    (partial) => {
+      expect(run(cnpj, `ref ${partial}`)).toEqual([[partial, true]]);
+    },
+  );
+  it.each(['11222333/0001-80', '11.222.333000180', '12.ABC.345/01DE36'])(
+    '%s com DV inválido e sem contexto não é detectado',
+    (partial) => {
+      expect(run(cnpj, `ref ${partial}`)).toEqual([]);
+    },
+  );
+  it('DV inválido com contexto é detectado (valid: false)', () => {
+    expect(run(cnpj, 'CNPJ 11222333/0001-80')).toEqual([['11222333/0001-80', false]]);
+    expect(run(cnpj, 'CNPJ 11.222.333000180')).toEqual([['11.222.333000180', false]]);
+  });
+  it('totalmente formatado continua aceito sem DV nem contexto', () => {
+    expect(run(cnpj, 'ref 11.222.333/0001-80')).toEqual([['11.222.333/0001-80', false]]);
+  });
+  it('prosa próxima não é CNPJ: data, valor e processo', () => {
+    expect(run(cnpj, 'em 14/10/2026 pagou R$ 1.234.567/0001 no processo 0001234-56.2026')).toEqual(
+      [],
+    );
+  });
+});
+
+describe('CPF e PIS seguidos de ponto ou traço + dígitos', () => {
+  it.each(['12345678901.50', '52998224725.50', '52998224725-3', '52998224725.5'])(
+    '%s é parte de número maior, não CPF',
+    (token) => {
+      expect(run(cpf, `valor ${token}`)).toEqual([]);
+    },
+  );
+  it('CPF com contexto também não sai de dentro de número maior', () => {
+    expect(run(cpf, 'CPF 52998224725-3')).toEqual([]);
+  });
+  it('fim de frase continua detectando: ponto ou traço sem dígito depois', () => {
+    expect(run(cpf, 'meu CPF é 529.982.247-25.')).toEqual([['529.982.247-25', true]]);
+    expect(run(cpf, 'pedido 52998224725.')).toEqual([['52998224725', true]]);
+    expect(run(cpf, 'pedido 52998224725 - 3')).toEqual([['52998224725', true]]);
+    expect(run(cpf, 'pedido 52998224725.\nPróximo')).toEqual([['52998224725', true]]);
+  });
+  it('CPF totalmente formatado vale mesmo com resto numérico depois (privacidade primeiro)', () => {
+    expect(run(cpf, 'x 529.982.247-25.50')).toEqual([['529.982.247-25', true]]);
+  });
+  it.each(['12055445814.50', '12055445814-3'])('PIS: %s é parte de número maior', (token) => {
+    expect(run(pis, `valor ${token}`)).toEqual([]);
+    expect(run(pis, `PIS ${token}`)).toEqual([]);
+  });
+  it('PIS: fim de frase e formatado continuam detectados', () => {
+    expect(run(pis, 'registro 12055445814.')).toEqual([['12055445814', true]]);
+    expect(run(pis, 'PIS 120.55445.81-4.')).toEqual([['120.55445.81-4', true]]);
   });
 });

@@ -1,5 +1,5 @@
 import { isValidPis } from '../check-digits';
-import { hasContext } from '../context';
+import { continuesAsLargerNumber, hasContext } from '../context';
 import { normalizeValue } from '../normalize';
 import type { Detector } from './types';
 
@@ -12,8 +12,13 @@ export const pis: Detector = {
   // colado ou parcial).
   pattern: /(?<![0-9A-Za-z])\d{3}\.?\d{5}\.?\d{2}-?\d(?![0-9A-Za-z])/g,
   accept(raw, text, start) {
+    const formatted = FULLY_FORMATTED.test(raw);
+    // Mesma regra do CPF: fora do formato completo, `.50`/`-3` depois indica número maior.
+    if (!formatted && continuesAsLargerNumber(text, start + raw.length)) {
+      return { ok: false, valid: false };
+    }
     const valid = isValidPis(normalizeValue('PIS', raw));
-    const ok = FULLY_FORMATTED.test(raw) || valid || hasContext(text, start, CONTEXT);
+    const ok = formatted || valid || hasContext(text, start, CONTEXT);
     return { ok, valid };
   },
 };

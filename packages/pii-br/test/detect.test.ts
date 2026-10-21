@@ -132,6 +132,45 @@ describe('detect: cartão com hífen espaçado (R4)', () => {
   });
 });
 
+describe('detect: vazamentos residuais (Task 7a)', () => {
+  const pairs = (t: string): [string, string][] => detect(t).map((f) => [f.type, f.value]);
+
+  it.each([
+    ['cartão 4111-1111-1111-1111-123', 'CARTAO', '4111-1111-1111-1111-123'],
+    ['4111 1111 1111 1111 123', 'CARTAO', '4111 1111 1111 1111 123'],
+    ['4111-1111-1111-1111-1111', 'CARTAO', '4111-1111-1111-1111-1111'],
+    ['cartão 4222 2222 2222 2', 'CARTAO', '4222 2222 2222 2'],
+    ['cartão 4111  1111  1111  1111', 'CARTAO', '4111  1111  1111  1111'],
+    ['ref 11222333/0001-81', 'CNPJ', '11222333/0001-81'],
+    ['ref 11.222.333000181', 'CNPJ', '11.222.333000181'],
+    ['ref 12.ABC.345/01DE35', 'CNPJ', '12.ABC.345/01DE35'],
+    ['meu zap 9 8888 7777', 'TELEFONE', '9 8888 7777'],
+    ['tel 9 8888-7777', 'TELEFONE', '9 8888-7777'],
+    ['fale (11) 98888 -- 7777.', 'TELEFONE', '(11) 98888 -- 7777'],
+    ['fale (11) 98888 - - 7777.', 'TELEFONE', '(11) 98888 - - 7777'],
+  ] as const)('mascara o trecho inteiro: %s', (text, type, value) => {
+    expect(pairs(text)).toEqual([[type, value]]);
+  });
+  it('ano em prosa depois do cartão não é engolido', () => {
+    expect(pairs('4111 1111 1111 1111 em 2026')).toEqual([['CARTAO', '4111 1111 1111 1111']]);
+  });
+  it.each(['valor 12345678901.50', 'valor 52998224725.50', 'valor 52998224725-3'])(
+    'número maior com ponto/traço não vira CPF nem PIS: %s',
+    (text) => {
+      expect(detect(text)).toEqual([]);
+    },
+  );
+  it('fim de frase continua detectando o CPF', () => {
+    expect(pairs('meu CPF é 529.982.247-25.')).toEqual([['CPF', '529.982.247-25']]);
+  });
+  it('prosa próxima não é mascarada', () => {
+    expect(detect('pedido 9 8888 7777')).toEqual([]);
+    expect(detect('ref 11222333/0001-80')).toEqual([]);
+    expect(detect('turma 12 2024 -- 2025')).toEqual([]);
+    expect(detect('cartão 4111   1111   1111   1111')).toEqual([]);
+  });
+});
+
 describe('desempenho de detect: texto patológico de 50 mil caracteres', () => {
   const N = 50_000;
   const casos: Record<string, string> = {
@@ -150,6 +189,12 @@ describe('desempenho de detect: texto patológico de 50 mil caracteres', () => {
     'x-ponto': '1.'.repeat(N / 2),
     'rg-contexto': 'RG 1'.repeat(N / 4),
     'cartao-hifen-espacado': '4111 - '.repeat(N / 7),
+    'cartao-espaco-duplo': '4111  '.repeat(N / 6),
+    'cartao-grupo-anexo': '4111-1111-1111-1111-123 '.repeat(N / 24),
+    'telefone-separador-duplo': '(11) 98888 - - '.repeat(N / 15),
+    'telefone-nove-destacado': '9 8888 '.repeat(N / 7),
+    'cnpj-parcial': '11222333/0001-'.repeat(N / 14),
+    'cnpj-ponto': 'ab.cde.'.repeat(N / 7),
   };
   it('cada entrada patológica varre em < 2000 ms', () => {
     for (const [caso, texto] of Object.entries(casos)) {
