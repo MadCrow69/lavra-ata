@@ -25,14 +25,50 @@ export interface ChamadaHttp {
 }
 
 const PADRAO_SEM_CREDITO = /credit balance|insufficient|billing|quota/i;
+const PADRAO_CHAVE_INVALIDA = /API key not valid|API_KEY_INVALID/i;
+const PADRAO_MUITO_LONGO =
+  /context[_ ]length|prompt is too long|maximum context|exceeds the maximum number of (input )?tokens|input token count|too many tokens|request too large/i;
+const PADRAO_PARAMETRO =
+  /unsupported|not supported|does not support|invalid (value|parameter|argument)|unknown (name|field|parameter)|extra inputs|input should be|not permitted|thinking|effort|temperature|budget/i;
 
 function foiCancelado(e: unknown, signal: AbortSignal): boolean {
   // DOMException nem sempre herda de Error (jsdom), então confere só o `name`.
   return signal.aborted || (ehRegistro(e) && e.name === 'AbortError');
 }
 
+/** Campos do corpo de erro que ajudam a classificar (OpenAI, Anthropic e Gemini têm formatos próximos). */
+interface CorpoDeErro {
+  mensagem: string;
+  /** Texto bruto para casar com os padrões: mensagem + códigos + razões em `details`. */
+  pistas: string;
+  temParam: boolean;
+}
+
+function lerCorpoDeErro(texto: string): CorpoDeErro {
+  let mensagem = texto;
+  const pistas: string[] = [];
+  let temParam = false;
+  try {
+    const corpo: unknown = JSON.parse(texto);
+    const erro = ehRegistro(corpo) ? corpo.error : undefined;
+    if (ehRegistro(erro)) {
+      if (typeof erro.message === 'string') mensagem = erro.message;
+      for (const campo of [erro.code, erro.type, erro.status]) {
+        if (typeof campo === 'string') pistas.push(campo);
+      }
+      if (typeof erro.param === 'string' && erro.param !== '') temParam = true;
+      for (const detalhe of comoLista(erro.details)) {
+        if (ehRegistro(detalhe) && typeof detalhe.reason === 'string') pistas.push(detalhe.reason);
+      }
+    }
+  } catch {
+    // corpo não é JSON (página de proxy, por exemplo): usa o texto cru, sanitizado.
+  }
+  return { mensagem, pistas: [mensagem, ...pistas].join(' '), temParam };
+}
+
 async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProvedor> {
-  const { provedor, chave } = c;
+  const { provedor, chave, modelo } = c;
   const status = resp.status;
   let texto = '';
   try {
@@ -40,21 +76,19 @@ async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProve
   } catch (e) {
     if (foiCancelado(e, c.signal)) return erroProvedor('cancelado', provedor);
   }
-  let bruto = texto;
-  try {
-    const corpo: unknown = JSON.parse(texto);
-    const erro = ehRegistro(corpo) ? corpo.error : undefined;
-    if (ehRegistro(erro) && typeof erro.message === 'string') bruto = erro.message;
-  } catch {
-    // corpo não é JSON (página de proxy, por exemplo): usa o texto cru, sanitizado.
-  }
-  const detalhe = sanitizar(bruto, chave);
+  const corpo = lerCorpoDeErro(texto);
+  const detalhe = sanitizar(corpo.mensagem, chave);
 
   if (status === 401 || status === 403) return erroProvedor('chave_invalida', provedor, { status });
   if (status === 429) return erroProvedor('limite', provedor, { status });
-  if (status >= 500 || status === 408)
-    return erroProvedor('instavel', provedor, { status, detalhe });
-  if (PADRAO_SEM_CREDITO.test(bruto)) {
+  if (status >= 500 || status === 408) {
+    return erroProvedor('instavel', provedor, { status, detalhe, repetivel: true });
+  }
+  // O Gemini devolve chave inválida como 400 INVALID_ARGUMENT, não como 401/403.
+  if (PADRAO_CHAVE_INVALIDA.test(corpo.pistas)) {
+    return erroProvedor('chave_invalida', provedor, { status });
+  }
+  if (PADRAO_SEM_CREDITO.test(corpo.pistas)) {
     return new ErroProvedor(
       'chave_invalida',
       provedor,
@@ -62,11 +96,27 @@ async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProve
       status,
     );
   }
-  // 400/404/413/422…: o modelo ou algum valor enviado não foi aceito.
-  return erroProvedor('parametro', provedor, {
-    status,
-    ...(c.modelo === undefined ? {} : { modelo: c.modelo }),
-  });
+  // As mensagens específicas do modelo só valem em chamadas que têm um modelo (nunca no teste de chave).
+  if (modelo !== undefined) {
+    if (status === 413 || PADRAO_MUITO_LONGO.test(corpo.pistas)) {
+      return erroProvedor('muito_longo', provedor, { status, modelo });
+    }
+    if (status === 404) {
+      return new ErroProvedor(
+        'parametro',
+        provedor,
+        `O modelo ${modelo} não foi encontrado neste provedor. Confira o nome nas configurações.`,
+        status,
+      );
+    }
+    if (
+      (status === 400 || status === 422) &&
+      (corpo.temParam || PADRAO_PARAMETRO.test(corpo.pistas))
+    ) {
+      return erroProvedor('parametro', provedor, { status, modelo });
+    }
+  }
+  return erroProvedor('inesperado', provedor, { status, detalhe });
 }
 
 /**
@@ -89,7 +139,9 @@ export async function chamarProvedor(c: ChamadaHttp): Promise<unknown> {
     });
   } catch (e) {
     if (foiCancelado(e, c.signal)) throw erroProvedor('cancelado', c.provedor);
-    throw erroProvedor(e instanceof TypeError ? 'rede' : 'instavel', c.provedor);
+    throw e instanceof TypeError
+      ? erroProvedor('rede', c.provedor)
+      : erroProvedor('instavel', c.provedor, { repetivel: true });
   }
 
   if (!resp.ok) throw await erroDeResposta(resp, c);

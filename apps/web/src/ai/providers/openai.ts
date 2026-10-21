@@ -43,7 +43,7 @@ export const openaiAdapter: ProviderAdapter = {
       const detalhes = ehRegistro(corpo.incomplete_details) ? corpo.incomplete_details : {};
       throw erroProvedor(detalhes.reason === 'content_filter' ? 'recusa' : 'cortado', 'openai');
     }
-    if (corpo.status === 'failed') throw erroProvedor('instavel', 'openai');
+    if (corpo.status === 'failed') throw erroProvedor('instavel', 'openai', { repetivel: false });
 
     const textos: string[] = [];
     for (const item of comoLista(corpo.output)) {

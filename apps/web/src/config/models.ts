@@ -13,8 +13,6 @@ export interface ModelosDoProvedor {
   opcoes: OpcaoModelo[];
   /** Teto de tokens de saída (inclui o raciocínio do modelo). */
   maxSaida: number;
-  /** Esforço enviado a um id digitado que não está em `opcoes`. */
-  esforcoPadrao?: string;
 }
 
 /** Fonte única de modelos e parâmetros por provedor. Os valores de esforço mudam por modelo. */
@@ -26,7 +24,6 @@ export const MODELOS: Record<ProviderId, ModelosDoProvedor> = {
       { id: 'gpt-6.1-sol', rotulo: 'GPT-6.1 Sol', esforco: 'low' },
     ],
     maxSaida: 16_000,
-    esforcoPadrao: 'none',
   },
   gemini: {
     padrao: 'gemini-3.8-flash',
@@ -44,7 +41,6 @@ export const MODELOS: Record<ProviderId, ModelosDoProvedor> = {
       { id: 'claude-opus-5-5', rotulo: 'Claude Opus 5.5', esforco: 'low' },
     ],
     maxSaida: 16_000,
-    esforcoPadrao: 'low',
   },
 };
 
@@ -58,9 +54,10 @@ export const ROTULO_PROVEDOR: Record<ProviderId, string> = {
 /** Espera, em ms, antes da única nova tentativa após `limite`/`instavel`. */
 export const ESPERA_RETRY_MS = 2_000;
 
-/** Esforço de raciocínio do modelo; id fora da lista usa o esforço padrão do provedor. */
+/**
+ * Esforço de raciocínio do modelo. Id digitado fora de `opcoes` devolve `undefined`: o parâmetro
+ * é omitido e vale o padrão do próprio provedor.
+ */
 export function esforcoDoModelo(provedor: ProviderId, modelo: string): string | undefined {
-  const conf = MODELOS[provedor];
-  const opcao = conf.opcoes.find((o) => o.id === modelo);
-  return opcao ? opcao.esforco : conf.esforcoPadrao;
+  return MODELOS[provedor].opcoes.find((o) => o.id === modelo)?.esforco;
 }

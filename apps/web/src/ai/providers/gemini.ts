@@ -28,7 +28,7 @@ export const geminiAdapter: ProviderAdapter = {
       provedor: 'gemini',
       chave: cfg.chave,
       modelo: cfg.modelo,
-      url: `${BASE}/models/${encodeURIComponent(cfg.modelo.trim())}:generateContent`,
+      url: `${BASE}/models/${encodeURIComponent(cfg.modelo)}:generateContent`,
       metodo: 'POST',
       headers: { 'x-goog-api-key': cfg.chave, 'Content-Type': 'application/json' },
       corpo: {
@@ -58,7 +58,7 @@ export const geminiAdapter: ProviderAdapter = {
     const motivo = typeof candidato.finishReason === 'string' ? candidato.finishReason : 'STOP';
     if (motivo === 'MAX_TOKENS') throw erroProvedor('cortado', 'gemini');
     if (FINALIZACAO_RECUSA.has(motivo)) throw erroProvedor('recusa', 'gemini');
-    if (motivo !== 'STOP') throw erroProvedor('instavel', 'gemini');
+    if (motivo !== 'STOP') throw erroProvedor('instavel', 'gemini', { repetivel: false });
 
     const conteudo = ehRegistro(candidato.content) ? candidato.content : {};
     const textos: string[] = [];

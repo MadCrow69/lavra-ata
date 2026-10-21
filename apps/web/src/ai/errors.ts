@@ -6,12 +6,25 @@ export class ErroProvedor extends Error {
   readonly tipo: ErroTipo;
   readonly provedor: ProviderId;
   readonly status?: number;
+  /**
+   * A cadeia só repete a chamada (uma vez) quando isto é true. Vale para falha de nível HTTP/rede
+   * (429, 5xx/529, sobrecarga); uma resposta 200 que o adaptador classificou como `instavel`
+   * não é repetível — o padrão é `tipo` ser `limite` ou `instavel`, e os adaptadores desligam.
+   */
+  readonly repetivel: boolean;
 
-  constructor(tipo: ErroTipo, provedor: ProviderId, mensagem: string, status?: number) {
+  constructor(
+    tipo: ErroTipo,
+    provedor: ProviderId,
+    mensagem: string,
+    status?: number,
+    repetivel: boolean = tipo === 'limite' || tipo === 'instavel',
+  ) {
     super(mensagem);
     this.name = 'ErroProvedor';
     this.tipo = tipo;
     this.provedor = provedor;
+    this.repetivel = repetivel;
     if (status !== undefined) this.status = status;
   }
 }
@@ -32,9 +45,9 @@ const CHAVE_REMOVIDA = '[chave removida]';
 /** Formatos conhecidos de chave (`sk-ant-…`, `sk-…`, `AIza…`) e cabeçalhos com credencial. */
 const PADROES_DE_CHAVE: RegExp[] = [
   /Bearer\s+[^\s,;"']+/gi,
-  /sk-ant-[\w*-]+/g,
-  /sk-[\w*-]+/g,
-  /AIza[\w*-]+/g,
+  // Sem letra/dígito antes: "risk-…" e "task-…" não são chaves.
+  /(?<![A-Za-z0-9])sk-[\w*-]+/g,
+  /(?<![A-Za-z0-9])AIza[\w*-]+/g,
 ];
 
 const LIMITE_DETALHE = 200;
@@ -45,7 +58,9 @@ const LIMITE_DETALHE = 200;
  */
 export function sanitizar(texto: string, chave: string): string {
   let saida = texto;
-  if (chave.length > 0) saida = saida.split(chave).join(CHAVE_REMOVIDA);
+  for (const forma of new Set([chave, chave.trim()])) {
+    if (forma.length > 0) saida = saida.split(forma).join(CHAVE_REMOVIDA);
+  }
   for (const padrao of PADROES_DE_CHAVE) saida = saida.replace(padrao, CHAVE_REMOVIDA);
   return saida.replace(/\s+/g, ' ').trim().slice(0, LIMITE_DETALHE);
 }
@@ -53,6 +68,7 @@ export function sanitizar(texto: string, chave: string): string {
 interface ContextoMensagem {
   modelo?: string;
   detalhe?: string;
+  status?: number;
 }
 
 /** Mensagem em pt-BR (causa + ação) para cada tipo de erro. `detalhe` já deve estar sanitizado. */
@@ -80,6 +96,10 @@ export function mensagemDeErro(
       return 'O provedor recusou a chamada direta do navegador ou a conexão falhou. Verifique sua conexão com a internet e tente de novo.';
     case 'parametro':
       return `O modelo ${ctx.modelo ?? 'escolhido'} não aceitou a configuração enviada. Escolha outro modelo nas configurações.`;
+    case 'muito_longo':
+      return `A transcrição ficou grande demais para o modelo ${ctx.modelo ?? 'escolhido'}. Divida a reunião ou escolha um modelo com mais contexto.`;
+    case 'inesperado':
+      return `${rot} recusou a chamada${ctx.status === undefined ? '' : ` (HTTP ${String(ctx.status)})`}. Tente de novo ou use outro provedor.${detalhe}`;
     case 'cancelado':
       return 'A geração foi cancelada.';
   }
@@ -89,7 +109,13 @@ export function mensagemDeErro(
 export function erroProvedor(
   tipo: ErroTipo,
   provedor: ProviderId,
-  opcoes: ContextoMensagem & { status?: number } = {},
+  opcoes: ContextoMensagem & { repetivel?: boolean } = {},
 ): ErroProvedor {
-  return new ErroProvedor(tipo, provedor, mensagemDeErro(tipo, provedor, opcoes), opcoes.status);
+  return new ErroProvedor(
+    tipo,
+    provedor,
+    mensagemDeErro(tipo, provedor, opcoes),
+    opcoes.status,
+    opcoes.repetivel,
+  );
 }

@@ -54,7 +54,7 @@ function validar(valor: unknown, schema: JsonSchema, caminho: string, problemas:
       const registro = valor as Record<string, unknown>;
       const propriedades = schema.properties ?? {};
       for (const nome of schema.required ?? []) {
-        if (!(nome in registro))
+        if (!Object.hasOwn(registro, nome))
           problemas.push(`${juntar(caminho, nome)}: campo obrigatório ausente`);
       }
       for (const [nome, filho] of Object.entries(registro)) {

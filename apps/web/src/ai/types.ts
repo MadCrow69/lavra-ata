@@ -38,6 +38,8 @@ export type ErroTipo =
   | 'recusa'
   | 'rede'
   | 'parametro'
+  | 'muito_longo'
+  | 'inesperado'
   | 'cancelado';
 
 export interface ProviderAdapter {

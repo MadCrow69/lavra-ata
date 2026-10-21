@@ -97,19 +97,47 @@ describe('gerarComFallback', () => {
     expect(r).toMatchObject({ valor: 'ok', provedor: 'openai', falhas: [] });
   });
 
-  it.each<ErroTipo>(['chave_invalida', 'cortado', 'json_invalido', 'recusa', 'rede', 'parametro'])(
-    'erro %s avança direto, sem retry nem espera',
-    async (tipo) => {
-      const { a, gerar } = adaptadores({
-        openai: () => falha(tipo, 'openai'),
-        gemini: () => Promise.resolve('ok'),
-      });
-      const r = await gerarComFallback(cadeia, reqCom(), { adaptadores: a });
-      expect(gerar.openai).toHaveBeenCalledTimes(1);
-      expect(r.provedor).toBe('gemini');
-      expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: tipo });
-    },
-  );
+  it('instável de resposta 200 (não repetível) avança sem retry nem espera', async () => {
+    const { a, gerar } = adaptadores({
+      openai: () => Promise.reject(new ErroProvedor('instavel', 'openai', 'falha 200', 200, false)),
+      gemini: () => Promise.resolve('ok'),
+    });
+    const r = await gerarComFallback(cadeia, reqCom(), { adaptadores: a });
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
+    expect(r.provedor).toBe('gemini');
+    expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: 'instavel' });
+  });
+
+  it('normaliza (trim) o id do modelo uma vez, na entrada da cadeia', async () => {
+    const { a, gerar } = adaptadores({ openai: () => Promise.resolve('ok') });
+    const r = await gerarComFallback(
+      [{ id: 'openai', modelo: '  gpt-6-luna \n', chave: 'k1' }],
+      reqCom(),
+      { adaptadores: a },
+    );
+    expect(gerar.openai.mock.calls[0]?.[0].modelo).toBe('gpt-6-luna');
+    expect(r.modelo).toBe('gpt-6-luna');
+  });
+
+  it.each<ErroTipo>([
+    'chave_invalida',
+    'cortado',
+    'json_invalido',
+    'recusa',
+    'rede',
+    'parametro',
+    'muito_longo',
+    'inesperado',
+  ])('erro %s avança direto, sem retry nem espera', async (tipo) => {
+    const { a, gerar } = adaptadores({
+      openai: () => falha(tipo, 'openai'),
+      gemini: () => Promise.resolve('ok'),
+    });
+    const r = await gerarComFallback(cadeia, reqCom(), { adaptadores: a });
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
+    expect(r.provedor).toBe('gemini');
+    expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: tipo });
+  });
 
   it('cancelado interrompe a cadeia e não tenta o próximo', async () => {
     const { a, gerar } = adaptadores({ openai: () => falha('cancelado', 'openai') });

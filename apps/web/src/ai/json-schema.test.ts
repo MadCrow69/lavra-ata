@@ -60,6 +60,19 @@ describe('validarSchema', () => {
     expect(problemas.some((p) => p.includes('itens[0].outro'))).toBe(true);
   });
 
+  it('exige campo obrigatório com nome herdado de Object.prototype', () => {
+    const texto: JsonSchema = { type: 'string' };
+    const propriedades: Record<string, JsonSchema> = Object.fromEntries([['toString', texto]]);
+    const s: JsonSchema = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['toString'],
+      properties: propriedades,
+    };
+    expect(validarSchema({}, s)).toHaveLength(1);
+    expect(validarSchema({ toString: 'x' }, s)).toEqual([]);
+  });
+
   it('rejeita null, array e primitivo onde se espera objeto', () => {
     expect(validarSchema(null, schema)).not.toEqual([]);
     expect(validarSchema([], schema)).not.toEqual([]);

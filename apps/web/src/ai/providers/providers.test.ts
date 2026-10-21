@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ErroProvedor } from '../errors';
+import { ErroProvedor, sanitizar } from '../errors';
 import type { ErroTipo, GenerateRequest, JsonSchema, ProviderConfig, ProviderId } from '../types';
 import { anthropicAdapter } from './anthropic';
 import { geminiAdapter } from './gemini';
@@ -106,12 +106,12 @@ describe('openaiAdapter.gerar', () => {
     expect(c.url).not.toContain(CHAVE_OPENAI);
   });
 
-  it('usa o esforço declarado do modelo e o padrão do provedor para id livre', async () => {
+  it('usa o esforço declarado do modelo e omite o parâmetro para id livre', async () => {
     fetchFalso.mockImplementation(() => Promise.resolve(respostaOpenai('{"idioma":"pt-BR"}')));
     await openaiAdapter.gerar({ ...cfgOpenai, modelo: 'gpt-6.1-sol' }, req());
     await openaiAdapter.gerar({ ...cfgOpenai, modelo: 'modelo-digitado' }, req());
     expect(chamada(0).corpo.reasoning).toEqual({ effort: 'low' });
-    expect(chamada(1).corpo.reasoning).toEqual({ effort: 'none' });
+    expect(chamada(1).corpo).not.toHaveProperty('reasoning');
   });
 
   it('status incomplete por max_output_tokens vira cortado', async () => {
@@ -330,6 +330,18 @@ describe('anthropicAdapter.gerar', () => {
     comumOk(c.init, r.signal);
   });
 
+  it('omite effort para id digitado livremente e usa o do modelo da lista', async () => {
+    fetchFalso.mockImplementation(() =>
+      Promise.resolve(respostaAnthropic([{ type: 'text', text: '{"idioma":"pt-BR"}' }])),
+    );
+    await anthropicAdapter.gerar({ ...cfgAnthropic, modelo: 'claude-sonnet-5-5' }, req());
+    await anthropicAdapter.gerar({ ...cfgAnthropic, modelo: 'modelo-digitado' }, req());
+    expect(chamada(0).corpo.output_config).toMatchObject({ effort: 'low' });
+    const livre = chamada(1).corpo.output_config as Record<string, unknown>;
+    expect(livre).not.toHaveProperty('effort');
+    expect(livre.format).toEqual({ type: 'json_schema', schema: SCHEMA });
+  });
+
   it('max_tokens vira cortado, mesmo sem nenhum bloco de texto', async () => {
     fetchFalso.mockResolvedValueOnce(
       respostaAnthropic([{ type: 'thinking', thinking: '', signature: 'abc' }], 'max_tokens'),
@@ -407,7 +419,6 @@ const statusParaTipo: [number, ErroTipo][] = [
   [500, 'instavel'],
   [503, 'instavel'],
   [529, 'instavel'],
-  [400, 'parametro'],
 ];
 
 async function erroDe(p: Promise<unknown>): Promise<ErroProvedor> {
@@ -421,6 +432,76 @@ async function erroDe(p: Promise<unknown>): Promise<ErroProvedor> {
 }
 
 describe.each(casos)('erros HTTP e de rede — $id', ({ id, cfg, gerar, testar }) => {
+  const erroApi = (message: string, extra: Record<string, unknown> = {}): Response =>
+    json({ error: { message, ...extra } }, 400);
+
+  it('400 de valor não suportado vira parametro em gerar e inesperado no teste de chave', async () => {
+    fetchFalso.mockImplementation(() => Promise.resolve(erroApi('Unsupported value: effort.')));
+    const e1 = await erroDe(gerar(cfg, req()));
+    expect(e1).toMatchObject({ tipo: 'parametro', provedor: id, status: 400 });
+    const e2 = await erroDe(testar(new AbortController().signal));
+    expect(e2).toMatchObject({ tipo: 'inesperado', provedor: id, status: 400 });
+    expect(e2.message).not.toContain('O modelo');
+  });
+
+  it('400 com campo param preenchido vira parametro', async () => {
+    fetchFalso.mockResolvedValueOnce(erroApi('Algo sobre o campo.', { param: 'reasoning.effort' }));
+    expect((await erroDe(gerar(cfg, req()))).tipo).toBe('parametro');
+  });
+
+  it.each([
+    ['context_length_exceeded', { code: 'context_length_exceeded' }, 'Context window.'],
+    ['prompt is too long', {}, 'prompt is too long: 250000 tokens > 200000 maximum'],
+    [
+      'input token count',
+      {},
+      'The input token count (300000) exceeds the maximum number of tokens allowed (1048576).',
+    ],
+  ])('estouro de contexto (%s) vira muito_longo', async (_nome, extra, msg) => {
+    fetchFalso.mockResolvedValueOnce(erroApi(msg, extra));
+    const e = await erroDe(gerar(cfg, req()));
+    expect(e.tipo).toBe('muito_longo');
+    expect(e.message).toBe(
+      `A transcrição ficou grande demais para o modelo ${cfg.modelo}. Divida a reunião ou escolha um modelo com mais contexto.`,
+    );
+  });
+
+  it('HTTP 413 vira muito_longo', async () => {
+    fetchFalso.mockResolvedValueOnce(json({ error: { message: 'Request too large' } }, 413));
+    expect((await erroDe(gerar(cfg, req()))).tipo).toBe('muito_longo');
+  });
+
+  it('404 diz que o modelo não foi encontrado (só em gerar)', async () => {
+    fetchFalso.mockImplementation(() =>
+      Promise.resolve(json({ error: { message: 'not found' } }, 404)),
+    );
+    const e1 = await erroDe(gerar(cfg, req()));
+    expect(e1.message).toBe(
+      `O modelo ${cfg.modelo} não foi encontrado neste provedor. Confira o nome nas configurações.`,
+    );
+    const e2 = await erroDe(testar(new AbortController().signal));
+    expect(e2.tipo).toBe('inesperado');
+    expect(e2.message).not.toContain('O modelo');
+  });
+
+  it('outros 4xx viram inesperado, com o status na mensagem', async () => {
+    fetchFalso.mockResolvedValueOnce(json({ error: { message: 'Algo estranho' } }, 418));
+    const e = await erroDe(gerar(cfg, req()));
+    expect(e.tipo).toBe('inesperado');
+    expect(e.message).toContain('HTTP 418');
+    fetchFalso.mockResolvedValueOnce(erroApi('Pedido malformado sem pistas'));
+    expect((await erroDe(gerar(cfg, req()))).tipo).toBe('inesperado');
+  });
+
+  it('429 e 5xx são repetíveis; 4xx de parâmetro não', async () => {
+    fetchFalso.mockResolvedValueOnce(json({ error: { message: 'x' } }, 429));
+    expect((await erroDe(gerar(cfg, req()))).repetivel).toBe(true);
+    fetchFalso.mockResolvedValueOnce(json({ error: { message: 'x' } }, 529));
+    expect((await erroDe(gerar(cfg, req()))).repetivel).toBe(true);
+    fetchFalso.mockResolvedValueOnce(erroApi('Unsupported value'));
+    expect((await erroDe(gerar(cfg, req()))).repetivel).toBe(false);
+  });
+
   it.each(statusParaTipo)('HTTP %i vira %s (gerar e testarChave)', async (status, tipo) => {
     fetchFalso.mockImplementation(() =>
       Promise.resolve(
@@ -487,6 +568,73 @@ describe.each(casos)('erros HTTP e de rede — $id', ({ id, cfg, gerar, testar }
         expect(JSON.stringify(e)).not.toContain(chave);
       }
     }
+  });
+});
+
+describe('Gemini: chave inválida vem como HTTP 400', () => {
+  const corpoReal = {
+    error: {
+      code: 400,
+      message: 'API key not valid. Please pass a valid API key.',
+      status: 'INVALID_ARGUMENT',
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+          reason: 'API_KEY_INVALID',
+          domain: 'googleapis.com',
+        },
+      ],
+    },
+  };
+
+  it('gerar e testarChave viram chave_invalida (e não parametro)', async () => {
+    fetchFalso.mockImplementation(() => Promise.resolve(json(corpoReal, 400)));
+    const e1 = await erroDe(geminiAdapter.gerar(cfgGemini, req()));
+    expect(e1).toMatchObject({ tipo: 'chave_invalida', status: 400 });
+    const e2 = await erroDe(
+      geminiAdapter.testarChave(
+        { id: 'gemini', chave: CHAVE_GEMINI },
+        new AbortController().signal,
+      ),
+    );
+    expect(e2).toMatchObject({ tipo: 'chave_invalida', status: 400 });
+    expect(e2.message).not.toContain('O modelo');
+  });
+
+  it('reconhece também só pela mensagem, sem details', async () => {
+    fetchFalso.mockResolvedValueOnce(
+      json({ error: { message: 'API key not valid. Please pass a valid API key.' } }, 400),
+    );
+    expect((await erroDe(geminiAdapter.gerar(cfgGemini, req()))).tipo).toBe('chave_invalida');
+  });
+});
+
+describe('retry só para falha de nível HTTP/rede', () => {
+  it('resposta 200 classificada como instavel não é repetível', async () => {
+    fetchFalso.mockResolvedValueOnce(json({ status: 'failed', output: [] }));
+    const e1 = await erroDe(openaiAdapter.gerar(cfgOpenai, req()));
+    expect(e1).toMatchObject({ tipo: 'instavel', repetivel: false });
+    fetchFalso.mockResolvedValueOnce(respostaGemini([{ text: 'x' }], 'OTHER'));
+    const e2 = await erroDe(geminiAdapter.gerar(cfgGemini, req()));
+    expect(e2).toMatchObject({ tipo: 'instavel', repetivel: false });
+    fetchFalso.mockResolvedValueOnce(respostaAnthropic([], 'pause_turn'));
+    const e3 = await erroDe(anthropicAdapter.gerar(cfgAnthropic, req()));
+    expect(e3).toMatchObject({ tipo: 'instavel', repetivel: false });
+  });
+});
+
+describe('sanitizar', () => {
+  it('remove chave sem formato conhecido, inclusive com espaços nas pontas', () => {
+    const eco = 'Falha com minha-chave-123456 na chamada';
+    expect(sanitizar(eco, 'minha-chave-123456')).not.toContain('minha-chave-123456');
+    expect(sanitizar(eco, '  minha-chave-123456 ')).not.toContain('minha-chave-123456');
+  });
+
+  it('não corta palavras que apenas terminam em "sk-"', () => {
+    const saida = sanitizar('risk-assessment e task-force seguem, mas sk-abc123 some', 'outra');
+    expect(saida).toContain('risk-assessment');
+    expect(saida).toContain('task-force');
+    expect(saida).not.toContain('sk-abc123');
   });
 });
 

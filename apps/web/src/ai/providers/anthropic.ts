@@ -52,7 +52,7 @@ export const anthropicAdapter: ProviderAdapter = {
     if (FINALIZACAO_CORTADA.has(motivo)) throw erroProvedor('cortado', 'anthropic');
     if (motivo === 'refusal') throw erroProvedor('recusa', 'anthropic');
     if (motivo !== 'end_turn' && motivo !== 'stop_sequence')
-      throw erroProvedor('instavel', 'anthropic');
+      throw erroProvedor('instavel', 'anthropic', { repetivel: false });
 
     // O conteúdo pode começar por blocos `thinking`: lê só os blocos `text`.
     const textos: string[] = [];

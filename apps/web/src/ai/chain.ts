@@ -38,7 +38,7 @@ function esperar(ms: number, signal: AbortSignal, provedor: ProviderId): Promise
 
 /** Qualquer erro vira ErroProvedor; erro inesperado nunca repassa o texto original (pode ter dados). */
 function comoErroProvedor(e: unknown, provedor: ProviderId): ErroProvedor {
-  return e instanceof ErroProvedor ? e : erroProvedor('instavel', provedor);
+  return e instanceof ErroProvedor ? e : erroProvedor('instavel', provedor, { repetivel: false });
 }
 
 function mensagemDaCadeia(falhas: FalhaProvedor[]): string {
@@ -50,9 +50,14 @@ function mensagemDaCadeia(falhas: FalhaProvedor[]): string {
 }
 
 /**
- * Tenta os provedores em ordem. Avança em qualquer erro, exceto `cancelado` (relançado na hora).
- * `limite` e `instavel` ganham UMA nova tentativa após 2 s (cancelável) antes de avançar.
- * Se todos falharem, lança `ErroCadeia` com as falhas em ordem.
+ * Tenta os provedores em ordem. Avança em qualquer erro, exceto `cancelado`.
+ * Só falha de nível HTTP/rede (`ErroProvedor.repetivel`: 429, 5xx/529, sobrecarga) ganha UMA nova
+ * tentativa após 2 s (cancelável); resposta 200 mal formada ou incompleta avança sem repetir.
+ * O id do modelo é normalizado (trim) aqui, uma vez, antes de chegar aos adaptadores.
+ *
+ * Lança `ErroCadeia` (com as falhas em ordem) quando todos falham ou a cadeia vem vazia. Cancelar
+ * (sinal abortado, inclusive durante a espera) lança `ErroProvedor` com `tipo: 'cancelado'`, não
+ * `ErroCadeia`.
  */
 export async function gerarComFallback(
   cadeia: ProviderConfig[],
@@ -63,7 +68,8 @@ export async function gerarComFallback(
   const espera = opcoes.esperaRetryMs ?? ESPERA_RETRY_MS;
   const falhas: FalhaProvedor[] = [];
 
-  for (const cfg of cadeia) {
+  for (const original of cadeia) {
+    const cfg = { ...original, modelo: original.modelo.trim() };
     const adaptador = adaptadores[cfg.id];
     let tentativa = 0;
     for (;;) {
@@ -74,8 +80,7 @@ export async function gerarComFallback(
       } catch (e) {
         const erro = comoErroProvedor(e, cfg.id);
         if (erro.tipo === 'cancelado') throw erro;
-        const repetivel = erro.tipo === 'limite' || erro.tipo === 'instavel';
-        if (repetivel && tentativa === 0) {
+        if (erro.repetivel && tentativa === 0) {
           tentativa++;
           await esperar(espera, req.signal, cfg.id);
           continue;
