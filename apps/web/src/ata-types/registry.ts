@@ -33,6 +33,11 @@ export function mensagemObrigatorio(campo: CampoDef, dados: Record<string, strin
   return campo.erroObrigatorio ?? `Preencha o campo “${rotuloDoCampo(campo, dados)}”.`;
 }
 
+/** Transcrição acima de `LIMITE_TRANSCRICAO`: bloqueia a geração e pinta o contador do bloco. */
+export function transcricaoExcedeLimite(texto: string): boolean {
+  return texto.length > LIMITE_TRANSCRICAO;
+}
+
 /**
  * Tudo que ainda impede a ata de sair completa, na ordem do formulário. Fonte única do bloqueio
  * da geração: os blocos e a barra de geração leem daqui (inclusive o limite da transcrição).
@@ -70,7 +75,7 @@ export function camposFaltando(d: AtaDraft, tipo: AtaTypeDefinition): CampoFalta
 
   if (d.transcricao.trim() === '') {
     faltas.push({ bloco: 'transcricao', campo: 'transcricao', rotulo: 'Transcrição' });
-  } else if (d.transcricao.length > LIMITE_TRANSCRICAO) {
+  } else if (transcricaoExcedeLimite(d.transcricao)) {
     // Mesmo campo: vazia e acima do limite nunca acontecem juntas.
     faltas.push({
       bloco: 'transcricao',

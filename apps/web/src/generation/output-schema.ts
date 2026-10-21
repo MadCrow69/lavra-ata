@@ -51,11 +51,16 @@ export function ehChaveDeSecao(tipo: AtaTypeDefinition, chave: string): boolean 
   return tipo.secoes.some((s) => s.chave === chave);
 }
 
-/** Só uma seção: `{ blocos: Bloco[] }`, ou `{ encaminhamentos: Encaminhamento[] }`. */
-export function schemaDaSecao(tipo: AtaTypeDefinition, chave: string): JsonSchema {
+/** Chave inexistente é erro de programação (quem chama só oferece seções do tipo). */
+export function exigirChaveDeSecao(tipo: AtaTypeDefinition, chave: string): void {
   if (!ehChaveDeSecao(tipo, chave)) {
     throw new Error(`Seção "${chave}" não existe no tipo de ata "${tipo.id}".`);
   }
+}
+
+/** Só uma seção: `{ blocos: Bloco[] }`, ou `{ encaminhamentos: Encaminhamento[] }`. */
+export function schemaDaSecao(tipo: AtaTypeDefinition, chave: string): JsonSchema {
+  exigirChaveDeSecao(tipo, chave);
   return chave === CHAVE_ENCAMINHAMENTOS
     ? objeto({ encaminhamentos: listaDe(ENCAMINHAMENTO) })
     : objeto({ blocos: listaDe(BLOCO) });

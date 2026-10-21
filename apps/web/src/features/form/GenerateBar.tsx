@@ -94,12 +94,15 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
     estavaGerandoRef.current = gerando;
   }, [gerando]);
 
+  /** Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta. */
+  const podeGerar = faltas.length === 0 && !gerando;
+
   const gerar = async () => {
+    if (!podeGerar || controleRef.current !== null) return;
     if (cadeia.length === 0) {
       onConfigurarChaves();
       return;
     }
-    controleRef.current?.abort();
     const controle = new AbortController();
     controleRef.current = controle;
     setEstado({ fase: 'gerando' });
@@ -127,7 +130,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
   };
 
   const aoClicarGerar = () => {
-    if (faltas.length > 0 || gerando) return;
+    if (!podeGerar) return;
     if (cadeia.length === 0) {
       onConfigurarChaves();
       return;
@@ -158,7 +161,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
         <Button
           ref={gerarRef}
           variante="primario"
-          disabled={faltas.length > 0 || gerando}
+          disabled={!podeGerar}
           aria-describedby={faltas.length > 0 ? resumoId : undefined}
           onClick={aoClicarGerar}
         >
@@ -241,6 +244,8 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
           <div className={styles.acoes}>
             <Button
               variante="primario"
+              disabled={!podeGerar}
+              aria-describedby={faltas.length > 0 ? resumoId : undefined}
               onClick={() => {
                 void gerar();
               }}

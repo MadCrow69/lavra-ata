@@ -8,7 +8,7 @@ import { criarRascunho } from '../domain/draft-reducer';
 import { validarSchema } from '../ai/json-schema';
 import type { JsonSchema } from '../ai/types';
 import { schemaDaAta, schemaDaSecao } from './output-schema';
-import { blocosParaTexto, montarPrompt, montarPromptSecao } from './prompt';
+import { REGRA_DELIMITADORES, blocosParaTexto, montarPrompt, montarPromptSecao } from './prompt';
 
 const CPF = '529.982.247-25';
 
@@ -104,6 +104,20 @@ describe('montarPrompt', () => {
     const d2 = rascunho({ dados: { data: '2026-02-31' } });
     expect(montarPrompt(corporativa, d2, 'x').usuario).toContain('Data: não informada');
     expect(montarPrompt(corporativa, d2, 'x').usuario).toContain('Modalidade: não informada');
+  });
+
+  it('o sistema diz que transcrição e texto delimitados são material, não instruções', () => {
+    const d = rascunho();
+    for (const { sistema } of [
+      montarPrompt(corporativa, d, 'x'),
+      montarPromptSecao(corporativa, d, 'resumo', 'y', 'z', 'x'),
+    ]) {
+      expect(sistema).toContain(REGRA_DELIMITADORES);
+    }
+    expect(REGRA_DELIMITADORES).toMatch(/<transcricao>/);
+    expect(REGRA_DELIMITADORES).toMatch(/<texto_atual>/);
+    expect(REGRA_DELIMITADORES).toMatch(/<instrucao>/);
+    expect(REGRA_DELIMITADORES).toMatch(/nunca/);
   });
 
   it('o sistema traz as regras de não inventar, de marcadores, do tipo, do tom e das seções', () => {

@@ -39,7 +39,23 @@ function ItemToast({
   const [sobMouse, setSobMouse] = useState(false);
   const [comFoco, setComFoco] = useState(false);
   const restanteRef = useRef(duracaoMs);
+  /** Quem tinha o foco antes de ele entrar nas notificações (para devolver ao fechar). */
+  const origemRef = useRef<HTMLElement | null>(null);
   const pausado = sobMouse || comFoco;
+
+  // Fechar pelo botão não deixa o foco cair no <body>: vai ao toast vizinho ou de volta à origem.
+  const fecharPeloBotao = (botao: HTMLElement) => {
+    const item = botao.closest('[data-toast]');
+    const ativo = document.activeElement;
+    if (item && (ativo === null || ativo === document.body || item.contains(ativo))) {
+      const vizinho = (
+        item.nextElementSibling ?? item.previousElementSibling
+      )?.querySelector<HTMLElement>('button');
+      const origem = origemRef.current?.isConnected ? origemRef.current : null;
+      (vizinho ?? origem)?.focus();
+    }
+    onFechar(toast.id);
+  };
 
   // O cronômetro só corre sem mouse em cima e sem foco dentro; ao pausar, guarda o que falta.
   useEffect(() => {
@@ -64,7 +80,11 @@ function ItemToast({
       onMouseLeave={() => {
         setSobMouse(false);
       }}
-      onFocus={() => {
+      onFocus={(e) => {
+        const veio = e.relatedTarget;
+        if (veio instanceof HTMLElement && !veio.closest('[data-toast-regiao]')) {
+          origemRef.current = veio;
+        }
         setComFoco(true);
       }}
       onBlur={(e) => {
@@ -84,8 +104,8 @@ function ItemToast({
         type="button"
         className={styles.fechar}
         aria-label="Fechar notificação"
-        onClick={() => {
-          onFechar(toast.id);
+        onClick={(e) => {
+          fecharPeloBotao(e.currentTarget);
         }}
       >
         <span aria-hidden="true">✕</span>
@@ -131,6 +151,7 @@ export function ToastProvider({
         className={styles.regiao}
         role="region"
         aria-label="Notificações"
+        data-toast-regiao=""
         aria-live="polite"
         aria-relevant="additions text"
       >

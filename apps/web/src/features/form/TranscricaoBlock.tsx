@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { camposFaltando } from '../../ata-types/registry';
+import { camposFaltando, transcricaoExcedeLimite } from '../../ata-types/registry';
 import type { AtaTypeDefinition } from '../../ata-types/types';
 import {
   LIMITE_ARQUIVO_BYTES,
@@ -23,9 +23,9 @@ const MENSAGEM_EXCEDIDO = `A transcrição passou do limite de ${String(LIMITE_T
 
 type Nivel = 'ok' | 'atencao' | 'excedido';
 
-function nivelDoContador(n: number): Nivel {
-  if (n > LIMITE_TRANSCRICAO) return 'excedido';
-  if (n * 100 >= LIMITE_TRANSCRICAO * PERCENTUAL_ALERTA_TRANSCRICAO) return 'atencao';
+function nivelDoContador(texto: string): Nivel {
+  if (transcricaoExcedeLimite(texto)) return 'excedido';
+  if (texto.length * 100 >= LIMITE_TRANSCRICAO * PERCENTUAL_ALERTA_TRANSCRICAO) return 'atencao';
   return 'ok';
 }
 
@@ -48,7 +48,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const [status, setStatus] = useState<Status | null>(null);
   const arquivoRef = useRef<HTMLInputElement>(null);
 
-  const nivel = nivelDoContador(texto.length);
+  const nivel = nivelDoContador(texto);
   const excedido = nivel === 'excedido';
   const faltando = camposFaltando(state, tipo)
     .filter((f) => f.bloco === 'transcricao')

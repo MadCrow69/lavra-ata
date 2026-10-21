@@ -1,4 +1,11 @@
-import { createMaskMap, mask, unmask, validateOutput, type MaskMap } from '@lavra/pii-br';
+import {
+  createMaskMap,
+  findMarkers,
+  mask,
+  unmask,
+  validateOutput,
+  type MaskMap,
+} from '@lavra/pii-br';
 import type { AtaTypeDefinition } from '../ata-types/types';
 import { gerarComFallback, type OpcoesCadeia } from '../ai/chain';
 import { erroProvedor } from '../ai/errors';
@@ -8,7 +15,7 @@ import type { AtaDraft, Atribuicao, Bloco, Encaminhamento, ResultadoAta } from '
 import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { nomeComArtigo } from '../features/privacy/rotulos';
 import { normalizarBlocos, normalizarEncaminhamentos, normalizarResultado } from './normalize';
-import { ehChaveDeSecao, nomeDoSchema, schemaDaAta, schemaDaSecao } from './output-schema';
+import { exigirChaveDeSecao, nomeDoSchema, schemaDaAta, schemaDaSecao } from './output-schema';
 import { montarPrompt, montarPromptSecao, textoAtualDaSecao } from './prompt';
 
 /**
@@ -55,12 +62,12 @@ class Mascarador {
 
 /**
  * Cópia do rascunho com tudo que vai para a IA mascarado: transcrição primeiro (é ela que define
- * a numeração), depois metadados, pauta e participantes. Campos fora de `camposNoPrompt`,
- * justificativas, extras, resultado e mapa não seguem na cópia de texto livre.
+ * a numeração), depois metadados, pauta e participantes. A cópia leva SÓ os campos de
+ * `camposNoPrompt` (mascarados); demais campos, justificativas, extras, resultado e mapa não seguem.
  */
 function rascunhoMascarado(d: AtaDraft, tipo: AtaTypeDefinition, m: Mascarador): AtaDraft {
   const transcricao = m.mascarar(d.transcricao);
-  const dados = { ...d.dados };
+  const dados: Record<string, string> = {};
   for (const id of tipo.camposNoPrompt) {
     const valor = d.dados[id];
     if (valor !== undefined) dados[id] = m.mascarar(valor);
@@ -86,12 +93,32 @@ function avisoDeColisao(c: Colisao): string {
   return `Seu texto já tinha um trecho parecido com um marcador (${c.literal}); ele foi mantido como ${c.reescrito}.`;
 }
 
-/** Problemas de `validateOutput` num trecho da saída, em pt-BR, sem repetir e sem dado pessoal. */
-function avisosDaSaida(saida: string, mapa: MaskMap, enviado: string): string[] {
+/** Marcadores (forma canônica) de um texto que não existem no mapa. */
+function marcadoresForaDoMapa(texto: string, mapa: MaskMap | null): Set<string> {
+  return new Set(
+    findMarkers(texto)
+      .map((m) => `[${m.type}_${m.number}]`)
+      .filter((c) => !mapa || !Object.hasOwn(mapa.markers, c)),
+  );
+}
+
+/**
+ * Problemas de `validateOutput` num trecho da saída, em pt-BR, sem repetir e sem dado pessoal.
+ * `suspeitos`: marcadores que já estavam no texto atual da seção sem existir no mapa (a IA os
+ * inventou antes). Ao regerar, o `mask` os trata como literais reservados e o `validateOutput`
+ * deixa de apontá-los; se a nova saída ainda os traz, o aviso continua.
+ */
+function avisosDaSaida(
+  saida: string,
+  mapa: MaskMap,
+  enviado: string,
+  suspeitos: ReadonlySet<string> = new Set(),
+): string[] {
   if (saida === '') return [];
   const r = validateOutput(saida, mapa, enviado);
+  const repetidos = [...marcadoresForaDoMapa(saida, mapa)].filter((c) => suspeitos.has(c));
   const avisos = [
-    ...r.unknownMarkers.map(
+    ...[...r.unknownMarkers, ...repetidos].map(
       (m) =>
         `A IA escreveu o marcador ${m}, que não corresponde a nenhum dado da transcrição — confira o trecho.`,
     ),
@@ -222,12 +249,12 @@ export async function regerarSecao(
   mapa: MaskMap;
   atribuicao: Atribuicao;
 }> {
-  if (!ehChaveDeSecao(tipo, chave)) {
-    throw new Error(`Seção "${chave}" não existe no tipo de ata "${tipo.id}".`);
-  }
+  exigirChaveDeSecao(tipo, chave);
   const m = new Mascarador(d.mapa);
   const mascarado = rascunhoMascarado(d, tipo, m);
-  const atual = m.mascarar(textoAtualDaSecao(d, chave));
+  const textoAtual = textoAtualDaSecao(d, chave);
+  const suspeitos = marcadoresForaDoMapa(textoAtual, d.mapa);
+  const atual = m.mascarar(textoAtual);
   const pedido = instrucao === null || instrucao.trim() === '' ? null : m.mascarar(instrucao);
   const prompt = montarPromptSecao(tipo, mascarado, chave, atual, pedido, mascarado.transcricao);
 
@@ -251,7 +278,10 @@ export async function regerarSecao(
     const itens = normalizarEncaminhamentos(raiz.encaminhamentos);
     return {
       blocos: desmascararEncaminhamentos(itens, mapa),
-      avisos: [...colisoes, ...avisosDaSaida(textoDosEncaminhamentos(itens), mapa, prompt.usuario)],
+      avisos: [
+        ...colisoes,
+        ...avisosDaSaida(textoDosEncaminhamentos(itens), mapa, prompt.usuario, suspeitos),
+      ],
       mapa,
       atribuicao: atribuicaoDe(r),
     };
@@ -259,7 +289,10 @@ export async function regerarSecao(
   const blocos = normalizarBlocos(raiz.blocos);
   return {
     blocos: desmascararBlocos(blocos, mapa),
-    avisos: [...colisoes, ...avisosDaSaida(textoDosBlocos(blocos), mapa, prompt.usuario)],
+    avisos: [
+      ...colisoes,
+      ...avisosDaSaida(textoDosBlocos(blocos), mapa, prompt.usuario, suspeitos),
+    ],
     mapa,
     atribuicao: atribuicaoDe(r),
   };

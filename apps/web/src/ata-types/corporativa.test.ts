@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITE_TRANSCRICAO } from '../config/limits';
-import { criarRascunho } from '../domain/draft-reducer';
+import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS, criarRascunho } from '../domain/draft-reducer';
 import type { AtaDraft, Participante } from '../domain/draft';
 import { corporativa } from './corporativa';
 import { REGRAS_COMUNS } from './regras-comuns';
@@ -11,6 +11,7 @@ import {
   ehObrigatorio,
   obterTipo,
   rotuloDoCampo,
+  transcricaoExcedeLimite,
 } from './registry';
 import type { AtaTypeDefinition } from './types';
 
@@ -92,6 +93,28 @@ describe('registro de tipos', () => {
     expect(corporativa.regrasPrompt.length).toBeGreaterThan(0);
     const todas = [...REGRAS_COMUNS, ...corporativa.regrasPrompt];
     expect(new Set(todas).size).toBe(todas.length);
+  });
+});
+
+describe('chaves de seção', () => {
+  it('nenhum tipo usa chave reservada; a chave de avisos gerais nem tem forma de seção', () => {
+    const forma = /^[a-z][a-z0-9_]*$/;
+    expect(forma.test(CHAVE_AVISOS_GERAIS)).toBe(false);
+    for (const tipo of Object.values(ATA_TYPES)) {
+      const chaves = tipo.secoes.map((s) => s.chave);
+      expect(new Set(chaves).size).toBe(chaves.length);
+      for (const chave of chaves) {
+        expect(chave).toMatch(forma);
+        expect([CHAVE_ENCAMINHAMENTOS, CHAVE_AVISOS_GERAIS]).not.toContain(chave);
+      }
+    }
+  });
+});
+
+describe('transcricaoExcedeLimite', () => {
+  it('vale só acima do limite (fonte única do bloco e de camposFaltando)', () => {
+    expect(transcricaoExcedeLimite('a'.repeat(LIMITE_TRANSCRICAO))).toBe(false);
+    expect(transcricaoExcedeLimite('a'.repeat(LIMITE_TRANSCRICAO + 1))).toBe(true);
   });
 });
 

@@ -111,6 +111,31 @@ describe('Toast', () => {
     expect(screen.getAllByText('Ata gerada.')).toHaveLength(1);
   });
 
+  it('fechar pelo botão leva o foco ao próximo toast, ou de volta a quem tinha o foco', () => {
+    const { disparar } = renderizar();
+    disparar();
+    disparar();
+    const botoes = () => screen.getAllByRole('button', { name: 'Fechar notificação' });
+    const [primeiro, segundo] = botoes();
+    if (!primeiro || !segundo) throw new Error('Esperava dois toasts.');
+    act(() => {
+      primeiro.focus();
+    });
+    fireEvent.click(primeiro);
+    expect(segundo).toHaveFocus();
+
+    const disparador = screen.getByText('disparar');
+    act(() => {
+      disparador.focus();
+    });
+    act(() => {
+      segundo.focus();
+    });
+    fireEvent.click(segundo);
+    expect(screen.queryByText('Ata gerada.')).not.toBeInTheDocument();
+    expect(disparador).toHaveFocus();
+  });
+
   it('useToast fora do provedor é erro de uso', () => {
     const erro = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(() => render(<Disparador dados={{ titulo: 'x' }} />)).toThrow(/ToastProvider/);

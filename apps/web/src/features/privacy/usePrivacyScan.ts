@@ -1,6 +1,7 @@
 import { mask, type Finding, type MaskMap, type PiiType } from '@lavra/pii-br';
 import { useEffect, useMemo, useState } from 'react';
-import { DEBOUNCE_DETECCAO_MS, LIMITE_TRANSCRICAO } from '../../config/limits';
+import { transcricaoExcedeLimite } from '../../ata-types/registry';
+import { DEBOUNCE_DETECCAO_MS } from '../../config/limits';
 
 export interface PrivacyScan {
   /** Ocorrências por tipo. */
@@ -42,7 +43,7 @@ export function contarPorTipo(achados: readonly Finding[]): Partial<Record<PiiTy
  * os marcadores mostrados sejam os mesmos que a IA receberá. Nunca altera o rascunho.
  */
 export function usePrivacyScan(texto: string, mapa?: MaskMap | null): PrivacyScan {
-  const excedido = texto.length > LIMITE_TRANSCRICAO;
+  const excedido = transcricaoExcedeLimite(texto);
   const [analisado, setAnalisado] = useState(excedido ? '' : texto);
 
   useEffect(() => {

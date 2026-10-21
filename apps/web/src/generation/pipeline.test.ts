@@ -314,6 +314,33 @@ describe('regerarSecao', () => {
     expect(r.atribuicao).toEqual({ provedor: 'openai', modelo: 'gpt-6-luna', fallbackDe: [] });
   });
 
+  it('marcador inventado que já estava no texto atual continua avisado ao regerar', async () => {
+    const base = rascunho();
+    const mapa = mask(base.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      base,
+      { secoes: { decisoes: [par('Pagar o titular [CPF_9].')] }, avisos: { decisoes: ['x'] } },
+      mapa,
+    );
+    const { opcoes } = adaptadores({
+      openai: () => Promise.resolve({ blocos: [par('Pagar o titular [CPF_9] e [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, corporativa, 'decisoes', null, CADEIA, sinal(), opcoes);
+    expect(r.avisos).toHaveLength(1);
+    expect(r.avisos[0]).toContain('[CPF_9]');
+    expect(r.blocos).toEqual([par(`Pagar o titular [CPF_9] e ${CPF}.`)]);
+  });
+
+  it('literal da pessoa ecoado pela IA na geração completa não vira aviso', async () => {
+    const { opcoes } = adaptadores({
+      openai: () =>
+        Promise.resolve(respostaAta({ resumo: [par('O campo [CPF_7] estava vazio.')] })),
+    });
+    const d = rascunho({ transcricao: 'Ana: o campo [CPF_7] estava vazio.' });
+    const { resultado } = await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(resultado.avisos.resumo).toEqual([]);
+  });
+
   it('aviso de identificador inventado fica na seção regerada', async () => {
     const { opcoes } = adaptadores({
       openai: () => Promise.resolve({ blocos: [par(`Contato: ${TELEFONE}.`)] }),

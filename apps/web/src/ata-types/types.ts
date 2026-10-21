@@ -19,6 +19,7 @@ export interface CampoDef {
 }
 
 export interface SecaoDef {
+  /** Minúsculas, dígitos e `_`, começando por letra; nunca `encaminhamentos` (chave reservada). */
   chave: string;
   titulo: string;
   /** O que a IA deve escrever nesta seção (narrativa: lista de blocos). */
@@ -40,6 +41,7 @@ export interface AtaTypeDefinition {
   /**
    * Campos do formulário enviados à IA como contexto (ex.: data, modalidade). Só metadados não
    * sensíveis: os demais (organização, local, condução…) vão direto do formulário para o documento.
+   * A cópia enviada leva SÓ estes campos: o `visivelSe` deles só pode depender de campos daqui.
    */
   camposNoPrompt: string[];
   /** Regras de prompt específicas do tipo (as comuns ficam em `regras-comuns.ts`). */

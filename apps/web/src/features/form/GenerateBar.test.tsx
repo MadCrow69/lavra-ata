@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
@@ -252,6 +252,27 @@ describe('GenerateBar', () => {
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(gerar.openai).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('erro: "Tentar de novo" respeita o que falta (transcrição passou do limite)', async () => {
+    const { user, gerar } = renderizar({
+      chaves: [OPENAI],
+      comBlocos: true,
+      impl: {
+        openai: () => Promise.reject(erroProvedor('limite', 'openai', { repetivel: false })),
+      },
+    });
+    await user.click(botaoGerar());
+    const alerta = await screen.findByRole('alert');
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByLabelText(/Transcrição da reunião/), {
+      target: { value: 'a'.repeat(LIMITE_TRANSCRICAO + 1) },
+    });
+    const tentar = within(alerta).getByRole('button', { name: 'Tentar de novo' });
+    expect(tentar).toBeDisabled();
+    expect(tentar).toHaveAccessibleDescription(/Falta: Transcrição dentro do limite/);
+    fireEvent.click(tentar);
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
   });
 
   it('erro: a mensagem nunca traz a chave nem o CPF', async () => {
