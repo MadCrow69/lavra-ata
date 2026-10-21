@@ -102,3 +102,19 @@ export const COR_FUNDO_PREENCHER = '#fbebd9';
 
 /** Famílias do DOCX: o Word as resolve no computador de quem abre (nada é embutido). */
 export const FONTES_DOCX = { titulo: 'Cambria', corpo: 'Calibri' } as const;
+
+/**
+ * Linhas das tabelas de dados, como o `lightHorizontalLines` do pdfmake as desenha: só linhas
+ * horizontais, finas e cinza entre as linhas, com a de baixo do cabeçalho mais grossa e na cor do
+ * texto. O DOCX reproduz o mesmo desenho.
+ */
+export const LINHAS_TABELA = { corPadrao: '#aaaaaa', padraoPt: 1, cabecalhoPt: 2 } as const;
+
+/** Medidas (pt) que só o DOCX usa: respiro das células e recuo da lista. */
+export const ESPACOS_DOCX = {
+  celulaVerticalPt: 2,
+  celulaHorizontalPt: 4,
+  /** Recuo do texto dos itens de lista e quanto o marcador avança para a esquerda dele. */
+  recuoListaPt: 18,
+  marcadorListaPt: 12,
+} as const;
