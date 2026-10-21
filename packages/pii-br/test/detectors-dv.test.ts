@@ -38,6 +38,33 @@ describe('detector de CPF', () => {
   it('detecta mais de uma ocorrência no mesmo texto', () => {
     expect(run(cpf, '529.982.247-25 e 529.982.247-25')).toHaveLength(2);
   });
+  it('CPF no fim de frase, antes do ponto final', () => {
+    expect(run(cpf, 'meu CPF é 529.982.247-25.')).toEqual([['529.982.247-25', true]]);
+  });
+  it('CPF entre parênteses', () => {
+    expect(run(cpf, 'titular (529.982.247-25) confirmado')).toEqual([['529.982.247-25', true]]);
+  });
+  it.each(['529982247-25', '529.98224725', '529.982.24725'])(
+    'CPF parcialmente pontuado %s é detectado com contexto',
+    (partial) => {
+      expect(run(cpf, `CPF ${partial}`)).toEqual([[partial, true]]);
+    },
+  );
+  it.each(['529982247-24', '529.98224724', '529.982.24724'])(
+    'CPF parcialmente pontuado %s com DV inválido e sem contexto não é detectado',
+    (partial) => {
+      expect(run(cpf, `pedido ${partial}`)).toEqual([]);
+    },
+  );
+  it('CPF parcialmente pontuado com DV inválido e contexto é detectado (valid: false)', () => {
+    expect(run(cpf, 'CPF 529982247-24')).toEqual([['529982247-24', false]]);
+  });
+  it('contexto "nº" colado ao rótulo: nºCPF', () => {
+    expect(run(cpf, 'nºCPF 12345678901')).toEqual([['12345678901', false]]);
+  });
+  it('palavra parecida com o rótulo não dá contexto', () => {
+    expect(run(cpf, 'cpfx 12345678901')).toEqual([]);
+  });
   it('chamadas repetidas não herdam lastIndex', () => {
     expect(run(cpf, 'CPF 529.982.247-25')).toEqual(run(cpf, 'CPF 529.982.247-25'));
   });
@@ -88,6 +115,27 @@ describe('detector de PIS', () => {
   });
 });
 
+describe('detector de PIS parcialmente pontuado', () => {
+  it.each(['120.5544581-4', '12055445.81-4'])('PIS %s com DV válido é detectado', (partial) => {
+    expect(run(pis, `registro ${partial}`)).toEqual([[partial, true]]);
+  });
+  it('PIS parcial com DV inválido e sem contexto não é detectado', () => {
+    expect(run(pis, 'registro 120.5544581-5')).toEqual([]);
+  });
+  it('PIS parcial com DV inválido e contexto é detectado (valid: false)', () => {
+    expect(run(pis, 'PIS 120.5544581-5')).toEqual([['120.5544581-5', false]]);
+  });
+  it('"nisso" não é contexto de PIS', () => {
+    expect(run(pis, 'pensei nisso 12345678901')).toEqual([]);
+  });
+  it.each(['piso', 'pista', 'nitidez'])('"%s" não é contexto de PIS', (word) => {
+    expect(run(pis, `${word} 12345678901`)).toEqual([]);
+  });
+  it('nº colado ao rótulo (nºNIT) é contexto', () => {
+    expect(run(pis, 'nºNIT 12345678901')).toEqual([['12345678901', false]]);
+  });
+});
+
 describe('detector de cartão', () => {
   it('cartão exige Luhn', () => {
     expect(run(cartao, 'cartão 4111 1111 1111 1111')).toEqual([['4111 1111 1111 1111', true]]);
@@ -99,6 +147,27 @@ describe('detector de cartão', () => {
   });
   it('rejeita sequência de dígitos todos iguais mesmo passando no Luhn', () => {
     expect(run(cartao, 'cartão 0000 0000 0000 0000')).toEqual([]);
+  });
+  it('cartão seguido de validade (MM AA) é detectado exatamente', () => {
+    expect(run(cartao, 'cartão 4111 1111 1111 1111 12 28')).toEqual([
+      ['4111 1111 1111 1111', true],
+    ]);
+  });
+  it('cartão seguido de CVV separado por espaço é detectado exatamente', () => {
+    expect(run(cartao, 'cartão 4111 1111 1111 1111 123')).toEqual([['4111 1111 1111 1111', true]]);
+  });
+  it('cartão colado seguido de validade e CVV', () => {
+    expect(run(cartao, '4111111111111111 12 28 123')).toEqual([['4111111111111111', true]]);
+  });
+  it('cartão Amex (4-6-5) e Diners (4-6-4)', () => {
+    expect(run(cartao, '3782 822463 10005')).toEqual([['3782 822463 10005', true]]);
+    expect(run(cartao, '3056-930902-5904')).toEqual([['3056-930902-5904', true]]);
+  });
+  it('separadores misturados (espaço e hífen)', () => {
+    expect(run(cartao, '4111 1111-1111 1111')).toEqual([['4111 1111-1111 1111', true]]);
+  });
+  it('19 dígitos colados com Luhn válido', () => {
+    expect(run(cartao, '4111111111111111110')).toEqual([['4111111111111111110', true]]);
   });
   it('não casa dentro de número maior que 19 dígitos', () => {
     expect(run(cartao, '41111111111111111111')).toEqual([]);
