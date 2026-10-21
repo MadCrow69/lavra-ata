@@ -52,7 +52,8 @@ function contarEmTexto(texto: string): number {
   return Array.from(texto.matchAll(LACUNA)).length;
 }
 
-const juntar = (partes: Inline[]): string => partes.map((p) => p.texto).join('');
+/** Texto corrido de um parágrafo ou item de lista: as partes coladas, sem o destaque. */
+export const textoDoInline = (partes: Inline[]): string => partes.map((p) => p.texto).join('');
 
 function textosDoBloco(bloco: DocBloco): string[] {
   switch (bloco.tipo) {
@@ -61,9 +62,9 @@ function textosDoBloco(bloco: DocBloco): string[] {
     case 'aviso':
       return [bloco.texto];
     case 'paragrafo':
-      return [juntar(bloco.partes)];
+      return [textoDoInline(bloco.partes)];
     case 'lista':
-      return bloco.itens.map(juntar);
+      return bloco.itens.map(textoDoInline);
     case 'secao':
       return [bloco.titulo, ...bloco.blocos.flatMap(textosDoBloco)];
     case 'tabela':

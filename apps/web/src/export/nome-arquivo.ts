@@ -3,6 +3,9 @@ import { TIPO_NOME_ARQUIVO_MAX, SEM_DATA_NOME_ARQUIVO } from '../config/limits';
 
 export type FormatoExportacao = 'pdf' | 'docx';
 
+/** Como cada formato aparece para a pessoa (botões, avisos e mensagens de erro). */
+export const ROTULO_FORMATO: Record<FormatoExportacao, string> = { pdf: 'PDF', docx: 'DOCX' };
+
 /** Tipo da ata em ASCII minúsculo: sem acento, só `a-z0-9` e hífens, até o limite. */
 function tipoSeguro(tipoId: string): string {
   return tipoId

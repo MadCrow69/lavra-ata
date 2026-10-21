@@ -1,5 +1,5 @@
 import type { DocumentModel } from '../document/model';
-import type { FormatoExportacao } from './nome-arquivo';
+import { ROTULO_FORMATO, type FormatoExportacao } from './nome-arquivo';
 
 /**
  * Como os geradores chegam à barra. Os módulos de PDF e DOCX (pdfmake, fontes e `docx`, ~1,3 MB)
@@ -16,7 +16,6 @@ export const CARREGADORES_PADRAO: CarregadoresExportacao = {
   docx: () => import('./docx/gerar-docx'),
 };
 
-const ROTULO_FORMATO: Record<FormatoExportacao, string> = { pdf: 'PDF', docx: 'DOCX' };
 const OUTRO_FORMATO: Record<FormatoExportacao, FormatoExportacao> = { pdf: 'docx', docx: 'pdf' };
 
 function mensagemDoErro(motivo: ErroExportacao['motivo'], formato: FormatoExportacao): string {

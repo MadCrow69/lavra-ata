@@ -13,7 +13,12 @@ import {
 import { LOGO_ACCEPT } from '../../config/logo';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import { construirDocumento, contarPreencher, dividirPreencher } from '../../document/build-model';
+import {
+  construirDocumento,
+  contarPreencher,
+  dividirPreencher,
+  textoDoInline,
+} from '../../document/build-model';
 import type { DocBloco, Inline } from '../../document/model';
 import { useDraft } from '../../domain/DraftContext';
 import type { Atribuicao, Presenca } from '../../domain/draft';
@@ -204,10 +209,6 @@ function Tabela({
 
 function idDaSecao(chave: string): string {
   return `${PREFIXO_ID_SECAO}${chave}`;
-}
-
-function textoDoInline(partes: Inline[]): string {
-  return partes.map((p) => p.texto).join('');
 }
 
 /** Identifica o bloco para a chave de lista (não precisa ser único: `chavesUnicas` resolve). */

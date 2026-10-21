@@ -1,12 +1,11 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { LOGO_TAMANHO_MAX_BYTES } from '../../config/logo';
 import { LOGO } from '../../config/storage-keys';
 import type { LogoDoc } from '../../document/model';
 import { AVISO_LOGO_SO_NA_PAGINA, useLogo } from '../../logo/LogoContext';
 import { criarLogoStore } from '../../logo/logo-store';
-import { ErroDeLogo, MENSAGEM_ERRO_LOGO } from '../../logo/validar-logo';
+import { ErroDeLogo, LOGO_TAMANHO_MAX_MB_TEXTO, MENSAGEM_ERRO_LOGO } from '../../logo/validar-logo';
 import { renderizarComProvedores } from '../../test/provedores';
 import { A4Preview } from '../preview/A4Preview';
 import { LogoField } from './LogoField';
@@ -43,7 +42,7 @@ describe('LogoField', () => {
     renderizar();
     expect(within(campo()).getByRole('button', { name: 'Enviar logo' })).toBeEnabled();
     expect(campo()).toHaveAccessibleDescription(
-      `PNG, JPEG, WebP ou SVG até ${String(LOGO_TAMANHO_MAX_BYTES / 1024 / 1024)} MB. A logo fica neste navegador e nunca vai para a IA.`,
+      `PNG, JPEG, WebP ou SVG até ${LOGO_TAMANHO_MAX_MB_TEXTO} MB. A logo fica neste navegador e nunca vai para a IA.`,
     );
     expect(within(campo()).queryByRole('img')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remover logo' })).not.toBeInTheDocument();

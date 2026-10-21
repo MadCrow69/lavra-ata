@@ -25,9 +25,12 @@ const PT_BR = new Intl.NumberFormat('pt-BR');
 /** 6000 → "6.000"; 2,5 → "2,5". */
 const numeroPtBr = (n: number): string => PT_BR.format(n);
 
+/** Teto do arquivo da logo em megabytes, no formato da pessoa ("2"): mensagem de erro e texto de ajuda. */
+export const LOGO_TAMANHO_MAX_MB_TEXTO = numeroPtBr(LOGO_TAMANHO_MAX_BYTES / MEGABYTE);
+
 export const MENSAGEM_ERRO_LOGO: Record<MotivoErroLogo, string> = {
   vazio: 'O arquivo da logo está vazio. Escolha outra imagem.',
-  grande: `A logo passa de ${numeroPtBr(LOGO_TAMANHO_MAX_BYTES / MEGABYTE)} MB. Reduza a imagem ou exporte em PNG menor.`,
+  grande: `A logo passa de ${LOGO_TAMANHO_MAX_MB_TEXTO} MB. Reduza a imagem ou exporte em PNG menor.`,
   formato: 'Formato de logo não aceito. Envie PNG, JPEG, WebP ou SVG.',
   dimensoes: `A logo tem dimensões fora do aceito (de ${numeroPtBr(LOGO_LADO_MIN_PX)} a ${numeroPtBr(LOGO_LADO_MAX_ORIGEM_PX)} pixels por lado). Redimensione a imagem.`,
   area: `A imagem tem mais de ${numeroPtBr(LOGO_PIXELS_MAX_ORIGEM / 1_000_000)} milhões de pixels. Reduza a resolução e envie de novo.`,

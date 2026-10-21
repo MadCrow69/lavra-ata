@@ -1,12 +1,12 @@
 import { useId } from 'react';
-import { LOGO_ACCEPT, LOGO_TAMANHO_MAX_BYTES } from '../../config/logo';
+import { LOGO_ACCEPT } from '../../config/logo';
 import { useLogo } from '../../logo/LogoContext';
+import { LOGO_TAMANHO_MAX_MB_TEXTO } from '../../logo/validar-logo';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { Button } from '../../ui/Button';
 import styles from './logo.module.css';
 
-const MB = LOGO_TAMANHO_MAX_BYTES / (1024 * 1024);
-const AJUDA = `PNG, JPEG, WebP ou SVG até ${String(MB)} MB. A logo fica neste navegador e nunca vai para a IA.`;
+const AJUDA = `PNG, JPEG, WebP ou SVG até ${LOGO_TAMANHO_MAX_MB_TEXTO} MB. A logo fica neste navegador e nunca vai para a IA.`;
 
 /**
  * Logo da organização (opcional): vai só para o cabeçalho da folha e dos arquivos exportados.

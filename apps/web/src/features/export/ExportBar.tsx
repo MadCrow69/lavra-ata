@@ -8,7 +8,7 @@ import {
   gerarArquivo,
   type CarregadoresExportacao,
 } from '../../export/exportar';
-import { nomeDoArquivo, type FormatoExportacao } from '../../export/nome-arquivo';
+import { nomeDoArquivo, ROTULO_FORMATO, type FormatoExportacao } from '../../export/nome-arquivo';
 import { caracteresSemFonte } from '../../export/pdf/cobertura';
 import { mensagemTarefasCopiadas, textoDasTarefas } from '../../export/tarefas';
 import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
@@ -21,8 +21,6 @@ import styles from './export.module.css';
 
 const MOTIVO_SEM_ATA = 'Gere a ata para baixar o PDF ou o DOCX.';
 const MOTIVO_SEM_ENCAMINHAMENTOS = 'A ata não tem encaminhamentos para copiar.';
-
-const ROTULO_FORMATO: Record<FormatoExportacao, string> = { pdf: 'PDF', docx: 'DOCX' };
 
 export interface ExportBarProps {
   /** O documento como a folha o mostra (com a logo): o arquivo sai deste modelo. */
