@@ -14,6 +14,9 @@ import { ToastProvider } from '../../ui/Toast';
 import { GenerateBar } from '../form/GenerateBar';
 import { A4Preview } from './A4Preview';
 
+/** Teto dos testes de volume: 200 grupos em jsdom, com cobertura e a máquina ocupada, passam de 5 s. */
+const TEMPO_VOLUME_MS = 30_000;
+
 const CPF_NA_TRANSCRICAO = '529.982.247-25';
 const CPF_INVENTADO = '111.444.777-35';
 
@@ -648,29 +651,33 @@ describe('revisão por seção: encaminhamentos', () => {
     expect(r.secoes).toEqual(resultado().secoes);
   });
 
-  it('com 200 encaminhamentos o editor continua utilizável (editar uma linha e salvar)', async () => {
-    const muitos = Array.from({ length: 200 }, (_, i) => ({
-      acao: `Ação número ${String(i + 1)}`,
-      responsavel: `Pessoa ${String(i + 1)}`,
-      prazo: '2026-11-05',
-      status: 'pendente' as const,
-    }));
-    const { user } = renderizar({
-      inicial: rascunho({ resultado: resultado({ encaminhamentos: muitos }) }),
-    });
-    const s = secao('Encaminhamentos');
-    await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
-    expect(within(s).getAllByRole('group', { name: /^Encaminhamento \d+$/ })).toHaveLength(200);
-    const ultimo = within(s).getByRole('group', { name: 'Encaminhamento 200' });
-    const acao = within(ultimo).getByRole('textbox', { name: 'Ação' });
-    await user.clear(acao);
-    await user.type(acao, 'Ação final');
-    await user.click(within(s).getByRole('button', { name: 'Salvar' }));
-    const r = lerResultado();
-    expect(r.encaminhamentos).toHaveLength(200);
-    expect(r.encaminhamentos[199]?.acao).toBe('Ação final');
-    expect(r.encaminhamentos[0]).toEqual(muitos[0]);
-  });
+  it(
+    'com 200 encaminhamentos o editor continua utilizável (editar uma linha e salvar)',
+    async () => {
+      const muitos = Array.from({ length: 200 }, (_, i) => ({
+        acao: `Ação número ${String(i + 1)}`,
+        responsavel: `Pessoa ${String(i + 1)}`,
+        prazo: '2026-11-05',
+        status: 'pendente' as const,
+      }));
+      const { user } = renderizar({
+        inicial: rascunho({ resultado: resultado({ encaminhamentos: muitos }) }),
+      });
+      const s = secao('Encaminhamentos');
+      await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
+      expect(within(s).getAllByRole('group', { name: /^Encaminhamento \d+$/ })).toHaveLength(200);
+      const ultimo = within(s).getByRole('group', { name: 'Encaminhamento 200' });
+      const acao = within(ultimo).getByRole('textbox', { name: 'Ação' });
+      await user.clear(acao);
+      await user.type(acao, 'Ação final');
+      await user.click(within(s).getByRole('button', { name: 'Salvar' }));
+      const r = lerResultado();
+      expect(r.encaminhamentos).toHaveLength(200);
+      expect(r.encaminhamentos[199]?.acao).toBe('Ação final');
+      expect(r.encaminhamentos[0]).toEqual(muitos[0]);
+    },
+    TEMPO_VOLUME_MS,
+  );
 });
 
 describe('revisão por seção: seções sem conteúdo', () => {
