@@ -30,6 +30,9 @@ function travarRolagem(): () => void {
   };
 }
 
+/** Modais abertos, do mais antigo ao mais novo. Só o do topo reage a foco, Tab e Esc. */
+const pilha: object[] = [];
+
 function focaveisDe(raiz: HTMLElement): HTMLElement[] {
   return Array.from(raiz.querySelectorAll<HTMLElement>(FOCAVEIS)).filter(
     (el) => !el.hasAttribute('hidden') && el.closest('[hidden]') === null,
@@ -44,6 +47,11 @@ function focaveisDe(raiz: HTMLElement): HTMLElement[] {
 export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps) {
   const tituloId = useId();
   const painelRef = useRef<HTMLDivElement>(null);
+  // Identidade deste modal na pilha de modais abertos.
+  const idRef = useRef({});
+  // Clique só fecha se o botão do mouse também foi pressionado no fundo (selecionar texto
+  // dentro do painel e soltar sobre o fundo não deve fechar).
+  const pressionouFundoRef = useRef(false);
   // O callback muda a cada render do pai; o efeito de abertura não pode reiniciar por causa dele.
   const onFecharRef = useRef(onFechar);
   useEffect(() => {
@@ -53,11 +61,14 @@ export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps)
   useEffect(() => {
     if (!aberto) return;
     const origem = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const id = idRef.current;
+    pilha.push(id);
     const soltarRolagem = travarRolagem();
     painelRef.current?.focus();
 
     // Foco que escapa (clique fora do alcance, leitor de tela) volta para o painel.
     const guardaFoco = (e: FocusEvent) => {
+      if (pilha.at(-1) !== id) return;
       const painel = painelRef.current;
       if (painel && e.target instanceof Node && !painel.contains(e.target)) painel.focus();
     };
@@ -65,6 +76,7 @@ export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps)
 
     return () => {
       document.removeEventListener('focusin', guardaFoco);
+      pilha.splice(pilha.indexOf(id), 1);
       soltarRolagem();
       if (origem?.isConnected) origem.focus();
     };
@@ -73,6 +85,8 @@ export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps)
   if (!aberto) return null;
 
   const aoTeclar = (e: KeyboardEvent<HTMLDivElement>) => {
+    // O evento de um modal interno sobe pelo React até este (portais): só o do topo age.
+    if (pilha.at(-1) !== idRef.current) return;
     if (e.key === 'Escape') {
       e.stopPropagation();
       onFecharRef.current();
@@ -103,8 +117,13 @@ export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps)
     <div
       className={styles.fundo}
       data-testid="modal-fundo"
+      onMouseDown={(e) => {
+        pressionouFundoRef.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onFechar();
+        const fechar = pressionouFundoRef.current && e.target === e.currentTarget;
+        pressionouFundoRef.current = false;
+        if (fechar) onFechar();
       }}
     >
       <div

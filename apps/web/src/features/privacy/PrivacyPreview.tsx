@@ -20,8 +20,11 @@ function Texto({ partes, classeMarca }: { partes: Parte[]; classeMarca: string }
   );
 }
 
-function Comparativo({ texto, scan }: { texto: string; scan: PrivacyScan }) {
-  const original = useMemo(() => fatiar(texto, scan.achados), [texto, scan.achados]);
+function Comparativo({ scan }: { scan: PrivacyScan }) {
+  const original = useMemo(
+    () => fatiar(scan.analisado, scan.achados),
+    [scan.analisado, scan.achados],
+  );
   const enviado = useMemo(
     () => fatiar(scan.mascarado, findMarkers(scan.mascarado)),
     [scan.mascarado],
@@ -80,6 +83,8 @@ export function PrivacyPreview({ texto }: { texto: string }) {
       <p className={styles.selo} aria-live="polite" data-pendente={scan.pendente}>
         {texto === '' ? (
           'Cole a transcrição para ver quais dados pessoais serão protegidos.'
+        ) : scan.excedido ? (
+          'Reduza a transcrição ao limite para ver a prévia.'
         ) : scan.pendente ? (
           'Verificando dados pessoais…'
         ) : (
@@ -90,7 +95,7 @@ export function PrivacyPreview({ texto }: { texto: string }) {
         )}
       </p>
       <Button
-        disabled={texto === '' || scan.pendente}
+        disabled={texto === '' || scan.excedido || scan.pendente}
         onClick={() => {
           setAberto(true);
         }}
@@ -104,7 +109,7 @@ export function PrivacyPreview({ texto }: { texto: string }) {
           setAberto(false);
         }}
       >
-        <Comparativo texto={texto} scan={scan} />
+        <Comparativo scan={scan} />
       </Modal>
     </div>
   );

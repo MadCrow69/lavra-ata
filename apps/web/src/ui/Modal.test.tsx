@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -105,5 +105,101 @@ describe('Modal', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     await user.click(screen.getByTestId('modal-fundo'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('selecionar texto dentro do painel e soltar sobre o fundo não fecha', async () => {
+    const user = userEvent.setup();
+    render(<Exemplo />);
+    await user.click(screen.getByRole('button', { name: 'Abrir' }));
+    const fundo = screen.getByTestId('modal-fundo');
+    fireEvent.mouseDown(screen.getByLabelText('Campo de dentro'));
+    fireEvent.click(fundo);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.mouseDown(fundo);
+    fireEvent.click(fundo);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+function Empilhado() {
+  const [externo, setExterno] = useState(false);
+  const [interno, setInterno] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          setExterno(true);
+        }}
+      >
+        Abrir externo
+      </button>
+      <Modal
+        aberto={externo}
+        titulo="Externo"
+        onFechar={() => {
+          setExterno(false);
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setInterno(true);
+          }}
+        >
+          Abrir interno
+        </button>
+        <Modal
+          aberto={interno}
+          titulo="Interno"
+          onFechar={() => {
+            setInterno(false);
+          }}
+          acoes={<button type="button">Confirmar interno</button>}
+        >
+          <p>Conteúdo interno</p>
+        </Modal>
+      </Modal>
+    </div>
+  );
+}
+
+describe('Modal empilhado', () => {
+  it('com o interno aberto, o foco fica nele, Tab circula nele e Esc fecha só o interno', async () => {
+    const user = userEvent.setup();
+    render(<Empilhado />);
+    await user.click(screen.getByRole('button', { name: 'Abrir externo' }));
+    const abrirInterno = screen.getByRole('button', { name: 'Abrir interno' });
+    await user.click(abrirInterno);
+
+    const interno = screen.getByRole('dialog', { name: 'Interno' });
+    const externo = screen.getByRole('dialog', { name: 'Externo' });
+    expect(interno).toContainElement(document.activeElement as HTMLElement);
+
+    // Tab circula só entre os botões do interno (Fechar e Confirmar interno).
+    for (let i = 0; i < 5; i++) {
+      await user.tab();
+      expect(interno).toContainElement(document.activeElement as HTMLElement);
+    }
+    await user.tab({ shift: true });
+    expect(interno).toContainElement(document.activeElement as HTMLElement);
+
+    // Foco forçado para o externo volta ao interno.
+    abrirInterno.focus();
+    expect(interno).toContainElement(document.activeElement as HTMLElement);
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Interno' })).not.toBeInTheDocument();
+    expect(externo).toBeInTheDocument();
+    expect(abrirInterno).toHaveFocus();
+
+    // Já sem o interno, o externo volta a prender o foco e a responder ao Esc.
+    for (let i = 0; i < 4; i++) {
+      await user.tab();
+      expect(externo).toContainElement(document.activeElement as HTMLElement);
+    }
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abrir externo' })).toHaveFocus();
   });
 });

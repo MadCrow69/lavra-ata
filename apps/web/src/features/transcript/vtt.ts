@@ -36,6 +36,7 @@ interface Fala {
 function separarLinha(
   linha: string,
   falanteAtual: string | null,
+  permitirPrefixo: boolean,
 ): { falante: string | null; texto: string } {
   const tag = FALANTE_TAG.exec(linha);
   if (tag?.[1] !== undefined) {
@@ -46,7 +47,7 @@ function separarLinha(
     };
   }
   const limpa = limparMarcacao(linha);
-  const prefixo = FALANTE_PREFIXO.exec(limpa);
+  const prefixo = permitirPrefixo ? FALANTE_PREFIXO.exec(limpa) : null;
   if (prefixo?.[1] !== undefined && prefixo[2] !== undefined) {
     const nome = prefixo[1].trim();
     if (nome.split(/\s+/).length <= MAX_PALAVRAS_NOME) return { falante: nome, texto: prefixo[2] };
@@ -83,8 +84,9 @@ export function vttParaTexto(vtt: string): string {
     if (indiceTempo === -1) continue; // NOTE, STYLE, REGION ou lixo: não é fala.
 
     let falanteDoCue: string | null = null;
-    for (const linha of bloco.slice(indiceTempo + 1)) {
-      const { falante, texto } = separarLinha(linha, falanteDoCue);
+    for (const [k, linha] of bloco.slice(indiceTempo + 1).entries()) {
+      // "Nome:" só vale na primeira linha do cue; nas seguintes é parte da fala.
+      const { falante, texto } = separarLinha(linha, falanteDoCue, k === 0);
       falanteDoCue = falante;
       if (texto !== '') falas.push({ falante, texto });
     }

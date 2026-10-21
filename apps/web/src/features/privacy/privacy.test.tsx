@@ -104,6 +104,22 @@ describe('prévia de privacidade', () => {
     ).toBeInTheDocument();
   });
 
+  it('acima do limite não analisa: avisa o motivo e desabilita a prévia', () => {
+    renderizar();
+    colar('x'.repeat(LIMITE_TRANSCRICAO + 1));
+    passarDebounce();
+    expect(
+      screen.getByText('Reduza a transcrição ao limite para ver a prévia.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/dados pessoais serão protegidos/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Verificando/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ver o que vai para a IA' })).toBeDisabled();
+    // Voltando ao limite, a análise volta.
+    colar(`CPF ${CPF_A}`);
+    passarDebounce();
+    expect(screen.getByText('1 dado pessoal será protegido (1 CPF)')).toBeInTheDocument();
+  });
+
   it('o botão do modal fica desabilitado sem transcrição', () => {
     renderizar();
     expect(screen.getByRole('button', { name: 'Ver o que vai para a IA' })).toBeDisabled();
@@ -245,6 +261,17 @@ describe('arquivo de transcrição', () => {
     const user = userEvent.setup();
     await user.upload(campoArquivo(container), arquivo('reuni�o', 'velho.txt'));
     expect(await screen.findByRole('status')).toHaveTextContent('UTF-8');
+  });
+
+  it('Desfazer devolve o texto anterior depois de enviar um arquivo por cima', async () => {
+    const { container } = renderizar();
+    const user = userEvent.setup();
+    colar('texto antigo');
+    await user.upload(campoArquivo(container), arquivo('texto novo do arquivo', 'novo.txt'));
+    expect(await screen.findByDisplayValue('texto novo do arquivo')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('O texto anterior foi substituído.');
+    await user.click(screen.getByRole('button', { name: 'Desfazer' }));
+    expect(screen.getByLabelText(/^Transcrição da reunião/)).toHaveValue('texto antigo');
   });
 
   it('Limpar apaga e oferece Desfazer', async () => {

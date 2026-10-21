@@ -125,4 +125,15 @@ describe('vttParaTexto', () => {
     expect(vttParaTexto('')).toBe('');
     expect(vttParaTexto('WEBVTT\n\n')).toBe('');
   });
+
+  it('"Nome:" só vale na primeira linha do cue; nas seguintes continua sendo fala', () => {
+    const vtt = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:03.000',
+      'Ana Lima: Vamos votar.',
+      'Resumo da pauta: aprovada.',
+    ].join('\n');
+    expect(vttParaTexto(vtt)).toBe('Ana Lima: Vamos votar. Resumo da pauta: aprovada.');
+  });
 });
