@@ -91,11 +91,17 @@ export function SectionActions({
   );
   const { operacao, ocupada: estaOcupada, cancelarRef } = chamada;
   const ultimaInstrucaoRef = useRef<string | null>(null);
+  /** Conteúdo da seção quando a última tentativa saiu (para saber se mudou desde então). */
+  const baseDaTentativaRef = useRef<unknown>(null);
   const baseId = useId();
   const motivoId = `${baseId}-motivo`;
   const instrucaoId = `${baseId}-instrucao`;
 
   const tipo = obterTipo(state.tipoId);
+  const conteudo =
+    chave === CHAVE_ENCAMINHAMENTOS
+      ? state.resultado?.encaminhamentos
+      : state.resultado?.secoes[chave];
   const cadeia = keys.cadeia();
   const semChave = cadeia.length === 0;
   const motivo = semChave
@@ -120,6 +126,7 @@ export function SectionActions({
       (signal, opcoes) => regerarSecao(state, tipo, chave, pedido, cadeia, signal, opcoes),
       {
         aoIniciar: () => {
+          baseDaTentativaRef.current = conteudo;
           origemRef.current = origem;
           ultimaInstrucaoRef.current = pedido;
           setErro(null);
@@ -176,6 +183,20 @@ export function SectionActions({
     if (iaParada) return;
     // Seção vazia não tem edições para perder.
     if (editada && !vazia) setConfirmando(true);
+    else void executar(null, 'regerar');
+  };
+
+  /**
+   * "Tentar de novo" repete a última ação pela mesma porta: regerar uma seção editada à mão desde
+   * a tentativa passa pela confirmação de substituir (ajustar parte do texto atual e não pergunta).
+   */
+  const aoTentarDeNovo = () => {
+    if (iaParada) return;
+    if (origemRef.current === 'ajustar') {
+      void executar(ultimaInstrucaoRef.current, 'ajustar');
+      return;
+    }
+    if (editada && !vazia && conteudo !== baseDaTentativaRef.current) setConfirmando(true);
     else void executar(null, 'regerar');
   };
 
@@ -339,9 +360,7 @@ export function SectionActions({
               variante="primario"
               disabled={iaParada}
               aria-describedby={descricao}
-              onClick={() => {
-                void executar(ultimaInstrucaoRef.current, origemRef.current);
-              }}
+              onClick={aoTentarDeNovo}
             >
               Tentar de novo
             </Button>

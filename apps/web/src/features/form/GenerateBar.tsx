@@ -4,6 +4,7 @@ import type { OpcoesCadeia } from '../../ai/chain';
 import { useKeys } from '../../ai/KeysContext';
 import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
+import type { ResultadoAta } from '../../domain/draft';
 import { textoDaFalha } from '../../generation/atribuicao';
 import { descreverErroDeGeracao } from '../../generation/erro-geracao';
 import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
@@ -44,6 +45,8 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
   const [estado, setEstado] = useState<Estado>({ fase: 'parado' });
   const [confirmando, setConfirmando] = useState(false);
   const gerarRef = useRef<HTMLButtonElement>(null);
+  /** A ata como estava quando a última tentativa saiu (para saber se algo mudou desde então). */
+  const baseDaTentativaRef = useRef<ResultadoAta | null>(null);
   // O botão Gerar fica desabilitado durante a geração: o foco vai para Cancelar e volta ao fim.
   const chamada = useChamadaIA({ tipo: 'ata' }, () => gerarRef.current, opcoesCadeia);
   const { operacao, ocupada: gerando, cancelarRef } = chamada;
@@ -67,6 +70,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
     }
     await chamada.executar((signal, opcoes) => gerarAta(state, tipo, cadeia, signal, opcoes), {
       aoIniciar: () => {
+        baseDaTentativaRef.current = state.resultado;
         setEstado({ fase: 'parado' });
       },
       sucesso: (r) => {
@@ -94,6 +98,19 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
       return;
     }
     if (state.resultado) {
+      setConfirmando(true);
+      return;
+    }
+    void gerar();
+  };
+
+  /**
+   * "Tentar de novo": se a ata mudou desde a tentativa (ex.: uma seção editada à mão depois da
+   * falha), passa pela mesma confirmação de substituir; sem mudança, a confirmação já foi dada.
+   */
+  const aoTentarDeNovo = () => {
+    if (!podeGerar) return;
+    if (state.resultado && state.resultado !== baseDaTentativaRef.current) {
       setConfirmando(true);
       return;
     }
@@ -197,9 +214,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
               variante="primario"
               disabled={!podeGerar}
               aria-describedby={descricaoId === '' ? undefined : descricaoId}
-              onClick={() => {
-                void gerar();
-              }}
+              onClick={aoTentarDeNovo}
             >
               Tentar de novo
             </Button>

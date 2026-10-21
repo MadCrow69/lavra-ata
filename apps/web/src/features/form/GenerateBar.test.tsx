@@ -94,11 +94,34 @@ function Espiao() {
   return <output data-testid="espiao">{texto}</output>;
 }
 
+/** Faz o papel do editor da folha: troca o resumo à mão (marca a seção como editada). */
+function EdicaoManual() {
+  const { dispatch } = useDraft();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        dispatch({
+          type: 'substituirSecao',
+          chave: 'resumo',
+          blocos: [{ tipo: 'paragrafo', texto: 'Escrito à mão.', itens: [] }],
+          avisos: [],
+          atribuicao: null,
+          mapa: null,
+        });
+      }}
+    >
+      Editar o resumo à mão
+    </button>
+  );
+}
+
 interface Opcoes {
   inicial?: AtaDraft;
   chaves?: ChaveProvedor[];
   impl?: Partial<Record<ProviderId, Gerar>>;
   comBlocos?: boolean;
+  comEdicao?: boolean;
 }
 
 function renderizar({
@@ -106,6 +129,7 @@ function renderizar({
   chaves = [],
   impl = {},
   comBlocos = false,
+  comEdicao = false,
 }: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
@@ -128,6 +152,7 @@ function renderizar({
               onGerada={onGerada}
               opcoesCadeia={{ adaptadores: a, esperaRetryMs: 0 }}
             />
+            {comEdicao ? <EdicaoManual /> : null}
             <Espiao />
           </ToastProvider>
         </OperacaoIAProvider>
@@ -349,6 +374,79 @@ describe('GenerateBar', () => {
     await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(screen.getByTestId('espiao')).toHaveTextContent(`Reembolso a ${CPF}.`);
+  });
+
+  it('"Tentar de novo" depois de editar uma seção pede a mesma confirmação de substituir', async () => {
+    let tentativas = 0;
+    const { user, gerar } = renderizar({
+      inicial: completo({
+        resultado: {
+          secoes: { resumo: [{ tipo: 'paragrafo', texto: 'Texto antigo.', itens: [] }] },
+          encaminhamentos: [],
+          atribuicao: {},
+          avisos: {},
+          editadas: [],
+        },
+      }),
+      chaves: [OPENAI],
+      comEdicao: true,
+      impl: {
+        openai: () => {
+          tentativas++;
+          return tentativas === 1
+            ? Promise.reject(erroProvedor('recusa', 'openai'))
+            : Promise.resolve(RESPOSTA);
+        },
+      },
+    });
+    await user.click(botaoGerar());
+    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    const alerta = await screen.findByRole('alert');
+
+    // A pessoa editou o resumo depois da falha: tentar de novo apagaria a edição.
+    await user.click(screen.getByRole('button', { name: 'Editar o resumo à mão' }));
+    expect(screen.getByTestId('espiao')).toHaveTextContent('Escrito à mão.');
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    const dialogo = screen.getByRole('dialog', { name: 'Gerar a ata de novo?' });
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('espiao')).toHaveTextContent('Escrito à mão.');
+
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
+    expect(gerar.openai).toHaveBeenCalledTimes(2);
+  });
+
+  it('"Tentar de novo" sem nada editado desde a tentativa confirmada não pergunta de novo', async () => {
+    let tentativas = 0;
+    const { user, gerar } = renderizar({
+      inicial: completo({
+        resultado: {
+          secoes: { resumo: [{ tipo: 'paragrafo', texto: 'Texto antigo.', itens: [] }] },
+          encaminhamentos: [],
+          atribuicao: {},
+          avisos: {},
+          editadas: ['resumo'],
+        },
+      }),
+      chaves: [OPENAI],
+      impl: {
+        openai: () => {
+          tentativas++;
+          return tentativas === 1
+            ? Promise.reject(erroProvedor('recusa', 'openai'))
+            : Promise.resolve(RESPOSTA);
+        },
+      },
+    });
+    await user.click(botaoGerar());
+    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    const alerta = await screen.findByRole('alert');
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
+    expect(gerar.openai).toHaveBeenCalledTimes(2);
   });
 
   it('avisos gerais não se repetem na barra (o lugar deles é acima da folha)', () => {

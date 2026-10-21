@@ -114,14 +114,43 @@ function Espiao() {
 const lerResultado = (): ResultadoAta =>
   JSON.parse(screen.getByTestId('espiao').textContent) as ResultadoAta;
 
+/** Troca o resumo à mão por fora da seção (como faria outra superfície de edição). */
+function EdicaoPorFora() {
+  const { dispatch } = useDraft();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        dispatch({
+          type: 'substituirSecao',
+          chave: 'resumo',
+          blocos: [{ tipo: 'paragrafo', texto: 'Escrito à mão por fora.', itens: [] }],
+          avisos: [],
+          atribuicao: null,
+          mapa: null,
+        });
+      }}
+    >
+      Editar o resumo por fora
+    </button>
+  );
+}
+
 interface Opcoes {
   inicial?: AtaDraft;
   chaves?: ChaveProvedor[];
   impl?: Partial<Record<ProviderId, Gerar>>;
   comBarra?: boolean;
+  comEdicaoPorFora?: boolean;
 }
 
-function renderizar({ inicial = rascunho(), chaves = [GEMINI], impl = {}, comBarra }: Opcoes = {}) {
+function renderizar({
+  inicial = rascunho(),
+  chaves = [GEMINI],
+  impl = {},
+  comBarra,
+  comEdicaoPorFora,
+}: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
   const { a, gerar } = adaptadores(impl);
@@ -135,6 +164,7 @@ function renderizar({ inicial = rascunho(), chaves = [GEMINI], impl = {}, comBar
               <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={opcoesCadeia} />
             ) : null}
             <A4Preview opcoesCadeia={opcoesCadeia} />
+            {comEdicaoPorFora ? <EdicaoPorFora /> : null}
             <Espiao />
           </ToastProvider>
         </OperacaoIAProvider>
@@ -506,6 +536,60 @@ describe('revisão por seção: regerar e ajustar', () => {
     await within(s).findByRole('alert');
     expect(store.listar()[0]?.estado).toBe('invalida');
     expect(store.cadeia()).toEqual([]);
+  });
+
+  it('"Tentar de novo" com a seção editada desde a falha pede a confirmação de substituir', async () => {
+    let tentativas = 0;
+    const { user, gerar } = renderizar({
+      comEdicaoPorFora: true,
+      impl: {
+        gemini: () => {
+          tentativas++;
+          return tentativas === 1
+            ? Promise.reject(erroProvedor('recusa', 'gemini'))
+            : Promise.resolve(respostaBlocos('Regerado.'));
+        },
+      },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    const alerta = await within(s).findByRole('alert');
+    await user.click(screen.getByRole('button', { name: 'Editar o resumo por fora' }));
+    expect(within(s).getByText('Escrito à mão por fora.')).toBeVisible();
+
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    const dialogo = screen.getByRole('dialog', { name: 'Regerar esta seção?' });
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+    expect(gerar.gemini).toHaveBeenCalledTimes(1);
+    expect(within(s).getByText('Escrito à mão por fora.')).toBeVisible();
+
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    await user.click(screen.getByRole('button', { name: 'Regerar e substituir' }));
+    expect(await within(s).findByText('Regerado.')).toBeVisible();
+    expect(gerar.gemini).toHaveBeenCalledTimes(2);
+  });
+
+  it('"Tentar de novo" de uma seção editada já confirmada não pergunta outra vez', async () => {
+    let tentativas = 0;
+    const { user, gerar } = renderizar({
+      inicial: rascunho({ resultado: resultado({ editadas: ['resumo'] }) }),
+      impl: {
+        gemini: () => {
+          tentativas++;
+          return tentativas === 1
+            ? Promise.reject(erroProvedor('recusa', 'gemini'))
+            : Promise.resolve(respostaBlocos('Regerado.'));
+        },
+      },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    await user.click(screen.getByRole('button', { name: 'Regerar e substituir' }));
+    const alerta = await within(s).findByRole('alert');
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await within(s).findByText('Regerado.')).toBeVisible();
+    expect(gerar.gemini).toHaveBeenCalledTimes(2);
   });
 
   it('a mensagem de erro nunca traz a chave nem o CPF', async () => {
