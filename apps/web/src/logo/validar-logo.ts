@@ -2,7 +2,9 @@ import {
   LOGO_LADO_MAX_ORIGEM_PX,
   LOGO_LADO_MIN_PX,
   LOGO_PIXELS_MAX_ORIGEM,
+  LOGO_PROPORCAO_MAX,
   LOGO_SVG_BYTES_CABECALHO,
+  LOGO_SVG_DIMENSOES_PADRAO,
   LOGO_TAMANHO_MAX_BYTES,
 } from '../config/logo';
 import type { Dimensoes } from '../document/medidas';
@@ -14,20 +16,22 @@ import type { Dimensoes } from '../document/medidas';
  */
 
 export type FormatoLogo = 'png' | 'jpeg' | 'webp' | 'svg';
-export type MotivoErroLogo = 'vazio' | 'grande' | 'formato' | 'dimensoes' | 'ilegivel';
+export type MotivoErroLogo =
+  'vazio' | 'grande' | 'formato' | 'dimensoes' | 'area' | 'proporcao' | 'ilegivel';
 
 const MEGABYTE = 1024 * 1024;
 
-/** 6000 → "6.000" (pt-BR, sem depender do ICU do ambiente). */
-function milhares(n: number): string {
-  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-}
+const PT_BR = new Intl.NumberFormat('pt-BR');
+/** 6000 → "6.000"; 2,5 → "2,5". */
+const numeroPtBr = (n: number): string => PT_BR.format(n);
 
 export const MENSAGEM_ERRO_LOGO: Record<MotivoErroLogo, string> = {
   vazio: 'O arquivo da logo está vazio. Escolha outra imagem.',
-  grande: `A logo passa de ${String(LOGO_TAMANHO_MAX_BYTES / MEGABYTE)} MB. Reduza a imagem ou exporte em PNG menor.`,
+  grande: `A logo passa de ${numeroPtBr(LOGO_TAMANHO_MAX_BYTES / MEGABYTE)} MB. Reduza a imagem ou exporte em PNG menor.`,
   formato: 'Formato de logo não aceito. Envie PNG, JPEG, WebP ou SVG.',
-  dimensoes: `A logo tem dimensões fora do aceito (de ${String(LOGO_LADO_MIN_PX)} a ${milhares(LOGO_LADO_MAX_ORIGEM_PX)} pixels por lado). Redimensione a imagem.`,
+  dimensoes: `A logo tem dimensões fora do aceito (de ${numeroPtBr(LOGO_LADO_MIN_PX)} a ${numeroPtBr(LOGO_LADO_MAX_ORIGEM_PX)} pixels por lado). Redimensione a imagem.`,
+  area: `A imagem tem mais de ${numeroPtBr(LOGO_PIXELS_MAX_ORIGEM / 1_000_000)} milhões de pixels. Reduza a resolução e envie de novo.`,
+  proporcao: `A logo é comprida ou estreita demais (mais de ${numeroPtBr(LOGO_PROPORCAO_MAX)} para 1). Recorte a imagem e envie de novo.`,
   ilegivel: 'Não foi possível ler esta imagem. Se for SVG, exporte a logo em PNG e envie de novo.',
 };
 
@@ -84,6 +88,13 @@ function semPrologoXml(texto: string): string | null {
     }
   }
 }
+
+/**
+ * Risco residual registrado (sem correção): um DOCTYPE com entidades internas (XML "billion
+ * laughs") só é expandido pelo parser do navegador ao carregar a imagem. A defesa é o limite que o
+ * navegador já impõe à expansão de entidades, mais o teto de 2 MB e de 5 s deste módulo; não há
+ * parse de XML aqui.
+ */
 
 /** Texto do documento a partir de `<svg`, ou `null` se os primeiros bytes não começam por ele. */
 function textoDoSvg(bytes: Uint8Array): string | null {
@@ -172,11 +183,13 @@ export function lerDimensoes(
 
 const NUMERO = '(\\d+(?:\\.\\d+)?)';
 
-/** `120`, `120px` → 120; porcentagem, `cm`, `em` etc. → `null` (dependem do contexto). */
+/**
+ * `120`, `120px` → 120 (inclusive 0 ou um número gigante, que `validarSvg` recusa); porcentagem,
+ * `cm`, `em` etc. → `null` (dependem do contexto).
+ */
 function medidaSvg(valor: string | undefined): number | null {
   const achado = valor === undefined ? null : new RegExp(`^\\s*${NUMERO}(?:px)?\\s*$`).exec(valor);
-  const n = achado ? Number(achado[1]) : NaN;
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return achado ? Number(achado[1]) : null;
 }
 
 function atributoSvg(atributos: string, nome: string): string | undefined {
@@ -186,56 +199,77 @@ function atributoSvg(atributos: string, nome: string): string | undefined {
 
 /**
  * Tamanho de um SVG lido só do texto (o SVG nunca é inserido como markup): `width`/`height`
- * numéricos, senão o `viewBox`; `null` quando o arquivo não declara nenhum dos dois. Como o SVG é
- * vetorial, o declarado vale mais que o tamanho que o navegador atribui (um SVG só com `viewBox`
- * de 2400×800 sai do navegador como 300×100).
+ * numéricos, senão o `viewBox`, senão 300×150 (o padrão do navegador). Os números vêm como
+ * declarados, até inválidos (0, NaN, infinito): quem recusa é `validarBytesLogo`. Como o SVG é
+ * vetorial, o tamanho só dá a PROPORÇÃO; a rasterização o ajusta à caixa de saída.
  */
-export function dimensoesDeclaradasSvg(bytes: Uint8Array): Dimensoes | null {
+export function dimensoesDeclaradasSvg(bytes: Uint8Array): Dimensoes {
   const texto = textoDoSvg(bytes) ?? '';
   const atributos = /^<svg((?:[^>"']|"[^"]*"|'[^']*')*)>?/.exec(texto)?.[1] ?? '';
   const largura = medidaSvg(atributoSvg(atributos, 'width'));
   const altura = medidaSvg(atributoSvg(atributos, 'height'));
   if (largura !== null && altura !== null) return { largura, altura };
 
-  const viewBox = atributoSvg(atributos, 'viewBox');
   const partes =
-    viewBox
+    atributoSvg(atributos, 'viewBox')
       ?.trim()
       .split(/[\s,]+/)
       .map(Number) ?? [];
   const [, , w, h] = partes;
-  if (partes.length === 4 && w !== undefined && h !== undefined && w > 0 && h > 0) {
+  if (partes.length === 4 && w !== undefined && h !== undefined) {
     return { largura: w, altura: h };
   }
-  return null;
+  return { ...LOGO_SVG_DIMENSOES_PADRAO };
 }
 
-function dimensoesAceitas({ largura, altura }: Dimensoes): boolean {
-  return (
-    largura >= LOGO_LADO_MIN_PX &&
-    altura >= LOGO_LADO_MIN_PX &&
-    largura <= LOGO_LADO_MAX_ORIGEM_PX &&
-    altura <= LOGO_LADO_MAX_ORIGEM_PX &&
-    largura * altura <= LOGO_PIXELS_MAX_ORIGEM
-  );
+const medidaFinita = (n: number): boolean => Number.isFinite(n) && n > 0;
+
+const proporcaoDe = ({ largura, altura }: Dimensoes): number =>
+  Math.max(largura, altura) / Math.min(largura, altura);
+
+/** Bitmap: lados dentro da faixa, área e proporção limitadas (nesta ordem). */
+function validarBitmap(dimensoes: Dimensoes): void {
+  const { largura, altura } = dimensoes;
+  if (
+    largura < LOGO_LADO_MIN_PX ||
+    altura < LOGO_LADO_MIN_PX ||
+    largura > LOGO_LADO_MAX_ORIGEM_PX ||
+    altura > LOGO_LADO_MAX_ORIGEM_PX
+  ) {
+    throw new ErroDeLogo('dimensoes');
+  }
+  if (largura * altura > LOGO_PIXELS_MAX_ORIGEM) throw new ErroDeLogo('area');
+  if (proporcaoDe(dimensoes) > LOGO_PROPORCAO_MAX) throw new ErroDeLogo('proporcao');
+}
+
+/** SVG: medidas finitas e positivas e proporção limitada; o tamanho absoluto não importa. */
+function validarSvg(dimensoes: Dimensoes): void {
+  if (!medidaFinita(dimensoes.largura) || !medidaFinita(dimensoes.altura)) {
+    throw new ErroDeLogo('ilegivel');
+  }
+  if (proporcaoDe(dimensoes) > LOGO_PROPORCAO_MAX) throw new ErroDeLogo('proporcao');
 }
 
 /**
- * Valida tamanho, formato e dimensões dos bytes. Lança `ErroDeLogo`. SVG não tem dimensões aqui
- * (são vetoriais; a rasterização desenha direto no tamanho de saída).
+ * Valida tamanho, formato e dimensões dos bytes. Lança `ErroDeLogo`. Em bitmap, `dimensoes` é o
+ * lido do cabeçalho; em SVG, o declarado no texto (só vale pela proporção).
  */
 export function validarBytesLogo(bytes: Uint8Array): {
   formato: FormatoLogo;
-  dimensoes: Dimensoes | null;
+  dimensoes: Dimensoes;
 } {
   if (bytes.length === 0) throw new ErroDeLogo('vazio');
   if (bytes.length > LOGO_TAMANHO_MAX_BYTES) throw new ErroDeLogo('grande');
   const formato = detectarFormato(bytes);
   if (formato === null) throw new ErroDeLogo('formato');
-  if (formato === 'svg') return { formato, dimensoes: null };
+  if (formato === 'svg') {
+    const dimensoes = dimensoesDeclaradasSvg(bytes);
+    validarSvg(dimensoes);
+    return { formato, dimensoes };
+  }
 
   const dimensoes = lerDimensoes(bytes, formato);
   if (dimensoes === null) throw new ErroDeLogo('ilegivel');
-  if (!dimensoesAceitas(dimensoes)) throw new ErroDeLogo('dimensoes');
+  validarBitmap(dimensoes);
   return { formato, dimensoes };
 }

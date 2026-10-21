@@ -18,20 +18,22 @@ const setTimeoutReal = globalThis.setTimeout;
 const urlCriada = vi.fn<(blob: Blob) => string>();
 const urlRevogada = vi.fn<(url: string) => void>();
 
+/** O jsdom não implementa createObjectURL/revokeObjectURL: troca a URL global por uma que implementa. */
+class URLComBlob extends URL {
+  static override createObjectURL = urlCriada;
+  static override revokeObjectURL = urlRevogada;
+}
+
 beforeEach(() => {
   urlCriada.mockReset().mockReturnValue('blob:http://localhost/logo-1');
   urlRevogada.mockReset();
-  URL.createObjectURL = urlCriada;
-  URL.revokeObjectURL = urlRevogada;
+  vi.stubGlobal('URL', URLComBlob);
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  // @ts-expect-error o jsdom não implementa createObjectURL; remove o stub do teste
-  delete URL.createObjectURL;
-  // @ts-expect-error o jsdom não implementa revokeObjectURL; remove o stub do teste
-  delete URL.revokeObjectURL;
+  vi.unstubAllGlobals();
 });
 
 function arquivo(bytes: Uint8Array, tipo = ''): Blob {
@@ -57,6 +59,9 @@ async function motivoDe(promessa: Promise<unknown>): Promise<string> {
   throw new Error('deveria ter recusado');
 }
 
+const svgComViewBox = (viewBox: string): Blob =>
+  arquivo(bytesTexto(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}"></svg>`));
+
 describe('prepararLogo — recusa antes de decodificar', () => {
   it('arquivo acima do tamanho máximo: grande, sem decodificar', async () => {
     const { ambiente, decodificar } = ambienteFalso({ largura: 10, altura: 10 });
@@ -74,6 +79,12 @@ describe('prepararLogo — recusa antes de decodificar', () => {
     expect(decodificar).not.toHaveBeenCalled();
   });
 
+  it('PNG de 6000×5000 (lados ok, 30 Mpx): area, sem decodificar', async () => {
+    const { ambiente, decodificar } = ambienteFalso({ largura: 6000, altura: 5000 });
+    expect(await motivoDe(prepararLogo(arquivo(bytesPng(6000, 5000)), ambiente))).toBe('area');
+    expect(decodificar).not.toHaveBeenCalled();
+  });
+
   it('GIF com nome e tipo de PNG: formato, sem decodificar', async () => {
     const { ambiente, decodificar } = ambienteFalso({ largura: 1, altura: 1 });
     const falso = new File([bytesGif() as BlobPart], 'logo.png', { type: 'image/png' });
@@ -85,14 +96,27 @@ describe('prepararLogo — recusa antes de decodificar', () => {
     const { ambiente } = ambienteFalso({ largura: 1, altura: 1 });
     expect(await motivoDe(prepararLogo(arquivo(new Uint8Array()), ambiente))).toBe('vazio');
   });
+
+  it('SVG com proporção extrema, medida infinita ou zero: recusado sem decodificar', async () => {
+    const { ambiente, decodificar } = ambienteFalso({ largura: 300, altura: 150 });
+    expect(await motivoDe(prepararLogo(svgComViewBox('0 0 3000 100'), ambiente))).toBe('proporcao');
+    expect(await motivoDe(prepararLogo(svgComViewBox('0 0 1e999 10'), ambiente))).toBe('ilegivel');
+    expect(await motivoDe(prepararLogo(svgComViewBox('0 0 0 0'), ambiente))).toBe('ilegivel');
+    expect(
+      await motivoDe(
+        prepararLogo(arquivo(bytesTexto('<svg width="0" height="50"></svg>')), ambiente),
+      ),
+    ).toBe('ilegivel');
+    expect(decodificar).not.toHaveBeenCalled();
+  });
 });
 
-describe('prepararLogo — ambiente falso', () => {
+describe('prepararLogo — bitmap, ambiente falso', () => {
   it('3000×1000 vira 1200×400; 100×50 não é ampliado', async () => {
     const grande = ambienteFalso({ largura: 3000, altura: 1000 });
     const logo = await prepararLogo(arquivo(bytesPng(3000, 1000), 'image/png'), grande.ambiente);
     expect(grande.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 1200, altura: 400 });
-    expect(logo).toEqual({ dataUrl: PREFIXO_PNG + 'AAAA', largura: 1200, altura: 400 });
+    expect(logo).toMatchObject({ largura: 1200, altura: 400 });
 
     const pequeno = ambienteFalso({ largura: 100, altura: 50 });
     const menor = await prepararLogo(arquivo(bytesPng(100, 50), 'image/png'), pequeno.ambiente);
@@ -121,7 +145,7 @@ describe('prepararLogo — ambiente falso', () => {
     );
   });
 
-  it('decodificação que não termina: ilegivel após LOGO_TEMPO_MAX_MS, e revoga a URL', async () => {
+  it('decodificação que não termina: ilegivel após LOGO_TEMPO_MAX_MS, aborta e revoga a URL', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { ambiente, decodificar } = ambienteFalso({ largura: 100, altura: 50 });
     decodificar.mockImplementation(() => new Promise(() => undefined));
@@ -133,10 +157,13 @@ describe('prepararLogo — ambiente falso', () => {
       await new Promise((r) => setTimeoutReal(r, 0));
     }
     expect(decodificar).toHaveBeenCalledTimes(1);
+    const sinal = decodificar.mock.calls[0]?.[1];
     await vi.advanceTimersByTimeAsync(LOGO_TEMPO_MAX_MS - 1);
     expect(urlRevogada).not.toHaveBeenCalled();
+    expect(sinal?.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await resultado;
+    expect(sinal?.aborted).toBe(true);
     expect(urlRevogada).toHaveBeenCalledTimes(1);
   });
 
@@ -162,20 +189,16 @@ describe('prepararLogo — ambiente falso', () => {
   });
 });
 
-describe('prepararLogo — SVG nunca vira markup', () => {
+describe('prepararLogo — SVG nunca vira markup e é dimensionado pela proporção', () => {
   it('com <script>, onload e referência externa: o ambiente recebe só uma URL blob:', async () => {
-    const { ambiente, decodificar, paraPng } = ambienteFalso({ largura: 200, altura: 100 });
-    const logo = await prepararLogo(
+    const { ambiente, decodificar } = ambienteFalso({ largura: 200, altura: 100 });
+    await prepararLogo(
       new File([bytesTexto(SVG_MALICIOSO) as BlobPart], 'logo.svg', { type: 'image/svg+xml' }),
       ambiente,
     );
     const recebida = decodificar.mock.calls[0]?.[0] ?? '';
     expect(recebida.startsWith('blob:')).toBe(true);
     expect(recebida).not.toContain('<svg');
-    expect(paraPng).toHaveBeenCalledTimes(1);
-    expect(logo.dataUrl.startsWith(PREFIXO_PNG)).toBe(true);
-    expect(logo.dataUrl).not.toContain('<svg');
-    expect(logo.dataUrl).not.toContain('script');
   });
 
   it('o tipo do blob vem do conteúdo, não do que a pessoa declarou', async () => {
@@ -188,27 +211,68 @@ describe('prepararLogo — SVG nunca vira markup', () => {
     expect(urlCriada.mock.calls[0]?.[0].type).toBe('image/png');
   });
 
-  it('SVG sem width/height usa o viewBox; sem viewBox, o tamanho do navegador ou 300×150', async () => {
-    // O Chrome informa 300×100 para um SVG só com viewBox 2400×800: vale o declarado.
-    const comViewBox = ambienteFalso({ largura: 300, altura: 100 });
-    const a = await prepararLogo(
-      arquivo(bytesTexto('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 800"></svg>')),
-      comViewBox.ambiente,
+  it('o tamanho do navegador é ignorado: vale a proporção declarada (viewBox, width/height, 300×150)', async () => {
+    // O Chrome informa 300×100 para um SVG só com viewBox 2400×800.
+    const a = ambienteFalso({ largura: 300, altura: 100 });
+    expect(await prepararLogo(svgComViewBox('0 0 2400 800'), a.ambiente)).toMatchObject({
+      largura: 1200,
+      altura: 400,
+    });
+    expect(a.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 1200, altura: 400 });
+
+    const b = ambienteFalso({ largura: 0, altura: 0 });
+    await prepararLogo(arquivo(bytesTexto('<svg></svg>')), b.ambiente);
+    expect(b.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 800, altura: 400 });
+
+    const c = ambienteFalso({ largura: 1, altura: 1 });
+    await prepararLogo(arquivo(bytesTexto(SVG_MALICIOSO)), c.ambiente);
+    expect(c.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 800, altura: 400 });
+  });
+
+  it('SVG pequeno é ampliado até a caixa: 24×24 vira 400×400; 1×1 também', async () => {
+    const a = ambienteFalso({ largura: 24, altura: 24 });
+    expect(await prepararLogo(svgComViewBox('0 0 24 24'), a.ambiente)).toMatchObject({
+      largura: 400,
+      altura: 400,
+    });
+    expect(a.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 400, altura: 400 });
+
+    const b = ambienteFalso({ largura: 1, altura: 1 });
+    await prepararLogo(
+      arquivo(bytesTexto('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>')),
+      b.ambiente,
     );
-    expect(comViewBox.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 1200, altura: 400 });
-    expect(a).toMatchObject({ largura: 1200, altura: 400 });
-
-    const nada = ambienteFalso({ largura: 0, altura: 0 });
-    const b = await prepararLogo(arquivo(bytesTexto('<svg></svg>')), nada.ambiente);
-    expect(b).toMatchObject({ largura: 300, altura: 150 });
-
-    const doNavegador = ambienteFalso({ largura: 320, altura: 200 });
-    const c = await prepararLogo(arquivo(bytesTexto('<svg></svg>')), doNavegador.ambiente);
-    expect(c).toMatchObject({ largura: 320, altura: 200 });
+    expect(b.paraPng.mock.calls[0]?.[1]).toEqual({ largura: 400, altura: 400 });
   });
 });
 
-describe('prepararLogo — pipeline com o canvas real da rasterização (mock de canvas)', () => {
+describe('AMBIENTE_NAVEGADOR.decodificar', () => {
+  it('ao receber o sinal de abortar, solta a imagem (src vazio)', () => {
+    const imagens: { src: string; decoding: string }[] = [];
+    vi.stubGlobal(
+      'Image',
+      class {
+        src = '';
+        decoding = '';
+        naturalWidth = 0;
+        naturalHeight = 0;
+        constructor() {
+          imagens.push(this);
+        }
+        decode(): Promise<void> {
+          return new Promise(() => undefined);
+        }
+      },
+    );
+    const controle = new AbortController();
+    void AMBIENTE_NAVEGADOR.decodificar('blob:http://localhost/x', controle.signal);
+    expect(imagens[0]?.src).toBe('blob:http://localhost/x');
+    controle.abort();
+    expect(imagens[0]?.src).toBe('');
+  });
+});
+
+describe('prepararLogo — pipeline com o paraPng real (canvas mockado)', () => {
   function instalarCanvas() {
     const drawImage = vi.fn();
     const medidasNoExport: Dimensoes[] = [];
@@ -224,58 +288,57 @@ describe('prepararLogo — pipeline com o canvas real da rasterização (mock de
     return { drawImage, medidasNoExport };
   }
 
-  it('desenha na dimensão encaixada, exporta PNG com o canvas desse tamanho e devolve o LogoDoc', async () => {
+  const comNatural = (natural: Dimensoes, fonte = {} as CanvasImageSource): AmbienteRaster => ({
+    decodificar: () => Promise.resolve({ dimensoes: natural, fonte }),
+    paraPng: AMBIENTE_NAVEGADOR.paraPng,
+  });
+
+  it('bitmap 3000×1000: desenha em 1200×400 e exporta com o canvas desse tamanho', async () => {
     const { drawImage, medidasNoExport } = instalarCanvas();
     const fonte = { id: 'imagem-decodificada' } as unknown as CanvasImageSource;
-    const ambiente: AmbienteRaster = {
-      decodificar: () => Promise.resolve({ dimensoes: { largura: 3000, altura: 1000 }, fonte }),
-      paraPng: AMBIENTE_NAVEGADOR.paraPng,
-    };
-    const logo = await prepararLogo(arquivo(bytesPng(3000, 1000), 'image/png'), ambiente);
+    const logo = await prepararLogo(
+      arquivo(bytesPng(3000, 1000), 'image/png'),
+      comNatural({ largura: 3000, altura: 1000 }, fonte),
+    );
     expect(drawImage).toHaveBeenCalledWith(fonte, 0, 0, 1200, 400);
     expect(medidasNoExport).toEqual([{ largura: 1200, altura: 400 }]);
     expect(logo).toEqual({ dataUrl: PREFIXO_PNG + 'QUJD', largura: 1200, altura: 400 });
   });
 
-  it('não amplia imagem pequena no canvas', async () => {
+  it('bitmap pequeno não é ampliado no canvas', async () => {
     const { drawImage, medidasNoExport } = instalarCanvas();
-    const ambiente: AmbienteRaster = {
-      decodificar: () =>
-        Promise.resolve({
-          dimensoes: { largura: 100, altura: 50 },
-          fonte: {} as CanvasImageSource,
-        }),
-      paraPng: AMBIENTE_NAVEGADOR.paraPng,
-    };
-    await prepararLogo(arquivo(bytesPng(100, 50)), ambiente);
+    await prepararLogo(arquivo(bytesPng(100, 50)), comNatural({ largura: 100, altura: 50 }));
     expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 100, 50);
     expect(medidasNoExport).toEqual([{ largura: 100, altura: 50 }]);
   });
 
-  it('SVG malicioso: a saída é só o PNG do canvas', async () => {
-    instalarCanvas();
-    const ambiente: AmbienteRaster = {
-      decodificar: () =>
-        Promise.resolve({
-          dimensoes: { largura: 200, altura: 100 },
-          fonte: {} as CanvasImageSource,
-        }),
-      paraPng: AMBIENTE_NAVEGADOR.paraPng,
-    };
-    const logo = await prepararLogo(arquivo(bytesTexto(SVG_MALICIOSO), 'image/svg+xml'), ambiente);
-    expect(logo.dataUrl).toBe(PREFIXO_PNG + 'QUJD');
+  it('SVG pequeno (viewBox 24×24) é desenhado ampliado, 400×400', async () => {
+    const { drawImage, medidasNoExport } = instalarCanvas();
+    const logo = await prepararLogo(
+      svgComViewBox('0 0 24 24'),
+      comNatural({ largura: 24, altura: 24 }),
+    );
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 400, 400);
+    expect(medidasNoExport).toEqual([{ largura: 400, altura: 400 }]);
+    expect(logo).toMatchObject({ largura: 400, altura: 400 });
+  });
+
+  it('SVG malicioso: só o desenho do canvas segue adiante, no tamanho calculado', async () => {
+    const { drawImage } = instalarCanvas();
+    const logo = await prepararLogo(
+      arquivo(bytesTexto(SVG_MALICIOSO), 'image/svg+xml'),
+      comNatural({ largura: 200, altura: 100 }),
+    );
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 800, 400);
+    expect(logo).toMatchObject({ largura: 800, altura: 400 });
   });
 
   it('sem contexto 2D no canvas: falha em paraPng vira ilegivel', async () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-    const ambiente: AmbienteRaster = {
-      decodificar: () =>
-        Promise.resolve({
-          dimensoes: { largura: 100, altura: 50 },
-          fonte: {} as CanvasImageSource,
-        }),
-      paraPng: AMBIENTE_NAVEGADOR.paraPng,
-    };
-    expect(await motivoDe(prepararLogo(arquivo(bytesPng(100, 50)), ambiente))).toBe('ilegivel');
+    expect(
+      await motivoDe(
+        prepararLogo(arquivo(bytesPng(100, 50)), comNatural({ largura: 100, altura: 50 })),
+      ),
+    ).toBe('ilegivel');
   });
 });

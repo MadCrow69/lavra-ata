@@ -127,11 +127,24 @@ describe('dimensoesDeclaradasSvg', () => {
     ).toEqual({ largura: 2400, altura: 800 });
   });
 
-  it('em porcentagem usa o viewBox; sem nada declarado devolve null', () => {
+  it('em porcentagem usa o viewBox; sem nada declarado usa 300×150', () => {
     const emPorcentagem = "<svg width='100%' height='100%' viewBox='0,0,50,25'></svg>";
     expect(dimensoesDeclaradasSvg(bytesTexto(emPorcentagem))).toEqual({ largura: 50, altura: 25 });
-    expect(dimensoesDeclaradasSvg(bytesTexto('<svg></svg>'))).toBeNull();
-    expect(dimensoesDeclaradasSvg(bytesTexto('<svg viewBox="0 0 0 0"></svg>'))).toBeNull();
+    expect(dimensoesDeclaradasSvg(bytesTexto('<svg></svg>'))).toEqual({
+      largura: 300,
+      altura: 150,
+    });
+  });
+
+  it('devolve o declarado mesmo inválido (0, infinito); quem recusa é validarBytesLogo', () => {
+    expect(dimensoesDeclaradasSvg(bytesTexto('<svg viewBox="0 0 0 0"></svg>'))).toEqual({
+      largura: 0,
+      altura: 0,
+    });
+    expect(dimensoesDeclaradasSvg(bytesTexto('<svg viewBox="0 0 1e999 5"></svg>'))).toEqual({
+      largura: Infinity,
+      altura: 5,
+    });
   });
 
   it('não confunde stroke-width com width', () => {
@@ -148,7 +161,10 @@ describe('validarBytesLogo', () => {
     });
     expect(validarBytesLogo(bytesJpeg(640, 480, { app1: true })).formato).toBe('jpeg');
     expect(validarBytesLogo(bytesWebpVp8x(3000, 1000)).formato).toBe('webp');
-    expect(validarBytesLogo(bytesTexto(SVG))).toEqual({ formato: 'svg', dimensoes: null });
+    expect(validarBytesLogo(bytesTexto(SVG))).toEqual({
+      formato: 'svg',
+      dimensoes: { largura: 10, altura: 10 },
+    });
   });
 
   it('0 bytes: vazio', () => {
@@ -173,10 +189,11 @@ describe('validarBytesLogo', () => {
     expect(motivoDe(() => validarBytesLogo(bomba))).toBe('dimensoes');
   });
 
-  it('lado dentro do teto, mas área acima do limite de pixels: dimensoes', () => {
+  it('lado dentro do teto, mas área acima do limite de pixels: area', () => {
     const lado = LOGO_LADO_MAX_ORIGEM_PX;
     expect(lado * lado).toBeGreaterThan(LOGO_PIXELS_MAX_ORIGEM);
-    expect(motivoDe(() => validarBytesLogo(bytesPng(lado, lado)))).toBe('dimensoes');
+    expect(motivoDe(() => validarBytesLogo(bytesPng(lado, lado)))).toBe('area');
+    expect(motivoDe(() => validarBytesLogo(bytesPng(6000, 5000)))).toBe('area');
     expect(validarBytesLogo(bytesPng(lado, 4000)).dimensoes).toEqual({
       largura: lado,
       altura: 4000,
@@ -191,6 +208,30 @@ describe('validarBytesLogo', () => {
     expect(motivoDe(() => validarBytesLogo(bytesPng(LOGO_LADO_MAX_ORIGEM_PX + 1, 100)))).toBe(
       'dimensoes',
     );
+  });
+
+  it('proporção acima do limite: proporcao, em bitmap e em SVG; no limite passa', () => {
+    expect(motivoDe(() => validarBytesLogo(bytesPng(LOGO_LADO_MIN_PX, 400)))).toBe('proporcao');
+    expect(motivoDe(() => validarBytesLogo(bytesPng(1200, 40)))).toBe('proporcao');
+    expect(validarBytesLogo(bytesPng(1200, 60)).formato).toBe('png');
+    expect(motivoDe(() => validarBytesLogo(bytesTexto('<svg viewBox="0 0 3000 100"></svg>')))).toBe(
+      'proporcao',
+    );
+    expect(validarBytesLogo(bytesTexto('<svg viewBox="0 0 2000 100"></svg>')).formato).toBe('svg');
+  });
+
+  it('SVG com medida infinita, zero ou negativa: ilegivel; SVG minúsculo (1×1) passa', () => {
+    for (const svg of [
+      '<svg viewBox="0 0 1e999 10"></svg>',
+      '<svg viewBox="0 0 0 0"></svg>',
+      '<svg viewBox="0 0 -5 10"></svg>',
+      '<svg viewBox="0 0 abc 10"></svg>',
+      '<svg width="0" height="10"></svg>',
+      `<svg width="${'9'.repeat(400)}" height="10"></svg>`,
+    ]) {
+      expect(motivoDe(() => validarBytesLogo(bytesTexto(svg)))).toBe('ilegivel');
+    }
+    expect(validarBytesLogo(bytesTexto('<svg width="1" height="1"></svg>')).formato).toBe('svg');
   });
 
   it('imagem reconhecida mas sem tamanho legível: ilegivel', () => {
@@ -221,6 +262,9 @@ describe('MENSAGEM_ERRO_LOGO', () => {
       formato: 'Formato de logo não aceito. Envie PNG, JPEG, WebP ou SVG.',
       dimensoes:
         'A logo tem dimensões fora do aceito (de 16 a 6.000 pixels por lado). Redimensione a imagem.',
+      area: 'A imagem tem mais de 25 milhões de pixels. Reduza a resolução e envie de novo.',
+      proporcao:
+        'A logo é comprida ou estreita demais (mais de 20 para 1). Recorte a imagem e envie de novo.',
       ilegivel:
         'Não foi possível ler esta imagem. Se for SVG, exporte a logo em PNG e envie de novo.',
     });
@@ -234,10 +278,22 @@ describe('MENSAGEM_ERRO_LOGO', () => {
       LOGO_TAMANHO_MAX_BYTES: 5 * 1024 * 1024,
       LOGO_LADO_MIN_PX: 32,
       LOGO_LADO_MAX_ORIGEM_PX: 12_000,
+      LOGO_PIXELS_MAX_ORIGEM: 40_000_000,
+      LOGO_PROPORCAO_MAX: 8,
     }));
     const { MENSAGEM_ERRO_LOGO: alterada } = await import('./validar-logo');
     expect(alterada.grande).toContain('5 MB');
     expect(alterada.grande).not.toContain('2 MB');
     expect(alterada.dimensoes).toContain('de 32 a 12.000 pixels');
+    expect(alterada.area).toContain('mais de 40 milhões de pixels');
+    expect(alterada.proporcao).toContain('mais de 8 para 1');
+  });
+
+  it('o limite em MB usa vírgula decimal (pt-BR)', async () => {
+    const real = await vi.importActual<typeof import('../config/logo')>('../config/logo');
+    vi.resetModules();
+    vi.doMock('../config/logo', () => ({ ...real, LOGO_TAMANHO_MAX_BYTES: 2.5 * 1024 * 1024 }));
+    const { MENSAGEM_ERRO_LOGO: alterada } = await import('./validar-logo');
+    expect(alterada.grande).toContain('2,5 MB');
   });
 });

@@ -1,17 +1,7 @@
-import {
-  LOGO_SAIDA_MAX_PX,
-  LOGO_SVG_DIMENSOES_PADRAO,
-  LOGO_TAMANHO_MAX_BYTES,
-  LOGO_TEMPO_MAX_MS,
-} from '../config/logo';
+import { LOGO_SAIDA_MAX_PX, LOGO_TAMANHO_MAX_BYTES, LOGO_TEMPO_MAX_MS } from '../config/logo';
 import { encaixar, type Dimensoes } from '../document/medidas';
 import type { LogoDoc } from '../document/model';
-import {
-  dimensoesDeclaradasSvg,
-  ErroDeLogo,
-  validarBytesLogo,
-  type FormatoLogo,
-} from './validar-logo';
+import { ErroDeLogo, validarBytesLogo, type FormatoLogo } from './validar-logo';
 
 /**
  * Rasteriza a logo para PNG no navegador. Nada da imagem original segue adiante: SVG, JPEG e WebP
@@ -21,19 +11,29 @@ import {
  * markup. Em contexto de imagem o navegador não executa script nem carrega recurso externo (MDN,
  * "SVG as an image"); `img-src blob:` já está na CSP. Um SVG com `foreignObject` contamina o
  * canvas e `toDataURL` lança `SecurityError`, tratado como imagem ilegível.
+ *
+ * Tamanho de saída: bitmap nunca é ampliado; SVG (vetorial) preenche a caixa mantendo a proporção.
  */
 
 export interface AmbienteRaster {
-  decodificar: (url: string) => Promise<{ dimensoes: Dimensoes; fonte: CanvasImageSource }>;
+  /** `sinal` é abortado quando a decodificação passa do tempo; o ambiente deve largar a imagem. */
+  decodificar: (
+    url: string,
+    sinal?: AbortSignal,
+  ) => Promise<{ dimensoes: Dimensoes; fonte: CanvasImageSource }>;
   /** PNG em data URL (`data:image/png;base64,…`) da `fonte` desenhada em `saida`. */
   paraPng: (fonte: CanvasImageSource, saida: Dimensoes) => string;
 }
 
 export const AMBIENTE_NAVEGADOR: AmbienteRaster = {
-  decodificar: async (url) => {
+  decodificar: async (url, sinal) => {
     const imagem = new Image();
     imagem.decoding = 'async';
     imagem.src = url;
+    // Passou do tempo: solta o recurso para o navegador cancelar o carregamento.
+    sinal?.addEventListener('abort', () => {
+      imagem.src = '';
+    });
     await imagem.decode();
     return {
       dimensoes: { largura: imagem.naturalWidth, altura: imagem.naturalHeight },
@@ -61,12 +61,14 @@ const MIME_POR_FORMATO: Record<FormatoLogo, string> = {
 
 const PREFIXO_PNG = 'data:image/png;base64,';
 
-function comTempoMaximo<T>(promessa: Promise<T>): Promise<T> {
+function comTempoMaximo<T>(executar: (sinal: AbortSignal) => Promise<T>): Promise<T> {
   return new Promise<T>((resolver, rejeitar) => {
+    const controle = new AbortController();
     const relogio = setTimeout(() => {
+      controle.abort();
       rejeitar(new ErroDeLogo('ilegivel'));
     }, LOGO_TEMPO_MAX_MS);
-    promessa.then(
+    executar(controle.signal).then(
       (valor) => {
         clearTimeout(relogio);
         resolver(valor);
@@ -79,23 +81,10 @@ function comTempoMaximo<T>(promessa: Promise<T>): Promise<T> {
   });
 }
 
-/**
- * Tamanho da imagem de origem. Bitmap: o que o navegador decodificou (0 = ilegível). SVG: o
- * declarado no texto (width/height ou viewBox), senão o do navegador, senão o padrão de 300×150.
- */
-function tamanhoDeOrigem(
-  formato: FormatoLogo,
-  bytes: Uint8Array,
-  decodificado: Dimensoes,
-): Dimensoes {
-  const valido = decodificado.largura > 0 && decodificado.altura > 0;
-  if (formato !== 'svg') {
-    if (!valido) throw new ErroDeLogo('ilegivel');
-    return decodificado;
-  }
-  return (
-    dimensoesDeclaradasSvg(bytes) ?? (valido ? decodificado : { ...LOGO_SVG_DIMENSOES_PADRAO })
-  );
+/** Bitmap: o que o navegador decodificou; 0 = não conseguiu ler. */
+function tamanhoDoBitmap(decodificado: Dimensoes): Dimensoes {
+  if (!(decodificado.largura > 0 && decodificado.altura > 0)) throw new ErroDeLogo('ilegivel');
+  return decodificado;
 }
 
 /**
@@ -114,15 +103,18 @@ export async function prepararLogo(
   } catch {
     throw new ErroDeLogo('ilegivel');
   }
-  const { formato } = validarBytesLogo(bytes);
+  const { formato, dimensoes: declaradas } = validarBytesLogo(bytes);
 
   const url = URL.createObjectURL(
     new Blob([bytes as BlobPart], { type: MIME_POR_FORMATO[formato] }),
   );
   try {
-    const { dimensoes, fonte } = await comTempoMaximo(ambiente.decodificar(url));
-    const natural = tamanhoDeOrigem(formato, bytes, dimensoes);
-    const saida = encaixar(natural, LOGO_SAIDA_MAX_PX);
+    const { dimensoes, fonte } = await comTempoMaximo((sinal) => ambiente.decodificar(url, sinal));
+    const saida =
+      formato === 'svg'
+        ? // Vetorial: o declarado só dá a proporção; preenche a caixa (24×24 vira 400×400).
+          encaixar(declaradas, LOGO_SAIDA_MAX_PX, { ampliar: true })
+        : encaixar(tamanhoDoBitmap(dimensoes), LOGO_SAIDA_MAX_PX);
     const dataUrl = ambiente.paraPng(fonte, saida);
     if (!dataUrl.startsWith(PREFIXO_PNG)) throw new ErroDeLogo('ilegivel');
     return { dataUrl, largura: saida.largura, altura: saida.altura };

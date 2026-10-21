@@ -15,6 +15,12 @@ export const LOGO_LADO_MAX_ORIGEM_PX = 6000;
  */
 export const LOGO_PIXELS_MAX_ORIGEM = 25_000_000;
 
+/**
+ * Maior proporção (lado maior ÷ lado menor) aceita, em bitmap e em SVG. Fora disso a logo vira uma
+ * faixa ilegível no cabeçalho e, no SVG, a escala até a caixa de saída gera um canvas de 1 px.
+ */
+export const LOGO_PROPORCAO_MAX = 20;
+
 /** Caixa máxima da imagem rasterizada que vai para o documento. */
 export const LOGO_SAIDA_MAX_PX = { largura: 1200, altura: 400 };
 
