@@ -13,14 +13,23 @@ type Dados = Record<string, string>;
 
 const palavras = (texto: string): string[] => texto.split(/\s+/).filter((p) => p !== '');
 
-/** `dados` vazio e, para cada campo `escolha` do tipo, um por opção (os rótulos de coluna mudam). */
+/**
+ * Todas as combinações dos campos `escolha` do tipo (cada um vazio ou com uma de suas opções): os
+ * rótulos e a visibilidade das colunas podem depender de mais de um campo ao mesmo tempo.
+ */
 function variacoesDeDados(tipo: AtaTypeDefinition): Dados[] {
-  return [
-    {},
-    ...tipo.campos.flatMap((campo) =>
-      campo.tipo === 'escolha' ? (campo.opcoes ?? []).map((o) => ({ [campo.id]: o.valor })) : [],
-    ),
-  ];
+  return tipo.campos
+    .filter((campo) => campo.tipo === 'escolha')
+    .reduce<Dados[]>(
+      (combinacoes, campo) =>
+        combinacoes.flatMap((dados) =>
+          ['', ...(campo.opcoes ?? []).map((o) => o.valor)].map((valor) => ({
+            ...dados,
+            [campo.id]: valor,
+          })),
+        ),
+      [{}],
+    );
 }
 
 interface Resultado {
@@ -96,6 +105,26 @@ describe('colunas de participantes cabem no A4 (PDF e DOCX)', () => {
     };
     const { violacoes } = conferirTipo(estreito);
     expect(violacoes.some((v) => v.includes('Proprietário(a)'))).toBe(true);
+  });
+
+  it('a guarda combina os campos de escolha (rótulo que depende de dois campos ao mesmo tempo)', () => {
+    const PALAVRA_LONGA = 'Representatividadeextraordinária';
+    const combinado: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+        c.id === 'vinculo'
+          ? {
+              ...c,
+              rotuloPor: (dados: Dados) =>
+                dados.natureza === 'extraordinaria' && dados.modalidade === 'hibrida'
+                  ? PALAVRA_LONGA
+                  : c.rotulo,
+            }
+          : c,
+      ),
+    };
+    const { violacoes } = conferirTipo(combinado);
+    expect(violacoes.some((v) => v.includes(PALAVRA_LONGA))).toBe(true);
   });
 
   it('a corporativa mede coluna a coluna: 43 % · 29 % · 28 % do espaço útil', () => {

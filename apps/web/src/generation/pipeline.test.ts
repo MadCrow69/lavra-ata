@@ -1,5 +1,6 @@
 import { createMaskMap, mask } from '@lavra/pii-br';
 import { describe, expect, it, vi } from 'vitest';
+import { cipa } from '../ata-types/cipa';
 import { corporativa } from '../ata-types/corporativa';
 import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { ErroCadeia, ErroProvedor, erroProvedor } from '../ai/errors';
@@ -573,5 +574,70 @@ describe('gerarAta: extras de participante', () => {
     const usuario = pedidos[0]?.usuario ?? '';
     expect(usuario).toContain('Ana Souza — Procurador(a) — outorgada por [CPF_1] — presente');
     expect(usuario).not.toContain(CPF);
+  });
+});
+
+describe('regerarSecao: CIPA (primeiro tipo registrado com extras enviados à IA)', () => {
+  const base = (): AtaDraft => ({
+    ...rascunho(),
+    tipoId: cipa.id,
+    dados: {
+      data: '2026-10-14',
+      natureza: 'ordinaria',
+      modalidade: 'hibrida',
+      presidente: 'Ana Souza',
+      secretario: 'Bruno Lima',
+      gestao: '2026/2027',
+      local: 'Sala 2',
+      plataforma: 'Sala virtual',
+    },
+    participantes: [
+      { ...ANA, extras: { representacao: 'empregador', condicao: 'titular' } },
+      {
+        ...ANA,
+        id: 'p2',
+        nome: `Bruno Lima ${CPF_2}`,
+        papel: 'Técnico',
+        presenca: 'justificado',
+        justificativa: `Atestado ${TELEFONE}`,
+        // Valor fora das opções (rascunho corrompido) com um CPF: não sai, nem como marcador.
+        extras: { representacao: CPF, condicao: 'suplente' },
+      },
+    ],
+    transcricao: `Ana: o CPF ${CPF} foi corrigido no cadastro.`,
+  });
+
+  it('envia representação e condição (rótulos), mascara o resto e não vaza valor fora das opções', async () => {
+    const d0 = base();
+    const mapa = mask(d0.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      d0,
+      { secoes: { deliberacoes: [par(`Aprovada por consenso a correção do CPF ${CPF}.`)] } },
+      mapa,
+    );
+    const { opcoes, pedidos } = adaptadores({
+      openai: () =>
+        Promise.resolve({ blocos: [par('Aprovada por consenso a correção de [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, cipa, 'deliberacoes', null, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain(
+      'Ana Souza — Diretora — Representante do empregador — Titular — presente',
+    );
+    expect(usuario).toMatch(/Bruno Lima \[CPF_\d\] — Técnico — Suplente — ausência justificada/);
+    expect(usuario).toContain('Aprovada por consenso a correção do CPF [CPF_1].');
+    for (const vazado of [
+      CPF,
+      CPF_2,
+      TELEFONE,
+      '2026/2027',
+      'Sala 2',
+      'Sala virtual',
+      'Atestado',
+    ]) {
+      expect(usuario).not.toContain(vazado);
+    }
+    expect(r.blocos).toEqual([par(`Aprovada por consenso a correção de ${CPF}.`)]);
+    expect(r.avisos).toEqual([]);
   });
 });

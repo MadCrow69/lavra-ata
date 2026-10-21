@@ -1,6 +1,7 @@
 import { PESOS_COLUNA } from '../config/documento';
 import { LIMITE_TRANSCRICAO } from '../config/limits';
 import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
+import { cipa } from './cipa';
 import { corporativa } from './corporativa';
 import { ehVisivel, rotuloDaOpcao, rotuloDoCampo, textoLimpo } from './texto-modelo';
 import type { AtaTypeDefinition, CampoDef, CampoFaltando } from './types';
@@ -16,6 +17,7 @@ export const TIPO_PADRAO_ID = corporativa.id;
 
 export const ATA_TYPES: Record<string, AtaTypeDefinition> = {
   [corporativa.id]: corporativa,
+  [cipa.id]: cipa,
 };
 
 /** Tipo pelo id; id desconhecido (rascunho antigo, sessão corrompida) cai no padrão. */

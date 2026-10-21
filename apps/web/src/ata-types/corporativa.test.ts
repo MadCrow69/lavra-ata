@@ -48,8 +48,8 @@ function completo(sobrescrever: Partial<AtaDraft> = {}): AtaDraft {
 }
 
 describe('registro de tipos', () => {
-  it('tem só a corporativa neste plano e ela é o tipo padrão', () => {
-    expect(Object.keys(ATA_TYPES)).toEqual(['corporativa']);
+  it('registra a corporativa (o tipo padrão, primeira da lista) e a CIPA', () => {
+    expect(Object.keys(ATA_TYPES)).toEqual(['corporativa', 'cipa']);
     expect(TIPO_PADRAO_ID).toBe('corporativa');
     expect(corporativa.id).toBe(TIPO_PADRAO_ID);
   });

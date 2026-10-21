@@ -29,10 +29,12 @@ const CAMPOS: CampoDef[] = [
     opcoes: OPCOES_NATUREZA,
   },
   {
+    // Mesmo id da CIPA = mesmo tipo e opções contidas nas dela (invariante do registro).
     id: 'motivo',
     rotulo: 'Motivo da reunião extraordinária',
-    tipo: 'texto',
+    tipo: 'escolha',
     obrigatorio: false,
+    opcoes: [{ valor: 'acidente', rotulo: 'Acidente do trabalho grave ou fatal' }],
     visivelSe: (dados) => dados.natureza === 'extraordinaria',
     obrigatorioSe: (dados) => dados.natureza === 'extraordinaria',
   },
