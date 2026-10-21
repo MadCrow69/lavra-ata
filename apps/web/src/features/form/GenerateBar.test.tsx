@@ -10,6 +10,7 @@ import { LIMITE_TRANSCRICAO } from '../../config/limits';
 import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
+import { OperacaoIAProvider } from '../../generation/OperacaoIA';
 import { ToastProvider } from '../../ui/Toast';
 import { DadosBlock } from './DadosBlock';
 import { GenerateBar } from './GenerateBar';
@@ -113,19 +114,21 @@ function renderizar({
   render(
     <KeysProvider store={store}>
       <DraftProvider inicial={inicial}>
-        <ToastProvider>
-          {comBlocos ? (
-            <>
-              <DadosBlock tipo={corporativa} />
-              <TranscricaoBlock tipo={corporativa} />
-            </>
-          ) : null}
-          <GenerateBar
-            onConfigurarChaves={onConfigurarChaves}
-            opcoesCadeia={{ adaptadores: a, esperaRetryMs: 0 }}
-          />
-          <Espiao />
-        </ToastProvider>
+        <OperacaoIAProvider>
+          <ToastProvider>
+            {comBlocos ? (
+              <>
+                <DadosBlock tipo={corporativa} />
+                <TranscricaoBlock tipo={corporativa} />
+              </>
+            ) : null}
+            <GenerateBar
+              onConfigurarChaves={onConfigurarChaves}
+              opcoesCadeia={{ adaptadores: a, esperaRetryMs: 0 }}
+            />
+            <Espiao />
+          </ToastProvider>
+        </OperacaoIAProvider>
       </DraftProvider>
     </KeysProvider>,
   );
@@ -347,9 +350,11 @@ describe('GenerateBar', () => {
     const { unmount } = render(
       <KeysProvider store={store}>
         <DraftProvider inicial={completo()}>
-          <ToastProvider>
-            <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={{ adaptadores: a }} />
-          </ToastProvider>
+          <OperacaoIAProvider>
+            <ToastProvider>
+              <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={{ adaptadores: a }} />
+            </ToastProvider>
+          </OperacaoIAProvider>
         </DraftProvider>
       </KeysProvider>,
     );

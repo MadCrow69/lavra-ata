@@ -1,6 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
+import { KeysProvider } from '../../ai/KeysContext';
+import { criarKeyStore } from '../../ai/keys';
 import { AVISO_MINUTA, TEXTO_SECOES_PENDENTES } from '../../config/documento';
 import { DraftProvider } from '../../domain/DraftContext';
 import {
@@ -11,6 +13,8 @@ import {
   type ResultadoAta,
 } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
+import { OperacaoIAProvider } from '../../generation/OperacaoIA';
+import { ToastProvider } from '../../ui/Toast';
 import { A4Preview } from './A4Preview';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
@@ -74,9 +78,15 @@ function rascunho(parcial: Partial<AtaDraft> = {}): AtaDraft {
 
 function renderizar(inicial: AtaDraft) {
   return render(
-    <DraftProvider inicial={inicial}>
-      <A4Preview />
-    </DraftProvider>,
+    <KeysProvider store={criarKeyStore(null)}>
+      <DraftProvider inicial={inicial}>
+        <OperacaoIAProvider>
+          <ToastProvider>
+            <A4Preview />
+          </ToastProvider>
+        </OperacaoIAProvider>
+      </DraftProvider>
+    </KeysProvider>,
   );
 }
 

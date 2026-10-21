@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { camposFaltando, obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import { ErroCadeia, ErroProvedor, resumoDoErro } from '../../ai/errors';
+import { ErroProvedor, resumoDoErro } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
-import { ROTULO_CURTO, ROTULO_PROVEDOR } from '../../config/models';
+import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
 import { CHAVE_AVISOS_GERAIS } from '../../domain/draft-reducer';
+import { descreverErroDeGeracao } from '../../generation/erro-geracao';
+import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
 import { gerarAta } from '../../generation/pipeline';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
@@ -21,34 +23,12 @@ export interface GenerateBarProps {
 }
 
 type Estado =
-  | { fase: 'parado' }
-  | { fase: 'gerando' }
-  | { fase: 'cancelado' }
-  | { fase: 'erro'; titulo: string; detalhes: string[] };
+  { fase: 'parado' } | { fase: 'cancelado' } | { fase: 'erro'; titulo: string; detalhes: string[] };
 
 const LISTA = new Intl.ListFormat('pt-BR', { type: 'conjunction' });
 
-/** Erro como causa + ação, sem nunca repassar texto que não foi escrito por nós (chave, dados). */
 function estadoDeErro(e: unknown): Estado {
-  if (e instanceof ErroCadeia) {
-    return e.falhas.length === 0
-      ? { fase: 'erro', titulo: e.message, detalhes: [] }
-      : {
-          fase: 'erro',
-          titulo: 'Nenhum provedor conseguiu gerar a ata.',
-          detalhes: e.falhas.map((f) => `${ROTULO_PROVEDOR[f.provedor]}: ${f.mensagem}`),
-        };
-  }
-  if (e instanceof ErroProvedor) {
-    return { fase: 'erro', titulo: 'A ata não foi gerada.', detalhes: [e.message] };
-  }
-  return {
-    fase: 'erro',
-    titulo: 'A ata não foi gerada por um erro inesperado no aplicativo.',
-    detalhes: [
-      'Tente de novo. Se o erro continuar, troque de provedor nas configurações de chave.',
-    ],
-  };
+  return { fase: 'erro', ...descreverErroDeGeracao(e, 'ata') };
 }
 
 /**
@@ -61,16 +41,20 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
   const { mostrar } = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: 'parado' });
   const [confirmando, setConfirmando] = useState(false);
+  const { operacao, iniciar, concluir, cancelar } = useOperacaoIA();
+  /** Controle da chamada desta barra: distingue a minha operação da de uma seção e o resultado tardio. */
   const controleRef = useRef<AbortController | null>(null);
   const gerarRef = useRef<HTMLButtonElement>(null);
   const cancelarRef = useRef<HTMLButtonElement>(null);
   const resumoId = useId();
+  const ocupadaId = useId();
 
   const tipo = obterTipo(state.tipoId);
   const faltas = camposFaltando(state, tipo);
   // `useKeys` re-renderiza a cada mudança no KeyStore; a cadeia (até 3 itens) é lida a cada render.
   const cadeia = keys.cadeia();
-  const gerando = estado.fase === 'gerando';
+  const gerando = operacao?.tipo === 'ata';
+  const ocupadaPorSecao = operacao !== null && !gerando;
   const avisosGerais = state.resultado?.avisos[CHAVE_AVISOS_GERAIS] ?? [];
 
   // Desmontar no meio da geração cancela a chamada (e o resultado tardio é ignorado).
@@ -95,17 +79,18 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
   }, [gerando]);
 
   /** Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta. */
-  const podeGerar = faltas.length === 0 && !gerando;
+  const podeGerar = faltas.length === 0 && operacao === null;
 
   const gerar = async () => {
-    if (!podeGerar || controleRef.current !== null) return;
+    if (!podeGerar) return;
     if (cadeia.length === 0) {
       onConfigurarChaves();
       return;
     }
-    const controle = new AbortController();
+    const controle = iniciar({ tipo: 'ata' });
+    if (controle === null) return;
     controleRef.current = controle;
-    setEstado({ fase: 'gerando' });
+    setEstado({ fase: 'parado' });
     try {
       const r = await gerarAta(state, tipo, cadeia, controle.signal, opcoesCadeia);
       if (controleRef.current !== controle) return;
@@ -126,6 +111,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
       );
     } finally {
       if (controleRef.current === controle) controleRef.current = null;
+      concluir(controle);
     }
   };
 
@@ -143,6 +129,9 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
   };
 
   const [primeiro, ...depois] = cadeia;
+  const descricaoId = [faltas.length > 0 ? resumoId : null, ocupadaPorSecao ? ocupadaId : null]
+    .filter((id) => id !== null)
+    .join(' ');
 
   return (
     <section className={styles.barra} aria-label="Gerar ata">
@@ -162,7 +151,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
           ref={gerarRef}
           variante="primario"
           disabled={!podeGerar}
-          aria-describedby={faltas.length > 0 ? resumoId : undefined}
+          aria-describedby={descricaoId === '' ? undefined : descricaoId}
           onClick={aoClicarGerar}
         >
           <span aria-hidden="true">✨</span> Gerar ata
@@ -171,7 +160,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
           <Button
             ref={cancelarRef}
             onClick={() => {
-              controleRef.current?.abort();
+              cancelar();
             }}
           >
             Cancelar
@@ -215,6 +204,12 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
         )}
       </p>
 
+      {ocupadaPorSecao ? (
+        <p id={ocupadaId} className={styles.statusTexto}>
+          {MOTIVO_IA_OCUPADA}
+        </p>
+      ) : null}
+
       <div className={styles.status} aria-live="polite">
         {gerando ? (
           <>
@@ -245,7 +240,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
             <Button
               variante="primario"
               disabled={!podeGerar}
-              aria-describedby={faltas.length > 0 ? resumoId : undefined}
+              aria-describedby={descricaoId === '' ? undefined : descricaoId}
               onClick={() => {
                 void gerar();
               }}

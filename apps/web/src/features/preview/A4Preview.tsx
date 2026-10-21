@@ -1,12 +1,19 @@
-import { Fragment, memo, useMemo, useRef, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { obterTipo } from '../../ata-types/registry';
+import type { OpcoesCadeia } from '../../ai/chain';
+import type { ProviderId } from '../../ai/types';
+import { ROTULO_CURTO } from '../../config/models';
 import { construirDocumento, contarPreencher, dividirPreencher } from '../../document/build-model';
 import type { DocBloco, Inline } from '../../document/model';
 import { useDraft } from '../../domain/DraftContext';
 import type { Presenca } from '../../domain/draft';
-import { CHAVE_AVISOS_GERAIS } from '../../domain/draft-reducer';
+import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 import { chavesUnicas } from './chaves';
+import { EncaminhamentosEditor } from './EncaminhamentosEditor';
 import styles from './preview.module.css';
+import revisao from './revisao.module.css';
+import { SectionActions } from './SectionActions';
+import { SectionEditor } from './SectionEditor';
 
 /** Atributo que marca cada lacuna `[PREENCHER: …]` como alvo do contador. */
 const ATRIBUTO_LACUNA = 'data-preencher';
@@ -207,11 +214,105 @@ function assinaturaDoBloco(bloco: DocBloco): string {
   }
 }
 
+type DocSecao = Extract<DocBloco, { tipo: 'secao' }>;
+
+/** "Gerado por Gemini · modelo" ou "Editado por você" (a edição à mão mantém a autoria, mas manda). */
+function textoDeAtribuicao(
+  atribuicao: { provedor: ProviderId; modelo: string } | undefined,
+  editada: boolean,
+): string | null {
+  if (editada) return 'Editado por você';
+  return atribuicao
+    ? `Gerado por ${ROTULO_CURTO[atribuicao.provedor]} · ${atribuicao.modelo}`
+    : null;
+}
+
+/**
+ * Seção gerada pela IA: avisos de validação acima, o texto (ou o editor), e no rodapé a
+ * atribuição e as ações Editar / Regerar / Ajustar. `data-secao` e `id` ficam no contêiner.
+ */
+function SecaoGerada({ bloco, opcoesCadeia }: { bloco: DocSecao; opcoesCadeia?: OpcoesCadeia }) {
+  const { state } = useDraft();
+  const { chave, titulo } = bloco;
+  const id = idDaSecao(chave);
+  const resultado = state.resultado;
+  const avisos = resultado?.avisos[chave] ?? [];
+  const chavesAvisos = chavesUnicas(avisos);
+  const editada = resultado?.editadas.includes(chave) ?? false;
+  const [editando, setEditando] = useState(false);
+  const editarRef = useRef<HTMLButtonElement>(null);
+  const estavaEditandoRef = useRef(false);
+
+  // Ao fechar o editor (salvar ou cancelar) o foco volta ao botão Editar.
+  useEffect(() => {
+    if (estavaEditandoRef.current && !editando) editarRef.current?.focus();
+    estavaEditandoRef.current = editando;
+  }, [editando]);
+
+  const fechar = () => {
+    setEditando(false);
+  };
+
+  return (
+    <section
+      id={id}
+      data-secao={chave}
+      aria-labelledby={`${id}-titulo`}
+      className={juntar(styles.secao, revisao.secaoRevisavel)}
+    >
+      {avisos.length > 0 ? (
+        <div role="note" className={revisao.avisos} aria-label={`Avisos da seção ${titulo}`}>
+          <ul>
+            {avisos.map((aviso, i) => (
+              <li key={chavesAvisos[i]}>
+                <span aria-hidden="true">⚠ </span>
+                {aviso}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <h3 id={`${id}-titulo`} className={styles.subtitulo}>
+        {titulo}
+      </h3>
+      {editando ? (
+        chave === CHAVE_ENCAMINHAMENTOS ? (
+          <EncaminhamentosEditor titulo={titulo} onFechar={fechar} />
+        ) : (
+          <SectionEditor chave={chave} titulo={titulo} onFechar={fechar} />
+        )
+      ) : (
+        <Blocos blocos={bloco.blocos} rotulo={titulo} />
+      )}
+      <SectionActions
+        chave={chave}
+        titulo={titulo}
+        atribuicao={textoDeAtribuicao(resultado?.atribuicao[chave], editada)}
+        editada={editada}
+        editando={editando}
+        onEditar={() => {
+          setEditando(true);
+        }}
+        editarRef={editarRef}
+        {...(opcoesCadeia ? { opcoesCadeia } : {})}
+      />
+    </section>
+  );
+}
+
 /**
  * `rotulo` dá nome às tabelas: o do subtítulo ou da seção que as antecede.
  * Cada `secao` é um contêiner estável (`id` + `data-secao`) onde as ações por seção se apoiam.
  */
-function Blocos({ blocos, rotulo }: { blocos: DocBloco[]; rotulo: string }) {
+function Blocos({
+  blocos,
+  rotulo,
+  opcoesCadeia,
+}: {
+  blocos: DocBloco[];
+  rotulo: string;
+  opcoesCadeia?: OpcoesCadeia;
+}) {
   let rotuloAtual = rotulo;
   const chaves = chavesUnicas(blocos.map(assinaturaDoBloco));
   const nos: ReactNode[] = [];
@@ -248,6 +349,12 @@ function Blocos({ blocos, rotulo }: { blocos: DocBloco[]; rotulo: string }) {
         break;
       }
       case 'secao': {
+        if (bloco.gerada) {
+          nos.push(
+            <SecaoGerada key={chave} bloco={bloco} {...(opcoesCadeia ? { opcoesCadeia } : {})} />,
+          );
+          break;
+        }
         const id = idDaSecao(bloco.chave);
         nos.push(
           <section
@@ -255,7 +362,7 @@ function Blocos({ blocos, rotulo }: { blocos: DocBloco[]; rotulo: string }) {
             id={id}
             data-secao={bloco.chave}
             aria-labelledby={`${id}-titulo`}
-            className={juntar(styles.secao, bloco.gerada ? undefined : styles.secaoPendente)}
+            className={juntar(styles.secao, styles.secaoPendente)}
           >
             <h3 id={`${id}-titulo`} className={styles.subtitulo}>
               {bloco.titulo}
@@ -304,7 +411,7 @@ function Blocos({ blocos, rotulo }: { blocos: DocBloco[]; rotulo: string }) {
  * participantes, pauta) e, depois de gerar, as seções, os encaminhamentos, o fecho e o aviso de
  * minuta. O conteúdo vem do `DocumentModel`; aqui só se decide a tipografia.
  */
-export function A4Preview() {
+export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}) {
   const { state } = useDraft();
   const tipo = obterTipo(state.tipoId);
   const { dados, pauta, participantes, resultado } = state;
@@ -379,7 +486,11 @@ export function A4Preview() {
         <h2 className={styles.titulo}>
           <Texto texto={modelo.titulo} />
         </h2>
-        <Blocos blocos={modelo.blocos} rotulo={modelo.titulo} />
+        <Blocos
+          blocos={modelo.blocos}
+          rotulo={modelo.titulo}
+          {...(opcoesCadeia ? { opcoesCadeia } : {})}
+        />
       </article>
     </div>
   );
