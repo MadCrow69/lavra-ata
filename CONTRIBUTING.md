@@ -20,9 +20,12 @@ pnpm format:check               # Prettier (use `pnpm format` para corrigir)
 pnpm typecheck                  # TypeScript em todos os pacotes
 pnpm test                       # Vitest, com no máximo 4 workers
 pnpm build                      # build de todos os pacotes
+pnpm --filter @lavra/web e2e    # E2E (Playwright) contra o build; exige `pnpm build` antes
 ```
 
 O `pnpm dev` não existe na raiz; use o filtro do pacote, como acima.
+
+Na primeira vez, instale o navegador do E2E: `pnpm --filter @lavra/web exec playwright install chromium`. O E2E roda contra o `vite preview` do build, onde a CSP está ativa, e intercepta os três provedores de IA: nenhuma chamada real sai.
 
 ### Testes com teto de workers
 
