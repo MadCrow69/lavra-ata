@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMaskMap, mask, MARKER_PATTERN, unmask } from '../src/mask';
+import type { MaskMap } from '../src/types';
 import { detect } from '../src/detect';
 import { normalizeValue } from '../src/normalize';
 import { CORPUS, FALSOS_POSITIVOS } from './corpus';
@@ -74,7 +75,13 @@ describe('mask / unmask', () => {
 
 describe('mask: mapa e estado', () => {
   it('createMaskMap devolve mapa vazio novo a cada chamada', () => {
-    expect(createMaskMap()).toEqual({ version: 1, markers: {}, keys: {}, counters: {} });
+    expect(createMaskMap()).toEqual({
+      version: 1,
+      markers: {},
+      keys: {},
+      counters: {},
+      reserved: {},
+    });
     expect(createMaskMap()).not.toBe(createMaskMap());
   });
   it('não muta o mapa recebido (nenhum campo)', () => {
@@ -206,5 +213,32 @@ describe('mask: texto do usuário com forma de marcador', () => {
     expect(unmask(masked, map)).toBe(t);
     // mesmo com mapa que tenha marcador homônimo de tipo desconhecido, nada é reservado/pulado
     expect(mask('[Anexo 2] 529.982.247-25').masked).toBe('[Anexo 2] [CPF_1]');
+  });
+  it('reserva persiste no mapa: literal da chamada 1 nunca é alocado na 3', () => {
+    const c1 = mask('[CPF_2] e 529.982.247-25');
+    expect(c1.masked).toBe('[CPF_2] e [CPF_1]');
+    expect(c1.map.reserved).toEqual({ CPF: ['2'] });
+    const novos = mask('111.444.777-35 e 000.000.001-91', { map: c1.map });
+    expect(novos.masked).toBe('[CPF_3] e [CPF_4]'); // o 2 foi pulado
+    expect(novos.map.reserved).toEqual({ CPF: ['2'] });
+    // reidratar a saída da chamada 1 com o mapa final mantém o literal
+    expect(unmask(c1.masked, novos.map)).toBe('[CPF_2] e 529.982.247-25');
+    expect(c1.map.reserved).toEqual({ CPF: ['2'] }); // mapa recebido não foi mutado
+  });
+  it('reservas se acumulam sem duplicar, por tipo, e sobrevivem a JSON', () => {
+    const a = mask('[CPF_2] [cpf 2] [TELEFONE_1]');
+    const b = mask('[CPF_5] [CPF_2]', { map: JSON.parse(JSON.stringify(a.map)) as MaskMap });
+    expect(b.map.reserved).toEqual({ CPF: ['2', '5'], TELEFONE: ['1'] });
+    expect(a.map.reserved).toEqual({ CPF: ['2'], TELEFONE: ['1'] });
+  });
+  it('aceita mapa antigo sem `reserved`', () => {
+    const antigo = { version: 1, markers: {}, keys: {}, counters: {} } as MaskMap;
+    const r = mask('[CPF_1] 529.982.247-25', { map: antigo });
+    expect(r.masked).toBe('[CPF_1] [CPF_2]');
+    expect(r.map.reserved).toEqual({ CPF: ['1'] });
+    expect('reserved' in antigo).toBe(false);
+  });
+  it('mapa sem literais não ganha tipos em `reserved`', () => {
+    expect(mask('529.982.247-25').map.reserved).toEqual({});
   });
 });

@@ -29,6 +29,11 @@ export interface MaskMap {
   keys: Record<string, string>;
   /** Último N usado por tipo. */
   counters: Partial<Record<PiiType, number>>;
+  /**
+   * Números de marcador que o usuário escreveu literalmente (`[CPF_2]`), por tipo, como
+   * texto decimal. Nunca são alocados. Ausente em mapas antigos (tratado como vazio).
+   */
+  reserved?: Partial<Record<PiiType, string[]>>;
 }
 
 /** Resultado da validação da saída do LLM. */

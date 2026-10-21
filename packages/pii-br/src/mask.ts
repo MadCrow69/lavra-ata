@@ -1,7 +1,7 @@
 import { detect } from './detect';
 import { DETECTORS } from './detectors/index';
 import { normalizeValue } from './normalize';
-import type { DetectOptions, Finding, MaskMap } from './types';
+import type { DetectOptions, Finding, MaskMap, PiiType } from './types';
 
 /** Forma canônica do marcador. Global: nunca use a instância compartilhada sem clonar. */
 export const MARKER_PATTERN = /\[([A-Z]+)_(\d+)\]/g;
@@ -16,6 +16,8 @@ const TOLERANT_SOURCE = '\\[\\s*([A-Za-z]+)[\\s_-]?(\\d+)\\s*\\]';
 
 const PII_TYPE_NAMES: ReadonlySet<string> = new Set(DETECTORS.map((d) => d.type));
 
+const isPiiType = (name: string): name is PiiType => PII_TYPE_NAMES.has(name);
+
 export interface MaskResult {
   masked: string;
   map: MaskMap;
@@ -29,7 +31,7 @@ export interface MaskResult {
 }
 
 export function createMaskMap(): MaskMap {
-  return { version: 1, markers: {}, keys: {}, counters: {} };
+  return { version: 1, markers: {}, keys: {}, counters: {}, reserved: {} };
 }
 
 /** Aplica `fn` a cada texto com forma de marcador (tolerante); regex nova por chamada. */
@@ -40,15 +42,21 @@ function mapMarkerLiterals(
   return text.replace(new RegExp(TOLERANT_SOURCE, 'g'), fn);
 }
 
-/** Números (como texto, sem passar por Number) que o usuário escreveu como marcador, por tipo. */
-function reservedNumbers(text: string): Map<string, Set<string>> {
-  const reserved = new Map<string, Set<string>>();
+/**
+ * Reservas do mapa (aceita mapas antigos, sem `reserved`) somadas aos números que o usuário
+ * escreveu como marcador nesta entrada. Números ficam como texto, sem passar por `Number`.
+ */
+function collectReserved(base: MaskMap, text: string): Map<PiiType, Set<string>> {
+  const reserved = new Map<PiiType, Set<string>>();
+  const add = (type: PiiType, n: string): void => {
+    reserved.set(type, (reserved.get(type) ?? new Set<string>()).add(n));
+  };
+  for (const [type, numbers] of Object.entries(base.reserved ?? {})) {
+    if (isPiiType(type)) for (const n of numbers) add(type, n);
+  }
   mapMarkerLiterals(text, (literal, type, n) => {
     const name = type.toUpperCase();
-    if (PII_TYPE_NAMES.has(name)) {
-      const set = reserved.get(name) ?? new Set<string>();
-      reserved.set(name, set.add(n));
-    }
+    if (isPiiType(name)) add(name, n);
     return literal;
   });
   return reserved;
@@ -62,7 +70,9 @@ function reservedNumbers(text: string): Map<string, Set<string>> {
  * Texto do usuário que já tem forma de marcador de um dos 9 tipos (`[CPF_1]`, `[cpf 1]`):
  * - a numeração PULA os números que o usuário escreveu nesta entrada, então o literal nunca
  *   entra no mapa e `unmask` o deixa como está, aconteça o que acontecer com o LLM.
- *   Por isso a numeração pode ter saltos; `counters` guarda o ÚLTIMO número usado;
+ *   Por isso a numeração pode ter saltos; `counters` guarda o ÚLTIMO número usado. Os números
+ *   reservados ficam em `map.reserved` e valem nas chamadas seguintes com o mesmo mapa (um
+ *   literal visto na chamada 1 nunca é alocado na 3); mapas sem `reserved` são aceitos;
  * - se o literal colide com um marcador já alocado no mapa reutilizado, ele é reescrito
  *   como `[CPF#1]` (visível, não casa com o `unmask`) e listado em `collisions`.
  * Colchetes que não são desses tipos (`[Anexo 2]`) passam intactos.
@@ -74,9 +84,10 @@ export function mask(text: string, options: DetectOptions & { map?: MaskMap } = 
     markers: { ...base.markers },
     keys: { ...base.keys },
     counters: { ...base.counters },
+    reserved: {},
   };
   const findings = detect(text, options.types ? { types: options.types } : {});
-  const reserved = reservedNumbers(text);
+  const reserved = collectReserved(base, text);
   const collisions: string[] = [];
 
   /** Trecho fora dos achados: literais que colidem com marcador já alocado viram `[TIPO#N]`. */
@@ -105,6 +116,7 @@ export function mask(text: string, options: DetectOptions & { map?: MaskMap } = 
     cursor = finding.end;
   }
   pieces.push(neutralize(text.slice(cursor)));
+  map.reserved = Object.fromEntries([...reserved].map(([type, numbers]) => [type, [...numbers]]));
 
   return { masked: pieces.join(''), map, findings, collisions };
 }
