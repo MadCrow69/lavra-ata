@@ -187,6 +187,7 @@ export const corporativa: AtaTypeDefinition = {
   rotuloPapel: 'Cargo / empresa',
   secoes: SECOES,
   temEncaminhamentos: true,
+  camposNoPrompt: ['data', 'modalidade'],
   regrasPrompt: REGRAS_PROMPT,
   titulo: (dados) => {
     const assunto = textoLimpo(dados.assunto);

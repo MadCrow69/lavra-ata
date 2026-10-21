@@ -5,6 +5,9 @@ import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } fr
 /** Chave de seção usada para `avisos`, `atribuicao` e `editadas` dos encaminhamentos. */
 export const CHAVE_ENCAMINHAMENTOS = 'encaminhamentos';
 
+/** Chave de `resultado.avisos` para avisos da ata toda, exibidos acima das seções. */
+export const CHAVE_AVISOS_GERAIS = 'geral';
+
 export function criarRascunho(tipoId: string = TIPO_PADRAO_ID): AtaDraft {
   return {
     versao: 1,

@@ -1,9 +1,13 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import type { BlocoFormulario } from '../../ata-types/types';
+import { EVENTO_REVELAR, type DetalheRevelar } from './focar-campo';
 import styles from './form.module.css';
 
 export interface FormBlockProps {
   numero: number;
   titulo: string;
+  /** Bloco de `CampoFaltando` que esta seção mostra; permite à barra de geração achá-la e abri-la. */
+  bloco?: BlocoFormulario;
   /** Rótulos do que ainda falta neste bloco; vazio = bloco completo (✓). */
   faltando: string[];
   /** Bloco começa aberto (padrão) ou recolhido. */
@@ -15,6 +19,7 @@ export interface FormBlockProps {
 export function FormBlock({
   numero,
   titulo,
+  bloco,
   faltando,
   abertoInicial = true,
   children,
@@ -22,9 +27,33 @@ export function FormBlock({
   const [aberto, setAberto] = useState(abertoInicial);
   const conteudoId = useId();
   const completo = faltando.length === 0;
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  /** Controle a focar assim que o bloco terminar de abrir (pedido por `focarCampo`). */
+  const focarDepoisRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const conteudo = conteudoRef.current;
+    if (!conteudo) return;
+    const revelar = (e: Event) => {
+      const { alvo } = (e as CustomEvent<DetalheRevelar>).detail;
+      focarDepoisRef.current = alvo;
+      setAberto(true);
+    };
+    conteudo.addEventListener(EVENTO_REVELAR, revelar);
+    return () => {
+      conteudo.removeEventListener(EVENTO_REVELAR, revelar);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!aberto) return;
+    const alvo = focarDepoisRef.current;
+    focarDepoisRef.current = null;
+    alvo?.focus();
+  }, [aberto]);
 
   return (
-    <section className={styles.bloco} aria-label={titulo}>
+    <section className={styles.bloco} aria-label={titulo} data-bloco={bloco}>
       <h2 className={styles.blocoTitulo}>
         <button
           type="button"
@@ -51,7 +80,13 @@ export function FormBlock({
           </span>
         </button>
       </h2>
-      <div id={conteudoId} className={styles.blocoConteudo} hidden={!aberto}>
+      <div
+        ref={conteudoRef}
+        id={conteudoId}
+        className={styles.blocoConteudo}
+        hidden={!aberto}
+        data-bloco-conteudo=""
+      >
         {children}
       </div>
     </section>

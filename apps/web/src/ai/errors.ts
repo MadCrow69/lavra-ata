@@ -119,3 +119,22 @@ export function erroProvedor(
     opcoes.repetivel,
   );
 }
+
+/** Causa curta de cada erro, para listas compactas (ex.: "OpenAI falhou: limite de uso"). */
+const RESUMO_DO_ERRO: Record<ErroTipo, string> = {
+  chave_invalida: 'chave recusada ou sem crédito',
+  limite: 'limite de uso',
+  instavel: 'instabilidade no provedor',
+  cortado: 'resposta cortada',
+  json_invalido: 'resposta fora do formato',
+  recusa: 'recusou o conteúdo',
+  rede: 'falha de conexão',
+  parametro: 'modelo não aceitou a configuração',
+  muito_longo: 'transcrição grande demais para o modelo',
+  inesperado: 'erro inesperado',
+  cancelado: 'cancelado',
+};
+
+export function resumoDoErro(tipo: ErroTipo): string {
+  return RESUMO_DO_ERRO[tipo];
+}

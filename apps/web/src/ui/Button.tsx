@@ -1,7 +1,7 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ComponentPropsWithRef } from 'react';
 import styles from './Button.module.css';
 
-export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> {
+export interface ButtonProps extends Omit<ComponentPropsWithRef<'button'>, 'className'> {
   variante?: 'primario' | 'secundario' | 'perigo';
 }
 

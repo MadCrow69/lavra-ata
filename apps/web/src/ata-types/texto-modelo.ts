@@ -1,4 +1,4 @@
-import { formatarDataPorExtenso, formatarHora } from '../domain/dates';
+import { formatarData, formatarDataPorExtenso, formatarHora } from '../domain/dates';
 
 /** Marcador de lacuna que a pessoa vê destacado na folha e deve preencher à mão. */
 export function preencher(oQueFalta: string): string {
@@ -26,6 +26,11 @@ function formatarOuNulo(
     if (erro instanceof RangeError) return null;
     throw erro;
   }
+}
+
+/** '2026-10-14' → '14/10/2026'; vazia ou inválida → `null`. */
+export function dataOuNulo(iso: string | undefined): string | null {
+  return formatarOuNulo(formatarData, iso);
 }
 
 export function dataPorExtensoOuNulo(iso: string | undefined): string | null {

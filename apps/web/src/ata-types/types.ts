@@ -37,6 +37,11 @@ export interface AtaTypeDefinition {
   /** Seções geradas, na ordem do documento. */
   secoes: SecaoDef[];
   temEncaminhamentos: boolean;
+  /**
+   * Campos do formulário enviados à IA como contexto (ex.: data, modalidade). Só metadados não
+   * sensíveis: os demais (organização, local, condução…) vão direto do formulário para o documento.
+   */
+  camposNoPrompt: string[];
   /** Regras de prompt específicas do tipo (as comuns ficam em `regras-comuns.ts`). */
   regrasPrompt: string[];
   titulo: (dados: Record<string, string>) => string;

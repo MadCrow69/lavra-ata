@@ -45,3 +45,11 @@ export function fraseDoSelo(total: number, contagem: Partial<Record<PiiType, num
       : `${String(total)} dados pessoais serão protegidos`;
   return `${quantos} (${descreverContagem(contagem)})`;
 }
+
+/** Tipos de nome feminino (o resto é masculino): "uma placa", "um telefone". */
+const FEMININOS: ReadonlySet<PiiType> = new Set<PiiType>(['PLACA']);
+
+/** "um telefone", "um CPF", "uma placa" — nome do tipo com artigo indefinido. */
+export function nomeComArtigo(tipo: PiiType): string {
+  return `${FEMININOS.has(tipo) ? 'uma' : 'um'} ${ROTULOS[tipo][0]}`;
+}

@@ -1,3 +1,4 @@
+import { LIMITE_TRANSCRICAO } from '../config/limits';
 import type { AtaDraft } from '../domain/draft';
 import { corporativa } from './corporativa';
 import { textoLimpo } from './texto-modelo';
@@ -33,8 +34,9 @@ export function mensagemObrigatorio(campo: CampoDef, dados: Record<string, strin
 }
 
 /**
- * Tudo que ainda impede a ata de sair completa, na ordem do formulário.
- * A transcrição entra aqui mesmo antes de existir a tela dela.
+ * Tudo que ainda impede a ata de sair completa, na ordem do formulário. Fonte única do bloqueio
+ * da geração: os blocos e a barra de geração leem daqui (inclusive o limite da transcrição).
+ * `campo` é o id que a tela usa em `data-campo` para levar o foco ao campo (`focar-campo.ts`).
  */
 export function camposFaltando(d: AtaDraft, tipo: AtaTypeDefinition): CampoFaltando[] {
   const faltas: CampoFaltando[] = [];
@@ -68,6 +70,13 @@ export function camposFaltando(d: AtaDraft, tipo: AtaTypeDefinition): CampoFalta
 
   if (d.transcricao.trim() === '') {
     faltas.push({ bloco: 'transcricao', campo: 'transcricao', rotulo: 'Transcrição' });
+  } else if (d.transcricao.length > LIMITE_TRANSCRICAO) {
+    // Mesmo campo: vazia e acima do limite nunca acontecem juntas.
+    faltas.push({
+      bloco: 'transcricao',
+      campo: 'transcricao',
+      rotulo: 'Transcrição dentro do limite',
+    });
   }
   return faltas;
 }

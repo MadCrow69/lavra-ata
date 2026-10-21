@@ -4,6 +4,13 @@ import type { ProviderId } from '../ai/types';
 export const PRESENCAS = ['presente', 'ausente', 'justificado'] as const;
 export type Presenca = (typeof PRESENCAS)[number];
 
+/** Nome de cada presença exibido ao usuário e enviado à IA. */
+export const ROTULO_PRESENCA: Record<Presenca, string> = {
+  presente: 'Presente',
+  ausente: 'Ausente',
+  justificado: 'Ausência justificada',
+};
+
 export const TONS = ['formal', 'conciso', 'detalhado'] as const;
 export type Tom = (typeof TONS)[number];
 
@@ -47,7 +54,10 @@ export interface Atribuicao {
   fallbackDe: ProviderId[];
 }
 
-/** `atribuicao` e `avisos` usam a chave da seção (`'encaminhamentos'` incluso). */
+/**
+ * `atribuicao` e `avisos` usam a chave da seção (`'encaminhamentos'` incluso). `avisos` tem ainda
+ * a chave `CHAVE_AVISOS_GERAIS` para o que vale para a ata toda (ex.: colisão de marcador).
+ */
 export interface ResultadoAta {
   secoes: Record<string, Bloco[]>;
   encaminhamentos: Encaminhamento[];

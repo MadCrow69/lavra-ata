@@ -11,6 +11,7 @@ import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { PrivacyPreview } from '../privacy/PrivacyPreview';
 import { vttParaTexto } from '../transcript/vtt';
+import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
 import styles from './transcricao.module.css';
 
@@ -52,7 +53,6 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const faltando = camposFaltando(state, tipo)
     .filter((f) => f.bloco === 'transcricao')
     .map((f) => f.rotulo);
-  if (excedido) faltando.push('reduzir a transcrição ao limite');
 
   const definir = (novo: string) => {
     dispatch({ type: 'definirTranscricao', texto: novo });
@@ -132,7 +132,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   };
 
   return (
-    <FormBlock numero={4} titulo="Transcrição" faltando={faltando}>
+    <FormBlock numero={4} titulo="Transcrição" bloco="transcricao" faltando={faltando}>
       <div className={styles.acoes}>
         <Button
           onClick={() => {
@@ -179,6 +179,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         {(controle) => (
           <textarea
             {...controle}
+            {...marcarCampo('transcricao')}
             className={styles.areaTexto}
             rows={12}
             spellCheck={false}

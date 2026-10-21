@@ -4,9 +4,15 @@ import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
 import { useDraft } from '../../domain/DraftContext';
 import { calcularAdicao } from '../../domain/participantes';
-import { PRESENCAS, type DraftAction, type Participante, type Presenca } from '../../domain/draft';
+import {
+  PRESENCAS,
+  ROTULO_PRESENCA,
+  type DraftAction,
+  type Participante,
+} from '../../domain/draft';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
+import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
 import {
   analisarLista,
@@ -16,12 +22,6 @@ import {
   type LinhaParticipante,
 } from './lista-participantes';
 import styles from './form.module.css';
-
-const ROTULO_PRESENCA: Record<Presenca, string> = {
-  presente: 'Presente',
-  ausente: 'Ausente',
-  justificado: 'Ausência justificada',
-};
 
 function plural(n: number, singular: string, pluralForma: string): string {
   return n === 1 ? singular : pluralForma;
@@ -48,6 +48,7 @@ function CampoExtra({
   if (campo.tipo === 'escolha') {
     return (
       <select
+        {...marcarCampo(campo.id)}
         aria-label={rotulo}
         value={valor}
         onChange={(e) => {
@@ -66,6 +67,7 @@ function CampoExtra({
   return (
     <input
       type="text"
+      {...marcarCampo(campo.id)}
       aria-label={rotulo}
       value={valor}
       onChange={(e) => {
@@ -89,6 +91,7 @@ const Linha = memo(function Linha({ participante: p, posicao, tipo, dispatch }: 
       <td data-rotulo="Nome">
         <input
           type="text"
+          {...marcarCampo('nome')}
           aria-label={`Nome do participante ${String(posicao)}`}
           aria-invalid={nomeVazio}
           aria-describedby={nomeVazio ? erroNomeId : undefined}
@@ -268,7 +271,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   };
 
   return (
-    <FormBlock numero={3} titulo="Participantes" faltando={faltando}>
+    <FormBlock numero={3} titulo="Participantes" bloco="participantes" faltando={faltando}>
       <div className={styles.barra}>
         <p className={styles.contador} aria-live="polite">
           {`${String(total)} ${plural(total, 'participante', 'participantes')} · ${String(presentes)} ${plural(presentes, 'presente', 'presentes')}`}
@@ -293,6 +296,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
           {(controle) => (
             <input
               {...controle}
+              {...marcarCampo('participantes')}
               ref={novoNomeRef}
               type="text"
               value={novoNome}

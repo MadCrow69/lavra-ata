@@ -9,6 +9,7 @@ import {
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { useDraft } from '../../domain/DraftContext';
 import { Field } from '../../ui/Field';
+import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
 import styles from './form.module.css';
 
@@ -49,6 +50,7 @@ function CampoDado({ campo, dados, tocado, onChange, onBlur }: CampoDadoProps) {
       {(controle) => {
         const comuns = {
           ...controle,
+          ...marcarCampo(campo.id),
           value: valor,
           onBlur,
         };
@@ -121,6 +123,7 @@ function PautaCampo({ pauta, tocado, onChange, onBlur }: PautaCampoProps) {
       {(controle) => (
         <textarea
           {...controle}
+          {...marcarCampo('pauta')}
           value={texto}
           rows={4}
           onChange={(e) => {
@@ -147,7 +150,7 @@ export function DadosBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   };
 
   return (
-    <FormBlock numero={2} titulo="Dados da reunião" faltando={faltando}>
+    <FormBlock numero={2} titulo="Dados da reunião" bloco="dados" faltando={faltando}>
       <div className={styles.grade}>
         {tipo.campos
           .filter((campo) => ehVisivel(campo, state.dados))

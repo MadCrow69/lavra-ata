@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LIMITE_TRANSCRICAO } from '../config/limits';
 import { criarRascunho } from '../domain/draft-reducer';
 import type { AtaDraft, Participante } from '../domain/draft';
 import { corporativa } from './corporativa';
@@ -126,6 +127,15 @@ describe('camposFaltando', () => {
   it('espaços em branco contam como vazio', () => {
     const d = completo({ transcricao: '   \n ', pauta: ['  '] });
     expect(camposFaltando(d, corporativa).map((f) => f.campo)).toEqual(['pauta', 'transcricao']);
+  });
+
+  it('transcrição acima do limite bloqueia (mesma fonte para o bloco e a barra de geração)', () => {
+    const no = completo({ transcricao: 'a'.repeat(LIMITE_TRANSCRICAO) });
+    expect(camposFaltando(no, corporativa)).toEqual([]);
+    const acima = completo({ transcricao: 'a'.repeat(LIMITE_TRANSCRICAO + 1) });
+    expect(camposFaltando(acima, corporativa)).toEqual([
+      { bloco: 'transcricao', campo: 'transcricao', rotulo: 'Transcrição dentro do limite' },
+    ]);
   });
 
   it('local só falta quando a modalidade é presencial ou híbrida', () => {
