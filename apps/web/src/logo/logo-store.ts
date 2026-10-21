@@ -15,7 +15,7 @@ export interface LogoStore {
   definir: (logo: LogoDoc) => { persistiu: boolean };
   /**
    * Marcar copia a logo atual para `localStorage` (recusado pelo navegador: `lembrar()` fica
-   * false e `persistiu` é false). Desmarcar apaga de lá; a sessão e a memória ficam. Sem logo
+   * false e `persistiu` é false). Desmarcar apaga de lá e regrava a logo atual na sessão. Sem logo
    * não há o que lembrar: nada é gravado e `lembrar()` segue false.
    */
   definirLembrar: (v: boolean) => { persistiu: boolean };
@@ -98,6 +98,9 @@ export function criarLogoStore(sessao?: Storage | null, local?: Storage | null):
   const daSessao = restaurar(alvoSessao);
   let atual: LogoDoc | null = doLocal ?? daSessao;
   let lembrar = doLocal !== null;
+  // A logo lembrada vale mais que a da sessão: espelha na sessão, para que desmarcar "Lembrar" e
+  // recarregar não traga de volta uma logo mais velha que ficou nesta aba.
+  if (doLocal !== null) gravar(alvoSessao, doLocal);
 
   return {
     atual: () => atual,
@@ -118,7 +121,9 @@ export function criarLogoStore(sessao?: Storage | null, local?: Storage | null):
       if (!v) {
         lembrar = false;
         apagar(alvoLocal);
-        return { persistiu: true };
+        // A sessão passa a ser a única cópia: tem de ser a logo atual, não uma mais velha.
+        const naSessao = atual === null ? true : gravar(alvoSessao, atual);
+        return { persistiu: naSessao };
       }
       if (atual === null) return { persistiu: alvoLocal !== null };
       lembrar = gravar(alvoLocal, atual);

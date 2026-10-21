@@ -129,6 +129,43 @@ describe('criarLogoStore', () => {
     expect(s.lembrar()).toBe(true);
   });
 
+  it('o local espelha na sessão ao restaurar: a sessão não guarda mais uma logo mais velha', () => {
+    const sessao = storageFalso();
+    const local = storageFalso();
+    sessao.itens.set(LOGO, gravado({ largura: 10, altura: 10 }));
+    local.itens.set(LOGO, gravado({ largura: 20, altura: 20 }));
+    criarLogoStore(sessao.storage, local.storage);
+    expect(JSON.parse(sessao.itens.get(LOGO) ?? 'null')).toMatchObject({ largura: 20 });
+  });
+
+  it('duas abas: desmarcar "Lembrar" e recarregar não traz de volta a logo velha da sessão', () => {
+    // Aba B ficou com a logo velha na sessão; a aba A trocou a logo e lembrou (local = nova).
+    const sessaoB = storageFalso();
+    const local = storageFalso();
+    sessaoB.itens.set(LOGO, gravado({ largura: 10, altura: 10 }));
+    local.itens.set(LOGO, gravado({ largura: 20, altura: 20 }));
+
+    const aba = criarLogoStore(sessaoB.storage, local.storage);
+    expect(aba.atual()).toMatchObject({ largura: 20 });
+    aba.definirLembrar(false);
+    expect(local.itens.has(LOGO)).toBe(false);
+
+    const recarregada = criarLogoStore(sessaoB.storage, local.storage);
+    expect(recarregada.atual()).toMatchObject({ largura: 20 });
+    expect(recarregada.lembrar()).toBe(false);
+  });
+
+  it('desmarcar lembrar grava a logo atual na sessão, mesmo sem o espelho do restaurar', () => {
+    const sessao = storageFalso();
+    const local = storageFalso();
+    const s = criarLogoStore(sessao.storage, local.storage);
+    s.definir(logo({ largura: 10, altura: 10 }));
+    s.definirLembrar(true);
+    sessao.itens.set(LOGO, gravado({ largura: 99, altura: 99 }));
+    s.definirLembrar(false);
+    expect(JSON.parse(sessao.itens.get(LOGO) ?? 'null')).toMatchObject({ largura: 10 });
+  });
+
   describe('valor gravado inválido é ignorado e apagado', () => {
     const corpoGrande = 'A'.repeat(Math.ceil((LOGO_BYTES_MAX_PNG * 4) / 3) + 8);
     const invalidos: [string, string][] = [
