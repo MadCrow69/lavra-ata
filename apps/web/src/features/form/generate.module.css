@@ -92,12 +92,3 @@
 p.erroDetalhes {
   padding-left: 0;
 }
-
-.avisos {
-  margin: 0;
-  padding: var(--espaco-2) var(--espaco-3);
-  border-left: 4px solid var(--cor-destaque);
-  background: var(--cor-fundo);
-  list-style: none;
-  font-size: 0.9375rem;
-}

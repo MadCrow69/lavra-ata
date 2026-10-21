@@ -110,6 +110,7 @@ function renderizar({
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
   const onConfigurarChaves = vi.fn();
+  const onGerada = vi.fn();
   const { a, gerar } = adaptadores(impl);
   render(
     <KeysProvider store={store}>
@@ -124,6 +125,7 @@ function renderizar({
             ) : null}
             <GenerateBar
               onConfigurarChaves={onConfigurarChaves}
+              onGerada={onGerada}
               opcoesCadeia={{ adaptadores: a, esperaRetryMs: 0 }}
             />
             <Espiao />
@@ -132,7 +134,7 @@ function renderizar({
       </DraftProvider>
     </KeysProvider>,
   );
-  return { onConfigurarChaves, gerar, user: userEvent.setup() };
+  return { onConfigurarChaves, onGerada, gerar, user: userEvent.setup() };
 }
 
 const botaoGerar = () => screen.getByRole('button', { name: /Gerar ata/ });
@@ -214,7 +216,7 @@ describe('GenerateBar', () => {
   });
 
   it('sucesso com fallback: grava a ata e o toast diz quem gerou e quem falhou', async () => {
-    const { user } = renderizar({
+    const { user, onGerada } = renderizar({
       chaves: [OPENAI, GEMINI],
       impl: {
         openai: () => Promise.reject(new ErroProvedor('limite', 'openai', 'limite', 429, false)),
@@ -224,6 +226,8 @@ describe('GenerateBar', () => {
     await user.click(botaoGerar());
     expect(await screen.findByText('Ata gerada por Gemini · gemini-3.8-flash')).toBeVisible();
     expect(screen.getByText('OpenAI falhou: limite de uso')).toBeVisible();
+    // Avisa a bancada (que leva a pessoa à folha) uma vez, só no sucesso.
+    expect(onGerada).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('espiao')).toHaveTextContent(`Reembolso a ${CPF}.`);
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
@@ -279,7 +283,7 @@ describe('GenerateBar', () => {
   });
 
   it('erro: a mensagem nunca traz a chave nem o CPF', async () => {
-    const { user } = renderizar({
+    const { user, onGerada } = renderizar({
       chaves: [OPENAI],
       impl: { openai: () => Promise.reject(new Error(`falhou ${OPENAI.chave} ${CPF}`)) },
     });
@@ -287,6 +291,7 @@ describe('GenerateBar', () => {
     const alerta = await screen.findByRole('alert');
     expect(alerta.textContent).not.toContain(OPENAI.chave);
     expect(alerta.textContent).not.toContain(CPF);
+    expect(onGerada).not.toHaveBeenCalled();
   });
 
   it('regerar tudo com conteúdo existente pede confirmação', async () => {
@@ -317,7 +322,7 @@ describe('GenerateBar', () => {
     expect(screen.getByTestId('espiao')).toHaveTextContent(`Reembolso a ${CPF}.`);
   });
 
-  it('avisos gerais da última geração (colisão de marcador) ficam à vista', () => {
+  it('avisos gerais não se repetem na barra (o lugar deles é acima da folha)', () => {
     renderizar({
       chaves: [OPENAI],
       inicial: completo({
@@ -333,8 +338,8 @@ describe('GenerateBar', () => {
       }),
     });
     expect(
-      screen.getByText('Seu texto já tinha um trecho parecido com um marcador.'),
-    ).toBeVisible();
+      screen.queryByText('Seu texto já tinha um trecho parecido com um marcador.'),
+    ).not.toBeInTheDocument();
   });
 
   it('desmontar durante a geração cancela a chamada', async () => {

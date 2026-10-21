@@ -27,6 +27,12 @@ interface OperacaoIAApi {
    * outro). A vez só é liberada quando quem a iniciou chamar `concluir`.
    */
   cancelar: (controle: AbortController) => void;
+  /**
+   * Aborta a operação em andamento, seja de quem for, e libera a vez na hora (ex.: "Nova ata").
+   * Quem a iniciou descarta o resultado tardio; o `concluir` dele vira nada (o controle já não é o
+   * da vez).
+   */
+  interromper: () => void;
 }
 
 const OperacaoIAContext = createContext<OperacaoIAApi | null>(null);
@@ -66,6 +72,14 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
     controle.abort();
   }, []);
 
+  const interromper = useCallback(() => {
+    const ativa = ativaRef.current;
+    if (ativa === null) return;
+    ativaRef.current = null;
+    ativa.controle.abort();
+    setOperacao(null);
+  }, []);
+
   // Sair da tela no meio de uma chamada a cancela (o resultado tardio é descartado pelo pipeline).
   useEffect(
     () => () => {
@@ -75,8 +89,8 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
   );
 
   const api = useMemo(
-    () => ({ operacao, iniciar, concluir, cancelar }),
-    [operacao, iniciar, concluir, cancelar],
+    () => ({ operacao, iniciar, concluir, cancelar, interromper }),
+    [operacao, iniciar, concluir, cancelar, interromper],
   );
   return <OperacaoIAContext value={api}>{children}</OperacaoIAContext>;
 }

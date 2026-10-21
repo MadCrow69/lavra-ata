@@ -245,10 +245,22 @@ function SecaoGerada({ bloco, opcoesCadeia }: { bloco: DocSecao; opcoesCadeia?: 
   const [editando, setEditando] = useState(false);
   const editarRef = useRef<HTMLButtonElement>(null);
   const estavaEditandoRef = useRef(false);
+  // Conteúdo da seção quando o editor abriu. Se ele for trocado por fora (a ata inteira gerada de
+  // novo), o editor fecha: salvar o texto antigo por cima do novo desfaria a geração.
+  const conteudo =
+    chave === CHAVE_ENCAMINHAMENTOS ? resultado?.encaminhamentos : resultado?.secoes[chave];
+  const [conteudoAoAbrir, setConteudoAoAbrir] = useState<unknown>(null);
+  if (editando && conteudo !== conteudoAoAbrir) {
+    setEditando(false);
+  }
 
-  // Ao fechar o editor (salvar ou cancelar) o foco volta ao botão Editar.
+  // Ao fechar o editor (salvar, cancelar ou troca por fora) o foco que se perdeu com ele volta ao
+  // botão Editar; foco que já está em outro lugar (ex.: na barra de geração) fica onde está.
   useEffect(() => {
-    if (estavaEditandoRef.current && !editando) editarRef.current?.focus();
+    if (estavaEditandoRef.current && !editando) {
+      const ativo = document.activeElement;
+      if (ativo === null || ativo === document.body) editarRef.current?.focus();
+    }
     estavaEditandoRef.current = editando;
   }, [editando]);
 
@@ -297,6 +309,7 @@ function SecaoGerada({ bloco, opcoesCadeia }: { bloco: DocSecao; opcoesCadeia?: 
         vazia={vazia}
         editando={editando}
         onEditar={() => {
+          setConteudoAoAbrir(conteudo);
           setEditando(true);
         }}
         editarRef={editarRef}
@@ -478,7 +491,8 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
         lang="pt-BR"
         aria-label="Prévia da ata"
       >
-        <header className={styles.cabecalho}>
+        {/* Timbre da folha: `div` e não `header`, para não virar um segundo marco "banner". */}
+        <div className={styles.cabecalho}>
           <div className={styles.logo}>
             {modelo.cabecalho.logo === null ? (
               <span className={styles.logoReserva}>Sua logo</span>
@@ -493,7 +507,7 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
               </p>
             ))}
           </div>
-        </header>
+        </div>
         <h2 className={styles.titulo}>
           <Texto texto={modelo.titulo} />
         </h2>

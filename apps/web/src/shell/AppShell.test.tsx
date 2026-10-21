@@ -53,7 +53,7 @@ describe('AppShell em tela larga', () => {
     const onConfigurarChaves = vi.fn();
     renderizar(onConfigurarChaves);
 
-    expect(screen.getByText(SITE.nome)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: SITE.nome })).toBeInTheDocument();
     const repo = screen.getByRole('link', { name: /GitHub/ });
     expect(repo).toHaveAttribute('href', SITE.repositorio);
     expect(repo).toHaveAttribute('rel', expect.stringContaining('noopener'));
@@ -74,16 +74,15 @@ describe('AppShell em tela larga', () => {
     simularLargura(true);
     renderizar();
 
-    const autor = screen.getByRole('link', { name: SITE.autor });
+    const autor = screen.getByRole('link', { name: `${SITE.autor} (abre em nova aba)` });
     expect(autor).toHaveAttribute('href', SITE.linkedin);
     expect(autor).toHaveAttribute('target', '_blank');
     expect(autor).toHaveAttribute('rel', expect.stringContaining('noopener'));
     expect(autor).toHaveAttribute('rel', expect.stringContaining('noreferrer'));
 
-    expect(screen.getByRole('link', { name: 'Código aberto (MIT)' })).toHaveAttribute(
-      'href',
-      SITE.repositorio,
-    );
+    expect(
+      screen.getByRole('link', { name: 'Código aberto (MIT) (abre em nova aba)' }),
+    ).toHaveAttribute('href', SITE.repositorio);
   });
 
   it('rodapé: "versão de desenvolvimento" quando o commit é dev', () => {
@@ -148,6 +147,38 @@ describe('AppShell em tela estreita', () => {
     expect(screen.getByRole('tab', { name: 'Documento' })).toHaveAttribute('tabindex', '-1');
   });
 
+  it('o painel de aba entra na ordem do Tab (APG)', () => {
+    simularLargura(false);
+    renderizar();
+
+    expect(screen.getByRole('tabpanel', { name: 'Editar' })).toHaveAttribute('tabindex', '0');
+  });
+
+  it('controlada: segue a aba de quem monta a casca e avisa a troca; mostra o contador de avisos', async () => {
+    simularLargura(false);
+    const onTrocarAba = vi.fn();
+    render(
+      <KeysProvider>
+        <AppShell
+          editar={<p>a</p>}
+          documento={<p>folha</p>}
+          onConfigurarChaves={vi.fn()}
+          aba="documento"
+          onTrocarAba={onTrocarAba}
+          avisos={{ documento: 2 }}
+        />
+      </KeysProvider>,
+    );
+
+    const documento = screen.getByRole('tab', { name: 'Documento, 2 avisos' });
+    expect(documento).toHaveAttribute('aria-selected', 'true');
+    expect(documento).toHaveTextContent('⚠ 2');
+    expect(screen.getByText('folha')).toBeVisible();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Editar' }));
+    expect(onTrocarAba).toHaveBeenCalledWith('editar');
+  });
+
   it('manter o conteúdo do painel oculto montado preserva o que foi digitado', async () => {
     simularLargura(false);
     render(
@@ -204,7 +235,7 @@ describe('Footer', () => {
   it('com commit real, mostra os 7 primeiros caracteres e liga ao commit', () => {
     render(<Footer commit="0123456789abcdef0123456789abcdef01234567" />);
 
-    const versao = screen.getByRole('link', { name: 'versão 0123456' });
+    const versao = screen.getByRole('link', { name: 'versão 0123456 (abre em nova aba)' });
     expect(versao).toHaveAttribute(
       'href',
       `${SITE.repositorio}/commit/0123456789abcdef0123456789abcdef01234567`,

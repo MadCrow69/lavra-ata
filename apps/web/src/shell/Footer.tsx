@@ -1,4 +1,5 @@
 import { COMMIT_CURTO_TAMANHO, COMMIT_DESENVOLVIMENTO, SITE } from '../config/site';
+import { LinkExterno } from '../ui/LinkExterno';
 import styles from './AppShell.module.css';
 
 export interface FooterProps {
@@ -13,27 +14,18 @@ export function Footer({ commit = SITE.commit }: FooterProps) {
     <footer className={styles.rodape}>
       <ul className={styles.listaRodape}>
         <li>
-          Feito por{' '}
-          <a href={SITE.linkedin} target="_blank" rel="noopener noreferrer">
-            {SITE.autor}
-          </a>
+          Feito por <LinkExterno href={SITE.linkedin}>{SITE.autor}</LinkExterno>
         </li>
         <li>
-          <a href={SITE.repositorio} target="_blank" rel="noopener noreferrer">
-            Código aberto (MIT)
-          </a>
+          <LinkExterno href={SITE.repositorio}>Código aberto (MIT)</LinkExterno>
         </li>
         <li>
           {emDesenvolvimento ? (
             'versão de desenvolvimento'
           ) : (
-            <a
-              href={`${SITE.repositorio}/commit/${commit}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <LinkExterno href={`${SITE.repositorio}/commit/${commit}`}>
               {`versão ${commit.slice(0, COMMIT_CURTO_TAMANHO)}`}
-            </a>
+            </LinkExterno>
           )}
         </li>
       </ul>

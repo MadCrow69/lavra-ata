@@ -1,0 +1,55 @@
+.coluna {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+  min-width: 0;
+}
+
+/* "Nova ata" e o aviso de rascunho recuperado, acima do formulário. */
+.topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--espaco-3);
+}
+
+.recuperado {
+  display: flex;
+  flex: 1 1 18rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-2) var(--espaco-3);
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-primaria);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+}
+
+.recuperadoTexto {
+  margin: 0;
+  font-weight: 600;
+}
+
+.recuperadoAcoes {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.fechar {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+/* Alvo da rolagem depois de gerar; a margem deixa a folha abaixo das abas fixas do celular. */
+.documento {
+  min-width: 0;
+  scroll-margin-top: 4rem;
+}

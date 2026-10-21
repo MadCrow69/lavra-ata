@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ---------- Cabeçalho ---------- */
@@ -26,6 +27,7 @@
 }
 
 .nome {
+  margin: 0;
   font-family: var(--fonte-titulo);
   font-size: 1.5rem;
   font-weight: 700;
@@ -85,6 +87,17 @@
 .aba[aria-selected='true'] {
   border-bottom-color: var(--cor-destaque);
   color: var(--cor-texto);
+}
+
+/* Contador de avisos na aba: texto além da cor. */
+.indicador {
+  margin-left: var(--espaco-2);
+  padding: 0 var(--espaco-2);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-destaque);
+  color: var(--cor-destaque-texto);
+  font-size: 0.8125rem;
 }
 
 /* ---------- Painéis ---------- */

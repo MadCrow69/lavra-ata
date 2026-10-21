@@ -109,6 +109,36 @@ describe('OperacaoIA', () => {
     expect((controle as AbortController | null)?.signal.aborted).toBe(true);
   });
 
+  it('interromper aborta a operação de qualquer dono e libera a vez na hora', () => {
+    const { result } = renderHook(() => useOperacaoIA(), { wrapper: envolver });
+    let antigo: AbortController | null = null;
+    act(() => {
+      antigo = result.current.iniciar({ tipo: 'ata' });
+    });
+    act(() => {
+      result.current.interromper();
+    });
+    expect((antigo as AbortController | null)?.signal.aborted).toBe(true);
+    expect(result.current.operacao).toBeNull();
+
+    // Uma operação nova começa; o concluir tardio do controle antigo não a libera.
+    act(() => {
+      result.current.iniciar({ tipo: 'secao', chave: 'resumo' });
+    });
+    act(() => {
+      if (antigo) result.current.concluir(antigo);
+    });
+    expect(result.current.operacao).toEqual({ tipo: 'secao', chave: 'resumo' });
+  });
+
+  it('interromper sem operação em andamento não faz nada', () => {
+    const { result } = renderHook(() => useOperacaoIA(), { wrapper: envolver });
+    act(() => {
+      result.current.interromper();
+    });
+    expect(result.current.operacao).toBeNull();
+  });
+
   it('usar fora do provedor é um erro explícito', () => {
     expect(() => renderHook(() => useOperacaoIA())).toThrow(/OperacaoIAProvider/);
   });

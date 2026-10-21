@@ -5,7 +5,6 @@ import { ErroProvedor, resumoDoErro } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
-import { CHAVE_AVISOS_GERAIS } from '../../domain/draft-reducer';
 import { descreverErroDeGeracao } from '../../generation/erro-geracao';
 import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
 import { gerarAta } from '../../generation/pipeline';
@@ -20,6 +19,8 @@ export interface GenerateBarProps {
   onConfigurarChaves: () => void;
   /** Substitui os adaptadores reais e a espera do retry (testes). */
   opcoesCadeia?: OpcoesCadeia;
+  /** A ata nova entrou no rascunho (a bancada leva a pessoa até a folha). */
+  onGerada?: () => void;
 }
 
 type Estado =
@@ -35,7 +36,7 @@ function estadoDeErro(e: unknown): Estado {
  * Barra de geração da ata: o que falta, para quem vai, progresso, cancelar, erro e confirmação
  * antes de substituir uma ata já gerada. O rascunho só muda no sucesso.
  */
-export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarProps) {
+export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: GenerateBarProps) {
   const { state, dispatch } = useDraft();
   const keys = useKeys();
   const { mostrar } = useToast();
@@ -55,7 +56,6 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
   const cadeia = keys.cadeia();
   const gerando = operacao?.tipo === 'ata';
   const ocupadaPorSecao = operacao !== null && !gerando;
-  const avisosGerais = state.resultado?.avisos[CHAVE_AVISOS_GERAIS] ?? [];
 
   // Desmontar no meio da geração cancela a chamada (e o resultado tardio é ignorado).
   useEffect(
@@ -102,6 +102,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
           (f) => `${ROTULO_CURTO[f.provedor]} falhou: ${resumoDoErro(f.erro)}`,
         ),
       });
+      onGerada?.();
     } catch (e) {
       if (controleRef.current !== controle) return;
       setEstado(
@@ -135,17 +136,6 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
 
   return (
     <section className={styles.barra} aria-label="Gerar ata">
-      {avisosGerais.length > 0 ? (
-        <ul className={styles.avisos}>
-          {avisosGerais.map((aviso) => (
-            <li key={aviso}>
-              <span aria-hidden="true">⚠ </span>
-              {aviso}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
       <div className={styles.acoes}>
         <Button
           ref={gerarRef}

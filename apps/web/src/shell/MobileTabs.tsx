@@ -14,9 +14,11 @@ export const idDoPainel = (id: AbaId) => `painel-${id}`;
 export interface MobileTabsProps {
   ativa: AbaId;
   onChange: (id: AbaId) => void;
+  /** Avisos por aba (ex.: avisos da ata na aba Documento), para não passarem despercebidos. */
+  avisos?: Partial<Record<AbaId, number>>;
 }
 
-export function MobileTabs({ ativa, onChange }: MobileTabsProps) {
+export function MobileTabs({ ativa, onChange, avisos = {} }: MobileTabsProps) {
   const abasRef = useRef<Partial<Record<AbaId, HTMLButtonElement | null>>>({});
 
   function aoTeclar(evento: KeyboardEvent<HTMLButtonElement>, indice: number) {
@@ -39,6 +41,7 @@ export function MobileTabs({ ativa, onChange }: MobileTabsProps) {
     <div role="tablist" aria-label="Seções do app" className={styles.abas}>
       {ABAS.map(({ id, rotulo }, indice) => {
         const selecionada = id === ativa;
+        const quantos = avisos[id] ?? 0;
         return (
           <button
             key={id}
@@ -60,6 +63,12 @@ export function MobileTabs({ ativa, onChange }: MobileTabsProps) {
             }}
           >
             {rotulo}
+            {quantos > 0 ? (
+              <span className={styles.indicador}>
+                <span aria-hidden="true">{`⚠ ${String(quantos)}`}</span>
+                <span className="somente-leitor">{`, ${String(quantos)} ${quantos === 1 ? 'aviso' : 'avisos'}`}</span>
+              </span>
+            ) : null}
           </button>
         );
       })}

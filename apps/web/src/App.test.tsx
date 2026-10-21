@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
+import { RASCUNHO } from './config/storage-keys';
 
 afterEach(() => {
   localStorage.clear();
@@ -41,8 +42,13 @@ describe('App', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     const cabecalho = screen.getByRole('banner');
     expect(within(cabecalho).getByRole('button')).toHaveTextContent('IA: Gemini → OpenAI');
-    // Sem "Lembrar", nada foi gravado no navegador.
+    // Sem "Lembrar", a chave não foi gravada no navegador; a sessão guarda só o rascunho.
     expect(localStorage.length).toBe(0);
-    expect(sessionStorage.length).toBe(0);
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const nome = sessionStorage.key(i) ?? '';
+      expect(nome).toBe(RASCUNHO);
+      expect(sessionStorage.getItem(nome)).not.toContain('sk-teste-ficticia-0002');
+      expect(sessionStorage.getItem(nome)).not.toContain('AIzaTesteFicticia0001');
+    }
   });
 });

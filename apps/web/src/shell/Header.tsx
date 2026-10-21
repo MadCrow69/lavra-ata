@@ -1,6 +1,7 @@
 import { useKeys } from '../ai/KeysContext';
 import { ROTULO_CURTO } from '../config/models';
 import { SITE } from '../config/site';
+import { LinkExterno } from '../ui/LinkExterno';
 import styles from './AppShell.module.css';
 
 export interface HeaderProps {
@@ -14,13 +15,11 @@ export function Header({ onConfigurarChaves }: HeaderProps) {
   return (
     <header className={styles.cabecalho}>
       <div className={styles.marca}>
-        <span className={styles.nome}>{SITE.nome}</span>
+        <h1 className={styles.nome}>{SITE.nome}</h1>
         <span className={styles.slogan}>{SITE.slogan}</span>
       </div>
       <nav className={styles.acoes} aria-label="Ações do cabeçalho">
-        <a href={SITE.repositorio} target="_blank" rel="noopener noreferrer">
-          GitHub ↗
-        </a>
+        <LinkExterno href={SITE.repositorio}>GitHub</LinkExterno>
         <button type="button" className={styles.botaoPrimario} onClick={onConfigurarChaves}>
           {ativos.length === 0 ? (
             'Configurar chaves de IA'
