@@ -7,6 +7,8 @@ Obrigado pelo interesse! Contribuições são bem-vindas: correções, melhorias
 - [pnpm](https://pnpm.io/installation) instalado.
 - Node 24 e pnpm 10 são provisionados automaticamente por projeto (campo `packageManager` e `use-node-version` no `.npmrc`). Não é preciso instalar nem trocar o Node globalmente, nem usar corepack.
 - A versão do Node fica em `.nvmrc` e em `use-node-version` no `.npmrc`; atualize os dois juntos. O Dependabot não atualiza o Node, então patches de segurança do Node são manuais.
+- O pnpm recusa versões de dependências publicadas há menos de 7 dias (`minimumReleaseAge` em `pnpm-workspace.yaml`); é proposital, então uma versão recém-lançada só pode ser instalada depois desse prazo.
+- Se o pnpm ou o Dependabot falhar com `ERR_PNPM_NO_MATURE_MATCHING_VERSION`, aguarde os 7 dias. Use `minimumReleaseAgeExclude` apenas para um patch de segurança urgente e documente o motivo no PR.
 
 ## Comandos
 

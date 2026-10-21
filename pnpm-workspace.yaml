@@ -4,3 +4,7 @@ packages:
 
 ignoredBuiltDependencies:
   - lefthook
+
+# Cadeia de suprimentos: só aceita versões publicadas há pelo menos 7 dias
+# (minutos; 10080 = 7 dias). Alinhado ao cooldown de 7 dias do Dependabot.
+minimumReleaseAge: 10080
