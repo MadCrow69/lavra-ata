@@ -116,3 +116,74 @@ describe('validateOutput', () => {
     expect(r.newIdentifiers[0]?.value).toBe('(11) 98888-7777');
   });
 });
+
+describe('validateOutput: marcadores quebrados que o unmask não restaura', () => {
+  const quebrados: [string, string][] = [
+    ['sem colchetes', 'CPF_1'],
+    ['colchete de abertura sem fechamento', '[CPF_1'],
+    ['parênteses', '(CPF_1)'],
+    ['chaves', '{CPF_1}'],
+    ['sublinhado duplo', '[CPF__1]'],
+    ['espaço depois do sublinhado', '[CPF_ 1]'],
+  ];
+
+  it.each(quebrados)('%s: %s é malformado e reprova', (_nome, literal) => {
+    const r = validateOutput(`Ref ${literal} no texto.`, map, original);
+    expect(r.malformedMarkers).toEqual([literal]);
+    expect(r.unknownMarkers).toEqual([]);
+    expect(r.ok).toBe(false);
+  });
+
+  it('escape de markdown [CPF\\_1] é reconhecido: malformado (não canônico), mas o unmask restaura', () => {
+    const r = validateOutput(String.raw`Ref [CPF\_1] no texto.`, map, original);
+    expect(r.malformedMarkers).toEqual([String.raw`[CPF\_1]`]);
+    expect(r.ok).toBe(false);
+  });
+
+  it('o marcador canônico não gera sobra', () => {
+    const r = validateOutput('Ref [CPF_1] e [CPF_1].', map, original);
+    expect(r.malformedMarkers).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it('sem repetição, na ordem de aparição, de qualquer um dos 9 tipos', () => {
+    const { map: m } = mask('CPF 529.982.247-25 e e-mail ana@exemplo.com.br');
+    const r = validateOutput('EMAIL_1, CPF_1, EMAIL_1 e [cpf_1]', m, '');
+    expect(r.malformedMarkers).toEqual(['EMAIL_1', 'CPF_1', '[cpf_1]']);
+  });
+
+  it('número fora do mapa, mas colado em pontuação de marcador, também reprova', () => {
+    expect(validateOutput('Ref CPF_9', map, original).ok).toBe(false);
+    expect(validateOutput('Ref [CPF_9', map, original).ok).toBe(false);
+  });
+
+  it('prosa normal com o nome do tipo e um número que não é marcador não reprova', () => {
+    const prosa = [
+      'Enviar ao CEP 01310100 conforme combinado.',
+      'O CEP 01310-100 fica em São Paulo.',
+      'Conferir o RG 2 e o CPF 3 na planilha de 2026.',
+      'A PLACA 1 do pátio e o PIS 77 da lista.',
+      'O RG1234 e o cartao 8 não são marcadores.',
+    ];
+    for (const texto of prosa) {
+      const r = validateOutput(texto, map, texto);
+      expect(r.malformedMarkers, texto).toEqual([]);
+    }
+  });
+
+  it('palavra que apenas contém o nome do tipo não conta ("PRG1", "ACEP_1")', () => {
+    expect(validateOutput('PRG1 e ACEP_1', map, original).malformedMarkers).toEqual([]);
+  });
+
+  it('número do mapa em prosa, sem pontuação de marcador, reprova (sobre-sinalizar é aceitável)', () => {
+    const r = validateOutput('Ver CPF 1 do cadastro', map, original);
+    expect(r.malformedMarkers).toEqual(['CPF 1']);
+  });
+
+  it('entrada longa e patológica não trava', () => {
+    const lixo = `CPF${' _'.repeat(25_000)}`;
+    const t0 = performance.now();
+    validateOutput(lixo, map, original);
+    expect(performance.now() - t0).toBeLessThan(1000);
+  });
+});

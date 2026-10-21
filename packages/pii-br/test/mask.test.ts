@@ -255,3 +255,10 @@ describe('mask: cartão com grupo anexo (CVV)', () => {
     expect(masked).toBe('[CARTAO_1] e [CARTAO_1]');
   });
 });
+
+describe('unmask: escape de markdown', () => {
+  it(String.raw`restaura [CPF\_1] (modelo que escapa o sublinhado)`, () => {
+    const { map } = mask('CPF 529.982.247-25');
+    expect(unmask(String.raw`Ref [CPF\_1] ok`, map)).toBe('Ref 529.982.247-25 ok');
+  });
+});

@@ -8,11 +8,12 @@ export const MARKER_PATTERN = /\[([A-Z]+)_(\d+)\]/g;
 
 /**
  * Forma tolerante, única para `mask` (reserva e colisão) e `unmask` (reidratação): LLMs
- * mudam a caixa, trocam `_` por espaço/hífen e põem espaços internos. O separador
- * `[\s_-]?` e os `\s*` aceitam também quebra de linha. `#` NÃO é aceito de propósito:
+ * mudam a caixa, trocam `_` por espaço/hífen, escapam o sublinhado do markdown (`[CPF\_1]`)
+ * e põem espaços internos. O separador (`\_`, `_`, espaço ou hífen) e os `\s*` aceitam também
+ * quebra de linha. `#` NÃO é aceito de propósito:
  * `[CPF#1]` é a forma visível de um literal do usuário que colidiria com um marcador.
  */
-const TOLERANT_SOURCE = '\\[\\s*([A-Za-z]+)[\\s_-]?(\\d+)\\s*\\]';
+const TOLERANT_SOURCE = '\\[\\s*([A-Za-z]+)(?:\\\\?_|[\\s-])?(\\d+)\\s*\\]';
 
 const PII_TYPE_NAMES: ReadonlySet<string> = new Set(DETECTORS.map((d) => d.type));
 
@@ -34,12 +35,18 @@ export function createMaskMap(): MaskMap {
   return { version: 1, markers: {}, keys: {}, counters: {}, reserved: {} };
 }
 
-/** Aplica `fn` a cada texto com forma de marcador (tolerante); regex nova por chamada. */
+/**
+ * Aplica `fn` a cada texto com forma de marcador (tolerante); regex nova por chamada.
+ * `offset` é a posição do literal em `text`.
+ */
 export function mapMarkerLiterals(
   text: string,
-  fn: (literal: string, type: string, n: string) => string,
+  fn: (literal: string, type: string, n: string, offset: number) => string,
 ): string {
-  return text.replace(new RegExp(TOLERANT_SOURCE, 'g'), fn);
+  return text.replace(
+    new RegExp(TOLERANT_SOURCE, 'g'),
+    (literal: string, type: string, n: string, offset: number) => fn(literal, type, n, offset),
+  );
 }
 
 /**
