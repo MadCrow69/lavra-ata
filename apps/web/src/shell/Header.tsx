@@ -1,3 +1,5 @@
+import { useKeys } from '../ai/KeysContext';
+import { ROTULO_CURTO } from '../config/models';
 import { SITE } from '../config/site';
 import styles from './AppShell.module.css';
 
@@ -6,6 +8,9 @@ export interface HeaderProps {
 }
 
 export function Header({ onConfigurarChaves }: HeaderProps) {
+  const { cadeia } = useKeys();
+  const ativos = cadeia().map((c) => ROTULO_CURTO[c.id]);
+
   return (
     <header className={styles.cabecalho}>
       <div className={styles.marca}>
@@ -17,7 +22,14 @@ export function Header({ onConfigurarChaves }: HeaderProps) {
           GitHub ↗
         </a>
         <button type="button" className={styles.botaoPrimario} onClick={onConfigurarChaves}>
-          Configurar chaves de IA
+          {ativos.length === 0 ? (
+            'Configurar chaves de IA'
+          ) : (
+            <>
+              IA: {ativos.join(' → ')}
+              <span className="somente-leitor"> — configurar chaves de IA</span>
+            </>
+          )}
         </button>
       </nav>
     </header>

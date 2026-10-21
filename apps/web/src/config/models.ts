@@ -51,6 +51,20 @@ export const ROTULO_PROVEDOR: Record<ProviderId, string> = {
   anthropic: 'Anthropic',
 };
 
+/** Nome curto do provedor (cabeçalho, listas compactas). */
+export const ROTULO_CURTO: Record<ProviderId, string> = {
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  anthropic: 'Anthropic',
+};
+
+/** Página oficial onde a pessoa cria a própria chave de API de cada provedor. */
+export const URL_CHAVE: Record<ProviderId, string> = {
+  openai: 'https://platform.openai.com/api-keys',
+  gemini: 'https://aistudio.google.com/apikey',
+  anthropic: 'https://platform.claude.com/settings/keys',
+};
+
 /** Espera, em ms, antes da única nova tentativa após `limite`/`instavel`. */
 export const ESPERA_RETRY_MS = 2_000;
 

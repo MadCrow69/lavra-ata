@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { KeysProvider } from '../ai/KeysContext';
 import { SITE } from '../config/site';
 import { AppShell } from './AppShell';
 import { Footer } from './Footer';
@@ -20,11 +21,13 @@ function simularLargura(largo: boolean): void {
 
 function renderizar(onConfigurarChaves = vi.fn()) {
   return render(
-    <AppShell
-      editar={<p>conteúdo da bancada</p>}
-      documento={<p>conteúdo da folha</p>}
-      onConfigurarChaves={onConfigurarChaves}
-    />,
+    <KeysProvider>
+      <AppShell
+        editar={<p>conteúdo da bancada</p>}
+        documento={<p>conteúdo da folha</p>}
+        onConfigurarChaves={onConfigurarChaves}
+      />
+    </KeysProvider>,
   );
 }
 
@@ -147,11 +150,13 @@ describe('AppShell em tela estreita', () => {
   it('manter o conteúdo do painel oculto montado preserva o que foi digitado', async () => {
     simularLargura(false);
     render(
-      <AppShell
-        editar={<input aria-label="campo" />}
-        documento={<p>folha</p>}
-        onConfigurarChaves={vi.fn()}
-      />,
+      <KeysProvider>
+        <AppShell
+          editar={<input aria-label="campo" />}
+          documento={<p>folha</p>}
+          onConfigurarChaves={vi.fn()}
+        />
+      </KeysProvider>,
     );
     await userEvent.type(screen.getByLabelText('campo'), 'texto');
     await userEvent.click(screen.getByRole('tab', { name: 'Documento' }));
