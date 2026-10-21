@@ -15,10 +15,10 @@ const CONTEXT = [
 ] as const;
 
 // Hífen, meia-risca (U+2013) e hífen tipográfico (U+2010), como saem de editores e
-// transcrições; espaço comum e espaço sem quebra (U+00A0). Montados por código para o
-// arquivo não conter caracteres invisíveis.
-const DASH = String.raw`-` + String.fromCharCode(0x2013, 0x2010);
-const SP = `[ ${String.fromCharCode(0xa0)}]`;
+// transcrições; espaço comum e espaço sem quebra (U+00A0). Escapes `\uXXXX` no texto do
+// padrão: o arquivo fica ASCII, sem caracteres invisíveis.
+const DASH = String.raw`-\u2013\u2010`;
+const SP = String.raw`[ \u00a0]`;
 // Separador entre blocos: até 2 espaços, um traço/ponto opcional, até 2 espaços
 // (`98888 - 7777`, `(11)  98888-7777`). Limitado: nada de repetição ilimitada (ReDoS).
 const SEP = String.raw`${SP}{0,2}[${DASH}.]?${SP}{0,2}`;

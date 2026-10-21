@@ -11,10 +11,12 @@ import type { Detector } from './types';
  * casa só os 16 dígitos. Consequência assumida: cartão de 19 dígitos agrupado
  * 4-4-4-4-3 não é distinguível de 16 + CVV; só o formato colado cobre 19.
  */
+// Um espaço, ou um hífen com espaço opcional de cada lado (`4111 - 1111`).
+const S = String.raw`(?: ?- ?| )`;
 const CARD_FORMS = [
-  String.raw`\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}`, // 4-4-4-4 (16)
-  String.raw`\d{4}[ -]\d{6}[ -]\d{5}`, // 4-6-5 (15, Amex)
-  String.raw`\d{4}[ -]\d{6}[ -]\d{4}`, // 4-6-4 (14, Diners)
+  String.raw`\d{4}${S}\d{4}${S}\d{4}${S}\d{4}`, // 4-4-4-4 (16)
+  String.raw`\d{4}${S}\d{6}${S}\d{5}`, // 4-6-5 (15, Amex)
+  String.raw`\d{4}${S}\d{6}${S}\d{4}`, // 4-6-4 (14, Diners)
   String.raw`\d{13,19}`, // colado
 ].join('|');
 
