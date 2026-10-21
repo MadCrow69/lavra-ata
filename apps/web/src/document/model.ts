@@ -52,3 +52,10 @@ export interface DocumentModel {
    */
   rodapeInterno: string | null;
 }
+
+/** Logo da pessoa já validada e rasterizada: PNG em data URL, com as dimensões em pixels. */
+export interface LogoDoc {
+  dataUrl: string;
+  largura: number;
+  altura: number;
+}
