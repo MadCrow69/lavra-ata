@@ -226,6 +226,26 @@ describe('criarKeyStore', () => {
     expect(store.listar().map((c) => c.provedor)).toEqual(['openai']);
   });
 
+  it('semCredito vale só com "inválida" e some ao trocar a chave ou o veredito', () => {
+    const store = criarKeyStore(null);
+    store.definir(chave());
+    store.definirEstado('openai', CHAVE_OPENAI, 'invalida', true);
+    expect(store.listar()[0]).toMatchObject({ estado: 'invalida', semCredito: true });
+
+    // Só o modelo mudou (o cartão repassa o estado e a marca): continua.
+    store.definir(chave({ modelo: 'modelo-b', estado: 'invalida', semCredito: true }));
+    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-b', semCredito: true });
+
+    // Chave nova, não testada: a marca cai.
+    store.definir(chave({ chave: 'sk-nova-0007' }));
+    expect(store.listar()[0]?.semCredito).toBeUndefined();
+
+    // "Inválida" comum (sem a marca) também apaga a marca anterior.
+    store.definirEstado('openai', 'sk-nova-0007', 'invalida', true);
+    store.definirEstado('openai', 'sk-nova-0007', 'invalida');
+    expect(store.listar()[0]?.semCredito).toBeUndefined();
+  });
+
   it('chave com estado "inválida" fica fora da cadeia, mas continua listada; editar a chave a traz de volta', () => {
     const store = criarKeyStore(null);
     store.definir(chave());

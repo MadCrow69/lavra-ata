@@ -1,5 +1,4 @@
-import { ROTULO_PROVEDOR } from '../../config/models';
-import { ErroProvedor, erroProvedor, sanitizar } from '../errors';
+import { ErroProvedor, erroProvedor, mensagemSemCredito, sanitizar } from '../errors';
 import { validarSchema } from '../json-schema';
 import type { JsonSchema, ProviderId } from '../types';
 
@@ -74,14 +73,10 @@ function lerCorpoDeErro(texto: string): CorpoDeErro {
 
 /** Conta sem crédito ou saldo: a chave não adianta até a pessoa recarregar; sem retry. */
 export function erroSemCredito(provedor: ProviderId, status: number): ErroProvedor {
-  return new ErroProvedor(
-    'chave_invalida',
-    provedor,
-    `A conta de ${ROTULO_PROVEDOR[provedor]} está sem crédito ou saldo. Confira o saldo e a cobrança no painel do provedor.`,
-    status,
-    false,
-    true,
-  );
+  return new ErroProvedor('chave_invalida', provedor, mensagemSemCredito(provedor), status, {
+    repetivel: false,
+    semCredito: true,
+  });
 }
 
 async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProvedor> {

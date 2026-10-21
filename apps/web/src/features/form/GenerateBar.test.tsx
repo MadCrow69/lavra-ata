@@ -244,7 +244,8 @@ describe('GenerateBar', () => {
     const { user, onGerada } = renderizar({
       chaves: [OPENAI, GEMINI],
       impl: {
-        openai: () => Promise.reject(new ErroProvedor('limite', 'openai', 'limite', 429, false)),
+        openai: () =>
+          Promise.reject(new ErroProvedor('limite', 'openai', 'limite', 429, { repetivel: false })),
         gemini: () => Promise.resolve(RESPOSTA),
       },
     });

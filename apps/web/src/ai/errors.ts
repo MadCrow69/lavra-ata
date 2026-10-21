@@ -20,15 +20,14 @@ export class ErroProvedor extends Error {
     provedor: ProviderId,
     mensagem: string,
     status?: number,
-    repetivel: boolean = tipo === 'limite' || tipo === 'instavel',
-    semCredito = false,
+    opcoes: { repetivel?: boolean; semCredito?: boolean } = {},
   ) {
     super(mensagem);
     this.name = 'ErroProvedor';
     this.tipo = tipo;
     this.provedor = provedor;
-    this.repetivel = repetivel;
-    this.semCredito = semCredito;
+    this.repetivel = opcoes.repetivel ?? (tipo === 'limite' || tipo === 'instavel');
+    this.semCredito = opcoes.semCredito ?? false;
     if (status !== undefined) this.status = status;
   }
 }
@@ -120,8 +119,13 @@ export function erroProvedor(
     provedor,
     mensagemDeErro(tipo, provedor, opcoes),
     opcoes.status,
-    opcoes.repetivel,
+    opcoes.repetivel === undefined ? {} : { repetivel: opcoes.repetivel },
   );
+}
+
+/** Conta sem crédito ou saldo: fonte única do texto (erro do provedor e cartão da chave). */
+export function mensagemSemCredito(provedor: ProviderId): string {
+  return `A conta de ${ROTULO_PROVEDOR[provedor]} está sem crédito ou saldo. Confira o saldo e a cobrança no painel do provedor.`;
 }
 
 /** Causa curta de cada erro, para listas compactas (ex.: "OpenAI falhou (limite de uso)"). */

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { gerarComFallback } from './chain';
 import { ErroCadeia, ErroProvedor } from './errors';
+import { criarKeyStore } from './keys';
 import { openaiAdapter } from './providers/openai';
 import type {
   ErroTipo,
@@ -100,7 +101,12 @@ describe('gerarComFallback', () => {
 
   it('instável de resposta 200 (não repetível) avança sem retry nem espera', async () => {
     const { a, gerar } = adaptadores({
-      openai: () => Promise.reject(new ErroProvedor('instavel', 'openai', 'falha 200', 200, false)),
+      openai: () =>
+        Promise.reject(
+          new ErroProvedor('instavel', 'openai', 'falha 200', 200, {
+            repetivel: false,
+          }),
+        ),
       gemini: () => Promise.resolve('ok'),
     });
     const r = await gerarComFallback(cadeia, reqCom(), { adaptadores: a });
@@ -159,7 +165,11 @@ describe('gerarComFallback', () => {
     vi.stubGlobal('fetch', fetchFalso);
     try {
       const { a } = adaptadores({ gemini: () => Promise.resolve({ ok: 2 }) });
-      const aoRecusarChave = vi.fn();
+      const store = criarKeyStore(null);
+      store.definir({ provedor: 'openai', chave: 'k1', modelo: '', estado: 'nao_testada' });
+      const aoRecusarChave = vi.fn((cfg: ProviderConfig, erro: ErroProvedor) => {
+        store.definirEstado(cfg.id, cfg.chave, 'invalida', erro.semCredito);
+      });
       // Sem avançar os timers: se houvesse espera de retry, a promessa não resolveria.
       const r = await gerarComFallback(cadeia, reqCom(), {
         adaptadores: { ...a, openai: openaiAdapter },
@@ -172,7 +182,10 @@ describe('gerarComFallback', () => {
       expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: 'chave_invalida' });
       expect(r.falhas[0]?.mensagem).toContain('sem crédito ou saldo');
       expect(aoRecusarChave).toHaveBeenCalledTimes(1);
-      expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0]);
+      expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0], expect.any(ErroProvedor));
+      // A chave sai da cadeia e fica marcada como sem saldo, não como "mal copiada".
+      expect(store.cadeia()).toEqual([]);
+      expect(store.listar()[0]).toMatchObject({ estado: 'invalida', semCredito: true });
     } finally {
       vi.unstubAllGlobals();
     }
@@ -255,7 +268,7 @@ describe('gerarComFallback', () => {
     const r = await gerarComFallback(cadeia, reqCom(), { adaptadores: a, aoRecusarChave });
     expect(r.provedor).toBe('gemini');
     expect(aoRecusarChave).toHaveBeenCalledTimes(1);
-    expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0]);
+    expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0], expect.any(ErroProvedor));
   });
 
   it('chave recusada também é avisada quando toda a cadeia falha; outros erros não', async () => {
@@ -269,7 +282,7 @@ describe('gerarComFallback', () => {
       gerarComFallback(cadeia, reqCom(), { adaptadores: a, aoRecusarChave }),
     ).rejects.toBeInstanceOf(ErroCadeia);
     expect(aoRecusarChave).toHaveBeenCalledTimes(1);
-    expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[1]);
+    expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[1], expect.any(ErroProvedor));
   });
 
   it('cadeia vazia lança ErroCadeia explicando o que fazer', async () => {

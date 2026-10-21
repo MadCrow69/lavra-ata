@@ -7,6 +7,11 @@ export interface ChaveProvedor {
   chave: string;
   modelo: string;
   estado: 'nao_testada' | 'ok' | 'invalida';
+  /**
+   * Só na memória (como `estado`): a chave foi recusada por falta de crédito, não por estar errada.
+   * Só vale com `estado === 'invalida'`.
+   */
+  semCredito?: boolean;
 }
 
 export interface KeyStore {
@@ -20,7 +25,12 @@ export interface KeyStore {
    * Grava só o veredito do teste. Não faz nada se a chave guardada para o provedor já não é a que
    * foi testada (a pessoa a trocou durante o teste); nunca mexe no modelo escolhido.
    */
-  definirEstado: (p: ProviderId, chave: string, estado: ChaveProvedor['estado']) => void;
+  definirEstado: (
+    p: ProviderId,
+    chave: string,
+    estado: ChaveProvedor['estado'],
+    semCredito?: boolean,
+  ) => void;
   remover: (p: ProviderId) => void;
   reordenar: (ordem: ProviderId[]) => void;
   lembrar: () => boolean;
@@ -188,13 +198,18 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
         chave,
         modelo: modeloOuPadrao(c.provedor, c.modelo),
         estado: c.estado,
+        ...(c.estado === 'invalida' && c.semCredito === true ? { semCredito: true } : {}),
       });
       mudou();
     },
-    definirEstado(p, chave, estado) {
+    definirEstado(p, chave, estado, semCredito = false) {
       const c = chaves.get(p);
-      if (c?.chave !== chave.trim() || c.estado === estado) return;
+      const semCreditoNovo = estado === 'invalida' && semCredito;
+      if (c?.chave !== chave.trim()) return;
+      if (c.estado === estado && (c.semCredito ?? false) === semCreditoNovo) return;
       c.estado = estado;
+      if (semCreditoNovo) c.semCredito = true;
+      else delete c.semCredito;
       mudou();
     },
     remover,

@@ -3,6 +3,7 @@ import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
 import { erroProvedor } from '../../ai/errors';
+import { erroSemCredito } from '../../ai/providers/comum';
 import { KeysProvider } from '../../ai/KeysContext';
 import { criarKeyStore, type KeyStore } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
@@ -335,6 +336,25 @@ describe('Workbench: Nova ata', () => {
     expect(screen.getByLabelText(/^Assunto/)).toHaveValue('');
     // A vez de usar a IA foi liberada para a ata nova.
     expect(screen.queryByText('Aguarde a geração em andamento terminar.')).not.toBeInTheDocument();
+  });
+});
+
+describe('Workbench: conta sem saldo', () => {
+  it('geração recusada por falta de saldo: o cartão da chave mostra o saldo, não "verifique se copiou"', async () => {
+    salvarRascunho(completo());
+    const { user, store } = renderizar({
+      store: comChave(),
+      gerar: () => Promise.reject(erroSemCredito('openai', 429)),
+    });
+    await user.click(botaoGerar());
+    await waitFor(() => {
+      expect(store.cadeia()).toEqual([]);
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Configurar chaves de IA' }));
+    const cartao = within(screen.getByRole('region', { name: 'OpenAI' }));
+    expect(cartao.getByText(/sem crédito ou saldo/)).toBeVisible();
+    expect(cartao.queryByText(/verifique se copiou/)).not.toBeInTheDocument();
   });
 });
 
