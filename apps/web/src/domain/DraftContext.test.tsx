@@ -1,13 +1,16 @@
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DraftProvider, useDraft } from './DraftContext';
 
 describe('useDraft', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('lança erro claro fora do provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(() => renderHook(() => useDraft())).toThrow(/DraftProvider/);
-    vi.restoreAllMocks();
   });
 
   it('expõe state e dispatch', () => {

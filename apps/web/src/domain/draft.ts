@@ -1,8 +1,11 @@
 import type { MaskMap } from '@lavra/pii-br';
 import type { ProviderId } from '../ai/types';
 
-export type Presenca = 'presente' | 'ausente' | 'justificado';
-export type Tom = 'formal' | 'conciso' | 'detalhado';
+export const PRESENCAS = ['presente', 'ausente', 'justificado'] as const;
+export type Presenca = (typeof PRESENCAS)[number];
+
+export const TONS = ['formal', 'conciso', 'detalhado'] as const;
+export type Tom = (typeof TONS)[number];
 
 export interface Participante {
   /** Identidade do participante: nunca casar por nome. */
@@ -14,13 +17,22 @@ export interface Participante {
   extras: Record<string, string>;
 }
 
+export const TIPOS_BLOCO = ['paragrafo', 'lista'] as const;
+export type TipoBloco = (typeof TIPOS_BLOCO)[number];
+
 export interface Bloco {
-  tipo: 'paragrafo' | 'lista';
+  tipo: TipoBloco;
   texto: string;
   itens: string[];
 }
 
-export type StatusEncaminhamento = 'pendente' | 'em_andamento' | 'concluido' | 'cancelado';
+export const STATUS_ENCAMINHAMENTO = [
+  'pendente',
+  'em_andamento',
+  'concluido',
+  'cancelado',
+] as const;
+export type StatusEncaminhamento = (typeof STATUS_ENCAMINHAMENTO)[number];
 
 export interface Encaminhamento {
   acao: string;

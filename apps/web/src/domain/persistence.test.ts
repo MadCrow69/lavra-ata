@@ -23,6 +23,23 @@ function rascunhoCompleto(): AtaDraft {
   });
 }
 
+const MAPA = {
+  version: 1,
+  markers: { '[CPF_1]': '529.982.247-25' },
+  keys: {},
+  counters: { CPF: 1 },
+};
+
+function comParticipante(patch: Record<string, unknown>): unknown {
+  const d = rascunhoCompleto();
+  return { ...d, participantes: [{ ...d.participantes[0], ...patch }] };
+}
+
+function comResultado(patch: Record<string, unknown>): unknown {
+  const d = rascunhoCompleto();
+  return { ...d, resultado: { ...d.resultado, ...patch } };
+}
+
 beforeEach(() => {
   sessionStorage.clear();
   localStorage.clear();
@@ -66,6 +83,42 @@ describe('persistência do rascunho', () => {
     ['dados não é objeto', { ...rascunhoCompleto(), dados: [] }],
     ['mapa de tipo errado', { ...rascunhoCompleto(), mapa: 'x' }],
     ['resultado de tipo errado', { ...rascunhoCompleto(), resultado: 1 }],
+    ['resultado vazio', { ...rascunhoCompleto(), resultado: {} }],
+    ['mapa vazio', { ...rascunhoCompleto(), mapa: {} }],
+    ['mapa com versão errada', { ...rascunhoCompleto(), mapa: { ...MAPA, version: 2 } }],
+    [
+      'mapa com marcador não texto',
+      { ...rascunhoCompleto(), mapa: { ...MAPA, markers: { a: 1 } } },
+    ],
+    [
+      'mapa com contador não numérico',
+      { ...rascunhoCompleto(), mapa: { ...MAPA, counters: { CPF: 'x' } } },
+    ],
+    ['participante sem nome', { ...rascunhoCompleto(), participantes: [{ id: 'x' }] }],
+    ['participante com presença inválida', comParticipante({ presenca: 'talvez' })],
+    ['participante com extras não texto', comParticipante({ extras: { a: 1 } })],
+    ['dados com número', { ...rascunhoCompleto(), dados: { assunto: 3 } }],
+    ['pauta com número', { ...rascunhoCompleto(), pauta: ['A', 2] }],
+    [
+      'bloco com tipo inválido',
+      comResultado({ secoes: { resumo: [{ tipo: 'x', texto: '', itens: [] }] } }),
+    ],
+    ['bloco sem itens', comResultado({ secoes: { resumo: [{ tipo: 'lista', texto: '' }] } })],
+    ['seção que não é lista', comResultado({ secoes: { resumo: 'texto' } })],
+    [
+      'encaminhamento com status inválido',
+      comResultado({ encaminhamentos: [{ acao: 'a', responsavel: 'b', prazo: '', status: 'x' }] }),
+    ],
+    [
+      'encaminhamento sem ação',
+      comResultado({ encaminhamentos: [{ responsavel: 'b', prazo: '', status: 'pendente' }] }),
+    ],
+    [
+      'atribuição com provedor inválido',
+      comResultado({ atribuicao: { resumo: { provedor: 'x', modelo: 'm', fallbackDe: [] } } }),
+    ],
+    ['avisos com número', comResultado({ avisos: { resumo: [1] } })],
+    ['editadas que não é lista', comResultado({ editadas: 'resumo' })],
     ['valor que não é objeto', 42],
     ['null', null],
   ])('formato inválido (%s) → null', (_nome, valor) => {
@@ -105,6 +158,25 @@ describe('persistência do rascunho', () => {
     } finally {
       if (original) Object.defineProperty(window, 'sessionStorage', original);
     }
+  });
+
+  it('aceita mapa com "reserved" e resultado com encaminhamentos', () => {
+    const base = rascunhoCompleto();
+    const d = {
+      ...base,
+      mapa: { ...MAPA, reserved: { CPF: ['2'] } } as AtaDraft['mapa'],
+      resultado: {
+        ...(
+          comResultado({
+            encaminhamentos: [
+              { acao: 'A', responsavel: 'B', prazo: '2026-11-01', status: 'concluido' },
+            ],
+          }) as AtaDraft
+        ).resultado,
+      } as AtaDraft['resultado'],
+    };
+    salvarRascunho(d);
+    expect(carregarRascunho()).toEqual(d);
   });
 
   it('a chave de API nunca aparece no JSON salvo', () => {

@@ -1,28 +1,109 @@
 import { RASCUNHO } from '../config/storage-keys';
-import type { AtaDraft } from './draft';
+import { PROVEDORES } from '../ai/types';
+import { PRESENCAS, STATUS_ENCAMINHAMENTO, TIPOS_BLOCO, TONS, type AtaDraft } from './draft';
 
-const TONS = ['formal', 'conciso', 'detalhado'];
+type Obj = Record<string, unknown>;
 
-function ehObjeto(v: unknown): v is Record<string, unknown> {
+function ehObjeto(v: unknown): v is Obj {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Validação mínima de formato: protege contra lixo, não contra adulteração. */
-function ehRascunho(v: unknown): v is AtaDraft {
-  if (!ehObjeto(v) || v.versao !== 1) return false;
-  const { tipoId, tom, dados, pauta, participantes, transcricao, mapa, resultado } = v;
+function ehTexto(v: unknown): v is string {
+  return typeof v === 'string';
+}
+
+function ehListaDeTexto(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every(ehTexto);
+}
+
+function ehRegistro(v: unknown, valido: (x: unknown) => boolean): boolean {
+  return ehObjeto(v) && Object.values(v).every(valido);
+}
+
+function ehUm<T extends string>(opcoes: readonly T[], v: unknown): v is T {
+  return ehTexto(v) && (opcoes as readonly string[]).includes(v);
+}
+
+function ehNumero(v: unknown): boolean {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function ehParticipante(v: unknown): boolean {
   return (
-    typeof tipoId === 'string' &&
-    typeof tom === 'string' &&
-    TONS.includes(tom) &&
-    ehObjeto(dados) &&
-    Array.isArray(pauta) &&
-    pauta.every((p) => typeof p === 'string') &&
-    Array.isArray(participantes) &&
-    participantes.every((p) => ehObjeto(p) && typeof p.id === 'string') &&
-    typeof transcricao === 'string' &&
-    (mapa === null || ehObjeto(mapa)) &&
-    (resultado === null || ehObjeto(resultado))
+    ehObjeto(v) &&
+    ehTexto(v.id) &&
+    ehTexto(v.nome) &&
+    ehTexto(v.papel) &&
+    ehUm(PRESENCAS, v.presenca) &&
+    ehTexto(v.justificativa) &&
+    ehRegistro(v.extras, ehTexto)
+  );
+}
+
+function ehBloco(v: unknown): boolean {
+  return ehObjeto(v) && ehUm(TIPOS_BLOCO, v.tipo) && ehTexto(v.texto) && ehListaDeTexto(v.itens);
+}
+
+function ehEncaminhamento(v: unknown): boolean {
+  return (
+    ehObjeto(v) &&
+    ehTexto(v.acao) &&
+    ehTexto(v.responsavel) &&
+    ehTexto(v.prazo) &&
+    ehUm(STATUS_ENCAMINHAMENTO, v.status)
+  );
+}
+
+function ehAtribuicao(v: unknown): boolean {
+  return (
+    ehObjeto(v) && ehUm(PROVEDORES, v.provedor) && ehTexto(v.modelo) && ehFallback(v.fallbackDe)
+  );
+}
+
+function ehFallback(v: unknown): boolean {
+  return Array.isArray(v) && v.every((p) => ehUm(PROVEDORES, p));
+}
+
+function ehResultado(v: unknown): boolean {
+  return (
+    ehObjeto(v) &&
+    ehRegistro(v.secoes, (blocos) => Array.isArray(blocos) && blocos.every(ehBloco)) &&
+    Array.isArray(v.encaminhamentos) &&
+    v.encaminhamentos.every(ehEncaminhamento) &&
+    ehRegistro(v.atribuicao, ehAtribuicao) &&
+    ehRegistro(v.avisos, ehListaDeTexto) &&
+    ehListaDeTexto(v.editadas)
+  );
+}
+
+function ehMapa(v: unknown): boolean {
+  return (
+    ehObjeto(v) &&
+    v.version === 1 &&
+    ehRegistro(v.markers, ehTexto) &&
+    ehRegistro(v.keys, ehTexto) &&
+    ehRegistro(v.counters, ehNumero) &&
+    (v.reserved === undefined || ehRegistro(v.reserved, ehListaDeTexto))
+  );
+}
+
+/**
+ * Valida o formato completo do rascunho recuperado: o que está no storage pode vir de
+ * outra versão do app ou estar corrompido, e os renderers confiam no tipo.
+ */
+function ehRascunho(v: unknown): v is AtaDraft {
+  return (
+    ehObjeto(v) &&
+    v.versao === 1 &&
+    ehTexto(v.tipoId) &&
+    ehUm(TONS, v.tom) &&
+    ehRegistro(v.dados, ehTexto) &&
+    ehListaDeTexto(v.pauta) &&
+    Array.isArray(v.participantes) &&
+    v.participantes.every(ehParticipante) &&
+    ehTexto(v.transcricao) &&
+    (v.mapa === null || ehMapa(v.mapa)) &&
+    (v.resultado === null || ehResultado(v.resultado))
   );
 }
 

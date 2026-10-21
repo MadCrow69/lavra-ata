@@ -1,2 +1,3 @@
 /** Provedores de IA suportados. */
-export type ProviderId = 'openai' | 'gemini' | 'anthropic';
+export const PROVEDORES = ['openai', 'gemini', 'anthropic'] as const;
+export type ProviderId = (typeof PROVEDORES)[number];
