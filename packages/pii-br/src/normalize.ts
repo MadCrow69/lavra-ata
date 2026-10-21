@@ -20,7 +20,7 @@ export function normalizeValue(type: PiiType, raw: string): string {
       return /^55\d{10,11}$/.test(digits) ? digits.slice(2) : digits;
     }
     case 'PLACA':
-      return raw.toUpperCase().replace(/-/g, '');
+      return raw.toUpperCase().replace(/[-\s]/g, '');
     case 'RG':
       return raw.toUpperCase().replace(/[^0-9X]/g, '');
   }
