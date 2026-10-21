@@ -35,15 +35,19 @@ export const cartao: Detector = {
   type: 'CARTAO',
   pattern: new RegExp(String.raw`(?<![0-9A-Za-z])${BODY}(?![0-9A-Za-z])`, 'g'),
   accept(raw) {
-    const groups = PARTS.exec(raw)?.groups;
-    const card = normalizeValue('CARTAO', groups?.card ?? raw);
+    // Invariante: todo trecho entregue pelo `pattern` casa com `PARTS` (mesmo corpo). Se não
+    // casar, rejeita (fail-closed): nunca avalia um valor cuja estrutura não foi confirmada.
+    const card = PARTS.exec(raw)?.groups?.card;
+    if (card === undefined) return { ok: false, valid: false };
+    const cardDigits = normalizeValue('CARTAO', card);
     const whole = normalizeValue('CARTAO', raw);
     // Luhn é exigido SEMPRE (contexto não o dispensa). Luhn aceita sequências
     // degeneradas (ex.: só zeros), então dígitos todos iguais são rejeitados. O conjunto
     // cartão + anexo só vale como cartão de 19 dígitos (4-4-4-4-3 ou 16 colados + 3); em
     // qualquer outro tamanho (17, 18, 20) o anexo é CVV e só o cartão é conferido.
     const ok =
-      luhnOk(card) || (whole !== card && whole.length === COMBINED_LENGTH && luhnOk(whole));
+      luhnOk(cardDigits) ||
+      (whole !== cardDigits && whole.length === COMBINED_LENGTH && luhnOk(whole));
     return { ok, valid: ok };
   },
 };

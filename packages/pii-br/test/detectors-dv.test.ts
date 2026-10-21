@@ -175,6 +175,9 @@ describe('detector de cartão', () => {
   it('não casa dentro de número maior que 19 dígitos', () => {
     expect(run(cartao, '41111111111111111111')).toEqual([]);
   });
+  it('trecho que não casa com a estrutura é rejeitado (fail-closed)', () => {
+    expect(cartao.accept('abc', 'abc', 0)).toEqual({ ok: false, valid: false });
+  });
 });
 
 describe('normalizeValue', () => {
