@@ -168,3 +168,10 @@
 .confirmacao {
   margin: 0;
 }
+
+.avisoBloqueado {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cor-erro-texto);
+}

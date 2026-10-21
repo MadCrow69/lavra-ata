@@ -208,6 +208,119 @@ describe('criarKeyStore', () => {
     }).not.toThrow();
   });
 
+  it('definirEstado grava só o veredito: mantém o modelo e ignora chave que já não é a testada', () => {
+    const store = criarKeyStore(null);
+    store.definir(chave({ modelo: 'modelo-a' }));
+    // A pessoa trocou o modelo enquanto o teste rodava.
+    store.definir(chave({ modelo: 'modelo-b' }));
+    store.definirEstado('openai', CHAVE_OPENAI, 'ok');
+    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-b', estado: 'ok' });
+
+    // A chave foi trocada: o veredito do teste antigo não vale para a nova.
+    store.definir(chave({ chave: 'sk-nova-0005' }));
+    store.definirEstado('openai', CHAVE_OPENAI, 'invalida');
+    expect(store.listar()[0]).toMatchObject({ chave: 'sk-nova-0005', estado: 'nao_testada' });
+
+    // Provedor sem chave: nada acontece (e não cria entrada).
+    store.definirEstado('gemini', CHAVE_GEMINI, 'ok');
+    expect(store.listar().map((c) => c.provedor)).toEqual(['openai']);
+  });
+
+  it('chave com estado "inválida" fica fora da cadeia, mas continua listada; editar a chave a traz de volta', () => {
+    const store = criarKeyStore(null);
+    store.definir(chave());
+    store.definir(chave({ provedor: 'gemini', chave: CHAVE_GEMINI }));
+    store.definirEstado('openai', CHAVE_OPENAI, 'invalida');
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini']);
+    expect(store.listar().map((c) => c.provedor)).toEqual(['openai', 'gemini']);
+
+    store.definirEstado('gemini', CHAVE_GEMINI, 'invalida');
+    expect(store.cadeia()).toEqual([]);
+
+    store.definir(chave({ chave: 'sk-corrigida-0006', estado: 'nao_testada' }));
+    expect(store.cadeia().map((c) => c.id)).toEqual(['openai']);
+  });
+
+  it('ao carregar, modelo vazio vira o padrão e modelo com espaços é aparado', () => {
+    const { storage } = storageFalso({
+      [CHAVES]: JSON.stringify({
+        chaves: [
+          { provedor: 'openai', chave: CHAVE_OPENAI, modelo: '   ' },
+          { provedor: 'gemini', chave: CHAVE_GEMINI, modelo: '  gem-x ' },
+        ],
+      }),
+    });
+    const store = criarKeyStore(storage);
+    expect(store.cadeia()).toEqual([
+      { id: 'openai', modelo: MODELOS.openai.padrao, chave: CHAVE_OPENAI },
+      { id: 'gemini', modelo: 'gem-x', chave: CHAVE_GEMINI },
+    ]);
+  });
+
+  it('marcar "lembrar" testa a gravação: navegador que bloqueia mantém lembrar=false e avisa', () => {
+    const bloqueado = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('QuotaExceededError');
+      },
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage;
+    const store = criarKeyStore(bloqueado);
+    store.definir(chave());
+    expect(store.persistenciaIndisponivel()).toBe(false);
+    store.definirLembrar(true);
+    expect(store.lembrar()).toBe(false);
+    expect(store.persistenciaIndisponivel()).toBe(true);
+    expect(store.cadeia()).toHaveLength(1);
+
+    // Sem armazenamento nenhum (null) vale o mesmo.
+    const semStorage = criarKeyStore(null);
+    semStorage.definirLembrar(true);
+    expect(semStorage.lembrar()).toBe(false);
+    expect(semStorage.persistenciaIndisponivel()).toBe(true);
+    // Desmarcar/apagar tudo zera o aviso.
+    semStorage.apagarTudo();
+    expect(semStorage.persistenciaIndisponivel()).toBe(false);
+  });
+
+  it('marcar "lembrar" sem nenhuma chave também testa a gravação e deixa a preferência ligada', () => {
+    const { storage, setItem } = storageFalso();
+    const store = criarKeyStore(storage);
+    store.definirLembrar(true);
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(store.lembrar()).toBe(true);
+    expect(store.persistenciaIndisponivel()).toBe(false);
+  });
+
+  it('falha de gravação depois de ligado ("lembrar") passa a avisar; a próxima gravação boa limpa o aviso', () => {
+    let falhar = false;
+    const dados = new Map<string, string>();
+    const instavel = {
+      getItem: (k: string) => dados.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        if (falhar) throw new Error('cheio');
+        dados.set(k, v);
+      },
+      removeItem: (k: string) => {
+        dados.delete(k);
+      },
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage;
+    const store = criarKeyStore(instavel);
+    store.definirLembrar(true);
+    falhar = true;
+    store.definir(chave());
+    expect(store.persistenciaIndisponivel()).toBe(true);
+    falhar = false;
+    store.definir(chave({ chave: 'sk-outra-0007' }));
+    expect(store.persistenciaIndisponivel()).toBe(false);
+  });
+
   it('assinantes são avisados a cada mudança, e param ao cancelar a assinatura', () => {
     const store = criarKeyStore(null);
     const ouvinte = vi.fn();

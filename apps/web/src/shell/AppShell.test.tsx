@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { KeysProvider } from '../ai/KeysContext';
+import { criarKeyStore } from '../ai/keys';
 import { SITE } from '../config/site';
 import { AppShell } from './AppShell';
 import { Footer } from './Footer';
@@ -163,6 +164,39 @@ describe('AppShell em tela estreita', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Editar' }));
 
     expect(screen.getByLabelText('campo')).toHaveValue('texto');
+  });
+});
+
+describe('Cabeçalho: resumo da IA', () => {
+  const ficticia = (provedor: 'openai' | 'gemini' | 'anthropic', chave: string) => ({
+    provedor,
+    chave,
+    modelo: '',
+    estado: 'nao_testada' as const,
+  });
+
+  it('mostra a cadeia na ordem de preferência; chave recusada sai do resumo; todas recusadas voltam ao convite', () => {
+    simularLargura(true);
+    const store = criarKeyStore(null);
+    store.definir(ficticia('openai', 'sk-teste-0001'));
+    store.definir(ficticia('gemini', 'AIzaTeste0002'));
+    store.reordenar(['gemini', 'openai', 'anthropic']);
+    render(
+      <KeysProvider store={store}>
+        <AppShell editar={<p>a</p>} documento={<p>b</p>} onConfigurarChaves={vi.fn()} />
+      </KeysProvider>,
+    );
+    expect(screen.getByRole('button', { name: /^IA: Gemini → OpenAI/ })).toBeInTheDocument();
+
+    act(() => {
+      store.definirEstado('gemini', 'AIzaTeste0002', 'invalida');
+    });
+    expect(screen.getByRole('button', { name: /^IA: OpenAI/ })).not.toHaveTextContent('Gemini');
+
+    act(() => {
+      store.definirEstado('openai', 'sk-teste-0001', 'invalida');
+    });
+    expect(screen.getByRole('button', { name: 'Configurar chaves de IA' })).toBeInTheDocument();
   });
 });
 

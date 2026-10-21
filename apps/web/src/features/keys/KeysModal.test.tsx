@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { erroProvedor } from '../../ai/errors';
+import { ErroProvedor, erroProvedor } from '../../ai/errors';
 import { KeysProvider, useKeys } from '../../ai/KeysContext';
 import { criarKeyStore } from '../../ai/keys';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
@@ -98,11 +98,15 @@ function Host({
 }
 
 async function montar(
-  opcoes: { testar?: Partial<Record<ProviderId, Testar>>; onFechar?: () => void } = {},
+  opcoes: {
+    testar?: Partial<Record<ProviderId, Testar>>;
+    onFechar?: () => void;
+    storage?: Storage;
+  } = {},
 ) {
   const user = userEvent.setup();
   const fake = storageFalso();
-  const store = criarKeyStore(fake.storage);
+  const store = criarKeyStore(opcoes.storage ?? fake.storage);
   const adaptadores = adaptadoresCom(opcoes.testar);
   render(
     <KeysProvider store={store}>
@@ -150,16 +154,30 @@ describe('KeysModal', () => {
     expect(campoChave('OpenAI')).toHaveAttribute('type', 'password');
   });
 
-  it('a chave digitada vai para a cadeia, mas nunca para storage sem "Lembrar" nem para o DOM fora do campo', async () => {
-    const { user, store, dados } = await montar();
+  it('a chave digitada vai para a cadeia, mas nunca para storage sem "Lembrar", console nem DOM fora do campo', async () => {
+    const consoles = (['log', 'info', 'warn', 'error', 'debug'] as const).map((metodo) =>
+      vi.spyOn(console, metodo).mockImplementation(() => undefined),
+    );
+    const { user, store, dados } = await montar({
+      testar: { openai: () => Promise.reject(erroProvedor('limite', 'openai')) },
+    });
     await user.type(campoChave('OpenAI'), CHAVE);
     await user.click(screen.getByRole('button', { name: 'Mostrar chave de OpenAI' }));
     await user.type(campoChave('Google Gemini'), CHAVE_2);
 
     expect(store.cadeia().map((c) => c.chave)).toEqual([CHAVE, CHAVE_2]);
     expect(dados.size).toBe(0);
-    expect(localStorage.length).toBe(0);
-    expect(sessionStorage.length).toBe(0);
+
+    // Testar (com falha) e trocar a ordem também não podem vazar a chave.
+    await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
+    await screen.findByText(/atingiu o limite de uso/);
+    await user.click(screen.getByRole('button', { name: 'Mover OpenAI para baixo' }));
+    expect(dados.size).toBe(0);
+    for (const espiao of consoles) {
+      expect(JSON.stringify(espiao.mock.calls)).not.toContain(CHAVE);
+      expect(JSON.stringify(espiao.mock.calls)).not.toContain(CHAVE_2);
+    }
+    vi.restoreAllMocks();
 
     const camposDeChave = new Set<Element>([campoChave('OpenAI'), campoChave('Google Gemini')]);
     expect(document.body.textContent).not.toContain(CHAVE);
@@ -244,6 +262,104 @@ describe('KeysModal', () => {
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(CHAVE_2);
     expect(within(cartao('Anthropic')).queryByText(/Chave inválida/)).not.toBeInTheDocument();
+  });
+
+  it('ErroProvedor cuja mensagem traz a chave: o status mostra a mensagem sem a chave', async () => {
+    const { user } = await montar({
+      testar: {
+        openai: () =>
+          Promise.reject(
+            new ErroProvedor('inesperado', 'openai', `Recusou a chave ${CHAVE} agora.`),
+          ),
+      },
+    });
+    await user.type(campoChave('OpenAI'), CHAVE);
+    await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
+    expect(
+      await within(cartao('OpenAI')).findByText('Recusou a chave [chave removida] agora.'),
+    ).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(CHAVE);
+  });
+
+  it('trocar o modelo durante o teste não é desfeito quando o teste termina', async () => {
+    let resolver: () => void = () => undefined;
+    const { user, store } = await montar({
+      testar: {
+        openai: () =>
+          new Promise<void>((resolve) => {
+            resolver = resolve;
+          }),
+      },
+    });
+    const c = cartao('OpenAI');
+    await user.type(campoChave('OpenAI'), CHAVE);
+    await user.click(within(c).getByRole('button', { name: 'Testar chave de OpenAI' }));
+
+    await user.selectOptions(within(c).getByLabelText('Modelo'), 'gpt-6.1-sol');
+    expect(store.cadeia()[0]?.modelo).toBe('gpt-6.1-sol');
+    resolver();
+    expect(await within(c).findByText('Chave válida')).toBeInTheDocument();
+    expect(store.cadeia()[0]?.modelo).toBe('gpt-6.1-sol');
+    expect(within(c).getByLabelText('Modelo')).toHaveValue('gpt-6.1-sol');
+
+    // Também com id livre digitado durante o teste.
+    await user.selectOptions(within(c).getByLabelText('Modelo'), 'gpt-6-luna');
+    await user.click(within(c).getByRole('button', { name: 'Testar chave de OpenAI' }));
+    await user.selectOptions(
+      within(c).getByLabelText('Modelo'),
+      within(c).getByRole('option', { name: 'Outro modelo…' }),
+    );
+    await user.type(within(c).getByLabelText('Id do modelo'), 'modelo-digitado');
+    resolver();
+    await within(c).findByText('Chave válida');
+    expect(store.cadeia()[0]?.modelo).toBe('modelo-digitado');
+  });
+
+  it('chave recusada sai da cadeia (continua no cartão com o motivo); editar a chave a devolve', async () => {
+    const { user, store } = await montar({
+      testar: {
+        openai: () => Promise.reject(erroProvedor('chave_invalida', 'openai', { status: 401 })),
+      },
+    });
+    await user.type(campoChave('OpenAI'), CHAVE);
+    await user.type(campoChave('Google Gemini'), CHAVE_2);
+    expect(store.cadeia().map((c) => c.id)).toEqual(['openai', 'gemini']);
+
+    await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
+    expect(
+      await within(cartao('OpenAI')).findByText(
+        'Chave inválida: verifique se copiou a chave inteira',
+      ),
+    ).toBeInTheDocument();
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini']);
+    expect(screen.getByTestId('cadeia')).toHaveTextContent(/^gemini:/);
+    expect(screen.getByTestId('cadeia')).not.toHaveTextContent('openai');
+
+    await user.type(campoChave('OpenAI'), '9');
+    expect(within(cartao('OpenAI')).queryByText(/Chave inválida/)).not.toBeInTheDocument();
+    expect(store.cadeia().map((c) => c.id)).toEqual(['openai', 'gemini']);
+  });
+
+  it('navegador que bloqueia o armazenamento: "Lembrar" não liga e o aviso aparece', async () => {
+    const bloqueado = {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('bloqueado');
+      },
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    } satisfies Storage;
+    const { user, store } = await montar({ storage: bloqueado });
+    const aviso = 'Este navegador bloqueou o armazenamento; a chave fica só nesta aba.';
+    expect(screen.queryByText(aviso)).not.toBeInTheDocument();
+
+    await user.type(campoChave('OpenAI'), CHAVE);
+    await user.click(screen.getByRole('checkbox', { name: 'Lembrar neste navegador' }));
+    expect(screen.getByRole('checkbox', { name: 'Lembrar neste navegador' })).not.toBeChecked();
+    expect(screen.getByText(aviso)).toBeInTheDocument();
+    expect(store.cadeia()).toHaveLength(1);
   });
 
   it('editar a chave depois de testar zera o veredito', async () => {

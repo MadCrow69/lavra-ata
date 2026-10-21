@@ -16,12 +16,29 @@ export interface KeyStore {
   ordem: () => ProviderId[];
   /** Grava (ou troca) a chave e o modelo do provedor. Chave vazia equivale a `remover`. */
   definir: (c: ChaveProvedor) => void;
+  /**
+   * Grava só o veredito do teste. Não faz nada se a chave guardada para o provedor já não é a que
+   * foi testada (a pessoa a trocou durante o teste); nunca mexe no modelo escolhido.
+   */
+  definirEstado: (p: ProviderId, chave: string, estado: ChaveProvedor['estado']) => void;
   remover: (p: ProviderId) => void;
   reordenar: (ordem: ProviderId[]) => void;
   lembrar: () => boolean;
-  /** Marcar grava as chaves atuais em `localStorage`; desmarcar apaga de lá (a memória fica). */
+  /**
+   * Marcar testa a gravação e salva as chaves atuais em `localStorage`; se o navegador bloquear,
+   * `lembrar()` continua false e `persistenciaIndisponivel()` vira true. Desmarcar apaga de lá
+   * (a memória fica).
+   *
+   * `CHAVES` guarda as chaves e a preferência junto: ao remover a última chave o item some, e com
+   * ele a preferência "Lembrar" (na próxima visita volta desmarcada).
+   */
   definirLembrar: (v: boolean) => void;
-  /** Cadeia de geração: só provedores com chave, na ordem de preferência. */
+  /** O navegador recusou gravar em `localStorage`: a chave fica só na memória desta aba. */
+  persistenciaIndisponivel: () => boolean;
+  /**
+   * Cadeia de geração: só provedores com chave, na ordem de preferência. Chave que o provedor já
+   * recusou (`estado === 'invalida'`) fica de fora; editar a chave a devolve à cadeia.
+   */
   cadeia: () => ProviderConfig[];
   /** Limpa memória e armazenamento e desliga "lembrar". */
   apagarTudo: () => void;
@@ -72,7 +89,7 @@ function lerPersistido(bruto: string | null): Persistido | null {
     const { provedor, chave, modelo } = item as Record<string, unknown>;
     if (!ehProvedor(provedor) || typeof chave !== 'string' || chave.trim() === '') continue;
     if (typeof modelo !== 'string') continue;
-    validas.push({ provedor, chave: chave.trim(), modelo });
+    validas.push({ provedor, chave: chave.trim(), modelo: modeloOuPadrao(provedor, modelo) });
   }
   if (validas.length === 0) return null;
   return { chaves: validas, ordem: normalizarOrdem(Array.isArray(ordem) ? ordem : []) };
@@ -97,25 +114,27 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
   const chaves = new Map<ProviderId, ChaveProvedor>();
   let ordem: ProviderId[] = [...PROVEDORES];
   let lembrar = false;
+  let bloqueado = false;
   let revisao = 0;
   const ouvintes = new Set<() => void>();
 
+  /** Grava o conteúdo atual, se "lembrar" estiver ligado (único portão de escrita no storage). */
   const gravar = (): void => {
     if (!alvo || !lembrar) return;
     try {
-      if (chaves.size === 0) {
-        alvo.removeItem(CHAVES);
-        return;
-      }
-      const dado: Persistido = {
-        ordem,
-        chaves: listar().map(({ provedor, chave, modelo }) => ({ provedor, chave, modelo })),
-      };
-      alvo.setItem(CHAVES, JSON.stringify(dado));
+      if (chaves.size === 0) alvo.removeItem(CHAVES);
+      else alvo.setItem(CHAVES, JSON.stringify(conteudo()));
+      bloqueado = false;
     } catch {
       // Armazenamento bloqueado ou cheio: as chaves seguem só na memória.
+      bloqueado = true;
     }
   };
+
+  const conteudo = (): Persistido => ({
+    ordem,
+    chaves: listar().map(({ provedor, chave, modelo }) => ({ provedor, chave, modelo })),
+  });
 
   const apagarGravado = (): void => {
     try {
@@ -172,6 +191,12 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
       });
       mudou();
     },
+    definirEstado(p, chave, estado) {
+      const c = chaves.get(p);
+      if (c?.chave !== chave.trim() || c.estado === estado) return;
+      c.estado = estado;
+      mudou();
+    },
     remover,
     reordenar(nova) {
       ordem = normalizarOrdem(nova);
@@ -180,17 +205,35 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
     lembrar: () => lembrar,
     definirLembrar(v) {
       if (v === lembrar) return;
-      lembrar = v;
-      if (v) gravar();
-      else apagarGravado();
+      if (v) {
+        // Grava mesmo sem chaves: é o teste de que o navegador aceita escrever.
+        try {
+          if (!alvo) throw new Error('sem armazenamento');
+          alvo.setItem(CHAVES, JSON.stringify(conteudo()));
+          lembrar = true;
+          bloqueado = false;
+        } catch {
+          lembrar = false;
+          bloqueado = true;
+        }
+      } else {
+        lembrar = false;
+        bloqueado = false;
+        apagarGravado();
+      }
       revisao++;
       for (const ouvinte of [...ouvintes]) ouvinte();
     },
-    cadeia: () => listar().map((c) => ({ id: c.provedor, modelo: c.modelo, chave: c.chave })),
+    persistenciaIndisponivel: () => bloqueado,
+    cadeia: () =>
+      listar()
+        .filter((c) => c.estado !== 'invalida')
+        .map((c) => ({ id: c.provedor, modelo: c.modelo, chave: c.chave })),
     apagarTudo() {
       chaves.clear();
       ordem = [...PROVEDORES];
       lembrar = false;
+      bloqueado = false;
       apagarGravado();
       revisao++;
       for (const ouvinte of [...ouvintes]) ouvinte();
