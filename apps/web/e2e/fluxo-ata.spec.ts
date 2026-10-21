@@ -207,27 +207,42 @@ async function preencherReuniao(page: Page) {
 }
 
 /**
- * Transcrição de `tamanho` caracteres em falas de ~800 caracteres (≈ 250 linhas para 200 mil),
- * com o CPF na primeira. Não são linhas curtas de propósito: o Chromium insere cada quebra de
- * linha de um `fill`/colagem como um comando de edição à parte, então 4 mil linhas curtas levam
- * dezenas de segundos até num `<textarea>` puro, sem nenhum código do app (medido no spike desta
- * tarefa). Uma fala de reunião real tem centenas de caracteres.
+ * Transcrição de `tamanho` caracteres no pior formato realista: ~4 mil falas curtas (~50
+ * caracteres por linha), com o CPF na primeira. É o que sai de uma exportação de chat/legenda.
  */
 function transcricaoGrande(tamanho: number): string {
-  const frase =
-    'comentário sobre o cronograma e o cadastro do fornecedor, com prazos e responsáveis definidos. ';
-  const falas: string[] = [];
-  let total = 0;
-  for (let n = 0; total < tamanho; n++) {
-    const abertura =
-      n === 0
-        ? `Marcos Ferraz: o documento do sócio é o CPF ${CPF}. `
-        : `Pessoa ${String(n % 200).padStart(3, '0')}: `;
-    const fala = abertura + frase.repeat(8);
+  const falas: string[] = [`Marcos Ferraz: o documento do sócio é o CPF ${CPF}.`];
+  let total = (falas[0]?.length ?? 0) + 1;
+  for (let n = 1; total < tamanho; n++) {
+    const fala = `Pessoa ${String(n % 200).padStart(3, '0')}: comentário ${String(n)} sobre o cronograma.`;
     falas.push(fala);
     total += fala.length + 1;
   }
   return falas.join('\n').slice(0, tamanho);
+}
+
+/**
+ * Cola `texto` no campo como a pessoa cola: texto na área de transferência, foco no campo e
+ * Ctrl+V. (`locator.fill` NÃO serve de medida: ele insere cada quebra de linha como um comando de
+ * edição à parte, e 4 mil linhas levam ~25 s até num `<textarea>` puro; a colagem nativa leva
+ * ~100 ms.) Devolve o caminho usado: `clipboard` (colagem de verdade) ou, se o navegador negar a
+ * área de transferência, `setter` (valor pelo setter nativo + evento `input`, que o React lê).
+ */
+async function colarComoPessoa(page: Page, campo: Locator, texto: string): Promise<string> {
+  await campo.focus();
+  try {
+    await page.evaluate((t) => navigator.clipboard.writeText(t), texto);
+    await page.keyboard.press('Control+V');
+    return 'clipboard';
+  } catch {
+    await campo.evaluate((el, t) => {
+      const alvo = el as HTMLTextAreaElement;
+      // Setter nativo (e não `alvo.value =`): é o que o React usa para enxergar a mudança.
+      Reflect.set(HTMLTextAreaElement.prototype, 'value', t, alvo);
+      alvo.dispatchEvent(new Event('input', { bubbles: true }));
+    }, texto);
+    return 'setter';
+  }
 }
 
 /** Console com erro além dos 429 que o próprio cenário provoca (o navegador loga toda resposta 4xx). */
@@ -327,9 +342,9 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
 
     expect(rede.violacoes).toEqual([]);
     expect(await violacoesDeCsp(page)).toEqual([]);
-    // Só os dois 429 provocados de propósito (tentativa + retry) aparecem no console.
+    // O navegador loga cada 429 provocado de propósito; nenhum outro erro pode aparecer.
+    expect(rede.errosDePagina.some((erro) => erro.includes('status of 429'))).toBe(true);
     expect(errosInesperados(rede)).toEqual([]);
-    expect(rede.errosDePagina).toHaveLength(2);
   });
 
   test.describe('celular (360×740)', () => {
@@ -431,21 +446,30 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     await colarParticipantes(page, participantes);
     await expect(page.getByText('200 participantes · 200 presentes')).toBeVisible();
 
-    // 200 mil caracteres de transcrição: o `fill` não pode travar a digitação.
+    // 200 mil caracteres em ~4 mil linhas curtas, colados como a pessoa cola (Ctrl+V).
     const transcricao = transcricaoGrande(200_000);
     expect(transcricao).toHaveLength(200_000);
+    expect(transcricao.split('\n').length).toBeGreaterThan(3_500);
 
     const campo = page.getByLabel('Transcrição da reunião');
+    const contador = page.getByTestId('contador-transcricao');
     const inicio = Date.now();
-    await campo.fill(transcricao);
-    const duracaoFill = Date.now() - inicio;
-    expect(duracaoFill).toBeLessThan(2_000);
-    await expect(page.getByTestId('contador-transcricao')).toContainText(/200\.000 de 300\.000/);
+    const caminho = await colarComoPessoa(page, campo, transcricao);
+    test.info().annotations.push({ type: 'colagem', description: caminho });
+    await expect(contador).toContainText(/200\.000 de 300\.000/);
+    const duracaoColagem = Date.now() - inicio;
+    test.info().annotations.push({ type: 'colagem-ms', description: String(duracaoColagem) });
+    expect(duracaoColagem).toBeLessThan(2_000);
 
-    // Continua digitando no texto gigante, sem esperar a prévia de privacidade.
-    const inicioDigitando = Date.now();
-    await campo.pressSequentially('fim', { delay: 0 });
-    expect(Date.now() - inicioDigitando).toBeLessThan(2_000);
+    // A prévia de privacidade termina de analisar (debounce + `mask` de 200 mil caracteres)...
+    await expect(page.locator('p[data-pendente="false"]')).toBeVisible({ timeout: 15_000 });
+    // ...e depois dela uma tecla ainda é atendida na hora.
+    const inicioTecla = Date.now();
+    await campo.press('x');
+    await expect(contador).toContainText(/200\.001 de 300\.000/);
+    const duracaoTecla = Date.now() - inicioTecla;
+    test.info().annotations.push({ type: 'tecla-ms', description: String(duracaoTecla) });
+    expect(duracaoTecla).toBeLessThan(1_000);
 
     // A folha mostra as 200 linhas da tabela de participantes (e o formulário, também).
     await expect(
@@ -488,6 +512,19 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     await expect.poll(() => violacoesDeCsp(page)).toHaveLength(1);
     expect((await violacoesDeCsp(page))[0]).toContain('connect-src');
     expect(rede.violacoes).toEqual([]);
+  });
+
+  test('o auditor de rede aborta e registra um host de fora (os "vazios" de violacoes não são cegos)', async ({
+    app: page,
+    rede,
+  }) => {
+    expect(rede.violacoes).toEqual([]);
+
+    // Navegação não é governada por `connect-src`: a requisição chega ao `context.route`.
+    await page.goto('https://example.com/rastreador').catch(() => undefined);
+
+    expect(rede.violacoes).toContain('GET https://example.com/rastreador');
+    expect(rede.chamadas).toEqual([]);
   });
 
   test('a chave nunca vai para localStorage nem sessionStorage sem "Lembrar"', async ({

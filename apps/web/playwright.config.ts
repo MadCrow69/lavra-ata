@@ -22,6 +22,8 @@ export default defineConfig({
     // A barra final faz `goto('./')` resolver dentro de `base: '/lavra-ata/'`.
     baseURL: `${ORIGEM}/lavra-ata/`,
     serviceWorkers: 'block',
+    // O cenário de volume cola a transcrição pela área de transferência (Ctrl+V), como a pessoa.
+    permissions: ['clipboard-read', 'clipboard-write'],
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
     actionTimeout: 10_000,
