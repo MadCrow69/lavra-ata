@@ -174,6 +174,20 @@ describe('A4Preview depois de gerar', () => {
     expect(screen.getByRole('group', { name: 'Assinaturas' })).toBeInTheDocument();
   });
 
+  it('rodapé interno da folha lista os provedores usados; sem autoria de IA, não aparece', () => {
+    const gemini = { provedor: 'gemini' as const, modelo: 'gemini-3.8-flash', falhas: [] };
+    const { unmount } = renderizar(
+      rascunho({ resultado: resultado({ atribuicao: { resumo: gemini, decisoes: gemini } }) }),
+    );
+    const folha = screen.getByRole('article', { name: 'Prévia da ata' });
+    expect(
+      within(folha).getByText('Minuta gerada com auxílio de IA (Gemini · gemini-3.8-flash).'),
+    ).toBeInTheDocument();
+    unmount();
+    renderizar(rascunho({ resultado: resultado() }));
+    expect(screen.queryByText(/Minuta gerada com auxílio de IA \(/)).not.toBeInTheDocument();
+  });
+
   it('desenha a tabela de encaminhamentos com data dd/mm/aaaa e status em português', () => {
     renderizar(rascunho({ resultado: resultado() }));
     const tabela = screen.getByRole('table', { name: 'Encaminhamentos' });

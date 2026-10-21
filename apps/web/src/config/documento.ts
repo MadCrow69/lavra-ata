@@ -16,6 +16,12 @@ export const RODAPE_PAGINADO = 'Página {pagina} de {total}';
 /** Título da seção de encaminhamentos (folha, documentos e prompt da IA). */
 export const TITULO_ENCAMINHAMENTOS = 'Encaminhamentos';
 
+/**
+ * Abre o rodapé interno da folha em tela, seguido dos provedores e modelos que geraram as seções
+ * (spec 8.1.1). Só na tela: PDF e DOCX não o imprimem.
+ */
+export const RODAPE_INTERNO_IA = 'Minuta gerada com auxílio de IA';
+
 /** Texto da célula quando o dado não foi informado (nome, cargo, prazo…). */
 export const CELULA_VAZIA = '—';
 

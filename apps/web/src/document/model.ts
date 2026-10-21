@@ -44,5 +44,11 @@ export interface DocumentModel {
   /** `logo` é a imagem da pessoa (Plano 04); `null` = espaço reservado. */
   cabecalho: { logo: string | null; linhas: string[] };
   blocos: DocBloco[];
+  /** Rodapé paginado dos documentos (PDF e DOCX); a folha em tela é contínua e não o exibe. */
   rodape: string;
+  /**
+   * Rodapé interno da folha em tela: os provedores e modelos que geraram as seções presentes
+   * (spec 8.1.1). Não vai para PDF nem DOCX. `null` quando nenhuma seção tem autoria de IA.
+   */
+  rodapeInterno: string | null;
 }

@@ -5,6 +5,7 @@ import {
   CELULA_VAZIA,
   LARGURAS_ENCAMINHAMENTOS,
   RESPONSAVEL_A_DEFINIR,
+  RODAPE_INTERNO_IA,
   RODAPE_PAGINADO,
   TEXTO_SECOES_PENDENTES,
   TITULO_ENCAMINHAMENTOS,
@@ -16,8 +17,10 @@ import {
   type Bloco,
   type Encaminhamento,
   type Participante,
+  type ResultadoAta,
 } from '../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
+import { ROTULO_CURTO } from '../config/models';
 import type { DocBloco, DocumentModel, Inline } from './model';
 
 /** Lacuna que a pessoa completa à mão: `[PREENCHER: o que falta]`. Sempre em maiúsculas. */
@@ -161,6 +164,18 @@ function secaoGerada(chave: string, titulo: string, blocos: DocBloco[]): DocBloc
   return blocos.length === 0 ? [] : [{ tipo: 'secao', chave, titulo, blocos, gerada: true }];
 }
 
+/** "Minuta gerada com auxílio de IA (Gemini · modelo, …)." com a autoria das seções na folha. */
+function rodapeInterno(blocos: DocBloco[], resultado: ResultadoAta | null): string | null {
+  if (!resultado) return null;
+  const usados = new Set<string>();
+  for (const b of blocos) {
+    if (b.tipo !== 'secao' || !b.gerada) continue;
+    const a = resultado.atribuicao[b.chave];
+    if (a) usados.add(`${ROTULO_CURTO[a.provedor]} · ${a.modelo}`);
+  }
+  return usados.size === 0 ? null : `${RODAPE_INTERNO_IA} (${[...usados].join(', ')}).`;
+}
+
 /**
  * Monta o documento da ata. Antes de gerar (sem `resultado`) traz só o que o formulário já tem,
  * mais um placeholder no lugar das seções. Depois, preâmbulo, seções na ordem do tipo (as vazias
@@ -220,5 +235,6 @@ export function construirDocumento(d: EntradaDoDocumento, tipo: AtaTypeDefinitio
     cabecalho: { logo: null, linhas: tipo.cabecalho(d) },
     blocos,
     rodape: RODAPE_PAGINADO,
+    rodapeInterno: rodapeInterno(blocos, resultado),
   };
 }

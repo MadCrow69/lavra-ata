@@ -255,6 +255,15 @@
   font-size: 0.9em;
 }
 
+/* Rodapé interno (só na tela): quais provedores geraram as seções. */
+.rodapeInterno {
+  margin: var(--espaco-4) 0 0;
+  color: var(--cor-folha-suave);
+  font-family: var(--fonte-interface);
+  font-size: 0.75em;
+  line-height: 1.45;
+}
+
 .aviso {
   margin: var(--espaco-8) 0 0;
   padding: var(--espaco-3) var(--espaco-4);

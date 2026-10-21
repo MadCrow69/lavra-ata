@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { corporativa } from '../ata-types/corporativa';
 import type { AtaTypeDefinition } from '../ata-types/types';
-import { AVISO_MINUTA, TEXTO_SECOES_PENDENTES } from '../config/documento';
+import { AVISO_MINUTA, RODAPE_PAGINADO, TEXTO_SECOES_PENDENTES } from '../config/documento';
 import {
   ROTULO_PRESENCA,
   ROTULO_STATUS,
@@ -361,6 +361,37 @@ describe('construirDocumento com resultado', () => {
     );
     // Preâmbulo: data, hora, modalidade, assunto; tabela: valor.
     expect(contarPreencher(faltando)).toBe(5);
+  });
+
+  it('rodapé interno lista os provedores das seções na folha, sem repetir (spec 8.1.1)', () => {
+    const gemini = { provedor: 'gemini' as const, modelo: 'gemini-3.8-flash', falhas: [] };
+    const openai = { provedor: 'openai' as const, modelo: 'gpt-6-luna', falhas: [] };
+    const doc = construirDocumento(
+      rascunho({
+        resultado: resultado({
+          atribuicao: {
+            resumo: gemini,
+            decisoes: openai,
+            encaminhamentos: gemini,
+            // Seção vazia não aparece na folha: o provedor dela não conta.
+            riscos: { provedor: 'anthropic', modelo: 'claude-haiku-5-5', falhas: [] },
+          },
+        }),
+      }),
+      corporativa,
+    );
+    expect(doc.rodapeInterno).toBe(
+      'Minuta gerada com auxílio de IA (Gemini · gemini-3.8-flash, OpenAI · gpt-6-luna).',
+    );
+    // O rodapé paginado do PDF/DOCX não muda.
+    expect(doc.rodape).toBe(RODAPE_PAGINADO);
+  });
+
+  it('sem atribuição (antes de gerar ou só texto escrito à mão), não há rodapé interno', () => {
+    expect(construirDocumento(rascunho(), corporativa).rodapeInterno).toBeNull();
+    expect(
+      construirDocumento(rascunho({ resultado: resultado() }), corporativa).rodapeInterno,
+    ).toBeNull();
   });
 
   it('não altera o rascunho', () => {

@@ -513,6 +513,9 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
           rotulo={modelo.titulo}
           {...(opcoesCadeia ? { opcoesCadeia } : {})}
         />
+        {modelo.rodapeInterno === null ? null : (
+          <footer className={styles.rodapeInterno}>{modelo.rodapeInterno}</footer>
+        )}
       </article>
     </div>
   );
