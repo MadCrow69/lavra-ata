@@ -1,0 +1,14 @@
+{
+  "name": "@lavra/pii-br",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run --maxWorkers=4",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

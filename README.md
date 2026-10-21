@@ -6,6 +6,7 @@ Gerador de atas de reunião brasileiras a partir de transcrição, projetado par
 
 ## Documentação
 
+- [`@lavra/pii-br`](packages/pii-br/README.md): biblioteca de detecção e máscara de dados pessoais brasileiros
 - [Documento de design](docs/superpowers/specs/2026-10-20-lavra-design.md)
 - [Roteiro de implementação](docs/superpowers/plans/2026-10-20-00-roteiro.md)
 - [Como contribuir](CONTRIBUTING.md) · [Código de conduta](CODE_OF_CONDUCT.md) · [Segurança](SECURITY.md)
