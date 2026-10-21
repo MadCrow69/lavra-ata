@@ -77,7 +77,12 @@ export type DraftAction =
   | { type: 'definirTom'; tom: Tom }
   | { type: 'definirCampo'; campo: string; valor: string }
   | { type: 'definirPauta'; itens: string[] }
-  | { type: 'adicionarParticipantes'; nomes: string[] }
+  | {
+      type: 'adicionarParticipantes';
+      nomes: string[];
+      /** Cargo/empresa de cada nome, pela mesma posição de `nomes` (opcional). */
+      papeis?: string[];
+    }
   | { type: 'atualizarParticipante'; id: string; patch: Partial<Participante> }
   | { type: 'removerParticipante'; id: string }
   | { type: 'definirTranscricao'; texto: string }

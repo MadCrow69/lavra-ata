@@ -9,3 +9,6 @@ export const LIMITE_PARTICIPANTES = 500;
 
 /** Espera, em ms, após a última digitação antes de rodar a detecção de dados pessoais. */
 export const DEBOUNCE_DETECCAO_MS = 300;
+
+/** Acima desta quantidade, a lista de participantes ganha rolagem com cabeçalho fixo e busca. */
+export const PARTICIPANTES_ATE_ROLAGEM = 20;

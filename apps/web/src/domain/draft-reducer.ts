@@ -1,8 +1,6 @@
+import { TIPO_PADRAO_ID } from '../ata-types/registry';
 import { LIMITE_PARTICIPANTES } from '../config/limits';
 import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } from './draft';
-
-/** Tipo de ata selecionado quando nada foi escolhido ainda. */
-export const TIPO_PADRAO_ID = 'corporativa';
 
 /** Chave de seção usada para `avisos`, `atribuicao` e `editadas` dos encaminhamentos. */
 export const CHAVE_ENCAMINHAMENTOS = 'encaminhamentos';
@@ -21,11 +19,11 @@ export function criarRascunho(tipoId: string = TIPO_PADRAO_ID): AtaDraft {
   };
 }
 
-function novoParticipante(nome: string): Participante {
+function novoParticipante(nome: string, papel: string): Participante {
   return {
     id: crypto.randomUUID(),
     nome,
-    papel: '',
+    papel,
     presenca: 'presente',
     justificativa: '',
     extras: {},
@@ -63,10 +61,10 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
     case 'adicionarParticipantes': {
       const vagas = Math.max(0, LIMITE_PARTICIPANTES - state.participantes.length);
       const novos = action.nomes
-        .map((n) => n.trim())
-        .filter((n) => n !== '')
+        .map((nome, i) => ({ nome: nome.trim(), papel: (action.papeis?.[i] ?? '').trim() }))
+        .filter((p) => p.nome !== '')
         .slice(0, vagas)
-        .map(novoParticipante);
+        .map((p) => novoParticipante(p.nome, p.papel));
       return novos.length === 0
         ? state
         : { ...state, participantes: [...state.participantes, ...novos] };

@@ -93,6 +93,19 @@ describe('draftReducer', () => {
       });
     });
 
+    it('papeis acompanha os nomes pela posição, mesmo com linhas vazias no meio', () => {
+      const d = draftReducer(criarRascunho(), {
+        type: 'adicionarParticipantes',
+        nomes: ['Ana Souza', '', 'Bruno Lima', 'Carla Dias'],
+        papeis: ['Diretora', 'Ignorado', ' Analista ', ''],
+      });
+      expect(d.participantes.map((p) => [p.nome, p.papel])).toEqual([
+        ['Ana Souza', 'Diretora'],
+        ['Bruno Lima', 'Analista'],
+        ['Carla Dias', ''],
+      ]);
+    });
+
     it('permite nomes repetidos (id é a chave, nunca o nome)', () => {
       const d = draftReducer(criarRascunho(), {
         type: 'adicionarParticipantes',

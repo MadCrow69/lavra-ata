@@ -1,0 +1,374 @@
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it } from 'vitest';
+import { corporativa } from '../../ata-types/corporativa';
+import type { AtaTypeDefinition } from '../../ata-types/types';
+import { LIMITE_PARTICIPANTES } from '../../config/limits';
+import { DraftProvider } from '../../domain/DraftContext';
+import type { AtaDraft, Participante } from '../../domain/draft';
+import { criarRascunho } from '../../domain/draft-reducer';
+import { DadosBlock } from './DadosBlock';
+import { ParticipantesBlock } from './ParticipantesBlock';
+import { TipoBlock } from './TipoBlock';
+
+function participante(i: number, parcial: Partial<Participante> = {}): Participante {
+  return {
+    id: `p${String(i)}`,
+    nome: `Pessoa ${String(i)}`,
+    papel: '',
+    presenca: 'presente',
+    justificativa: '',
+    extras: {},
+    ...parcial,
+  };
+}
+
+function rascunhoCom(parcial: Partial<AtaDraft>): AtaDraft {
+  return { ...criarRascunho(), ...parcial };
+}
+
+function comParticipantes(n: number, parcial: (i: number) => Partial<Participante> = () => ({})) {
+  return rascunhoCom({
+    participantes: Array.from({ length: n }, (_, i) => participante(i + 1, parcial(i + 1))),
+  });
+}
+
+function renderizar(ui: React.ReactNode, inicial?: AtaDraft) {
+  return render(<DraftProvider {...(inicial ? { inicial } : {})}>{ui}</DraftProvider>);
+}
+
+function linhas(n: number): string {
+  return Array.from(
+    { length: n },
+    (_, i) => `Participante Número ${String(i + 1)} — Cargo ${String(i + 1)}`,
+  ).join('\n');
+}
+
+describe('DadosBlock', () => {
+  it('sair do campo data vazio mostra o erro abaixo do campo, em pt-BR', async () => {
+    const user = userEvent.setup();
+    renderizar(<DadosBlock tipo={corporativa} />);
+
+    const data = screen.getByLabelText(/^Data/);
+    expect(screen.queryByText('Informe a data da reunião.')).not.toBeInTheDocument();
+    await user.click(data);
+    await user.tab();
+
+    const erro = screen.getByText('Informe a data da reunião.');
+    expect(erro).toBeVisible();
+    expect(data).toHaveAttribute('aria-invalid', 'true');
+    expect(data).toHaveAccessibleDescription('Informe a data da reunião.');
+  });
+
+  it('o erro some quando o campo é preenchido', async () => {
+    const user = userEvent.setup();
+    renderizar(<DadosBlock tipo={corporativa} />);
+
+    const assunto = screen.getByLabelText(/^Assunto/);
+    await user.click(assunto);
+    await user.tab();
+    expect(screen.getByText('Informe o assunto da reunião.')).toBeVisible();
+
+    await user.type(assunto, 'Planejamento');
+    expect(screen.queryByText('Informe o assunto da reunião.')).not.toBeInTheDocument();
+    expect(assunto).toHaveAttribute('aria-invalid', 'false');
+  });
+
+  it('marca obrigatórios com * e aria-required; opcionais ficam sem', () => {
+    renderizar(<DadosBlock tipo={corporativa} />);
+    expect(screen.getByLabelText(/^Organização/)).toBeRequired();
+    expect(screen.getByLabelText(/^Organização/).closest('div')).toHaveTextContent('*');
+    expect(screen.getByLabelText(/^Término/)).not.toBeRequired();
+    expect(screen.getByLabelText(/^Condução/)).not.toBeRequired();
+  });
+
+  it('local vira Plataforma na reunião remota e é opcional; presencial exige', async () => {
+    const user = userEvent.setup();
+    renderizar(<DadosBlock tipo={corporativa} />);
+
+    await user.selectOptions(screen.getByLabelText(/^Modalidade/), 'remota');
+    const plataforma = screen.getByLabelText(/^Plataforma/);
+    expect(plataforma).not.toBeRequired();
+    expect(screen.queryByLabelText(/^Local/)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText(/^Modalidade/), 'presencial');
+    const local = screen.getByLabelText(/^Local/);
+    expect(local).toBeRequired();
+    await user.click(local);
+    await user.tab();
+    expect(screen.getByText('Informe o local da reunião.')).toBeVisible();
+  });
+
+  it('pauta aceita um item por linha, com Enter, e deixa de faltar', async () => {
+    const user = userEvent.setup();
+    renderizar(<DadosBlock tipo={corporativa} />);
+
+    expect(screen.getByText(/falta:.*Pauta/)).toBeVisible();
+    const pauta = screen.getByLabelText(/^Pauta/);
+    await user.type(pauta, 'Metas do trimestre{Enter}Orçamento{Enter}');
+    expect(pauta).toHaveValue('Metas do trimestre\nOrçamento\n');
+    expect(screen.queryByText(/falta:.*Pauta/)).not.toBeInTheDocument();
+  });
+
+  it('mostra "falta: Data, Pauta" quando só esses faltam', () => {
+    renderizar(
+      <DadosBlock tipo={corporativa} />,
+      rascunhoCom({
+        dados: {
+          organizacao: 'Empresa Exemplo Ltda.',
+          assunto: 'Planejamento',
+          inicio: '14:30',
+          modalidade: 'remota',
+        },
+      }),
+    );
+    expect(screen.getByText('falta: Data, Pauta')).toBeVisible();
+    expect(screen.queryByText('✓')).not.toBeInTheDocument();
+  });
+
+  it('mostra ✓ quando o bloco está completo', () => {
+    renderizar(
+      <DadosBlock tipo={corporativa} />,
+      rascunhoCom({
+        dados: {
+          organizacao: 'Empresa Exemplo Ltda.',
+          assunto: 'Planejamento',
+          data: '2026-10-14',
+          inicio: '14:30',
+          modalidade: 'remota',
+        },
+        pauta: ['Metas'],
+      }),
+    );
+    expect(screen.getByText('✓')).toBeVisible();
+    expect(screen.queryByText(/falta:/)).not.toBeInTheDocument();
+  });
+
+  it('o bloco recolhe e expande pelo cabeçalho', async () => {
+    const user = userEvent.setup();
+    renderizar(<DadosBlock tipo={corporativa} />);
+
+    const cabecalho = screen.getByRole('button', { name: /Dados da reunião/ });
+    expect(cabecalho).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText(/^Organização/)).toBeVisible();
+
+    await user.click(cabecalho);
+    expect(cabecalho).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByLabelText(/^Organização/)).not.toBeVisible();
+  });
+});
+
+describe('TipoBlock', () => {
+  it('lista os tipos disponíveis com o padrão marcado e conta como completo', () => {
+    renderizar(<TipoBlock />);
+    expect(screen.getByRole('radio', { name: /Reunião corporativa/ })).toBeChecked();
+    expect(screen.getByText('✓')).toBeVisible();
+  });
+
+  it('troca o tom da redação', async () => {
+    const user = userEvent.setup();
+    renderizar(<TipoBlock />);
+    const tom = screen.getByLabelText(/Tom da redação/);
+    expect(tom).toHaveValue('formal');
+    await user.selectOptions(tom, 'conciso');
+    expect(tom).toHaveValue('conciso');
+  });
+});
+
+describe('ParticipantesBlock', () => {
+  it('vazio: explica como começar e mostra o que falta', () => {
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+    expect(screen.getByText(/Nenhum participante ainda/)).toBeVisible();
+    expect(screen.getByText('0 participantes · 0 presentes')).toBeVisible();
+    expect(screen.getByText('falta: Participante presente')).toBeVisible();
+  });
+
+  it('colar 200 linhas cria 200 participantes em menos de 500 ms', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+
+    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+    const area = screen.getByLabelText(/Nomes, um por linha/);
+    const adicionar = screen.getByRole('button', { name: 'Adicionar à lista' });
+    const texto = linhas(200);
+
+    // Só a ação de colar entra na medida: buscar elementos na tela não é custo do app.
+    const inicio = performance.now();
+    fireEvent.change(area, { target: { value: texto } });
+    fireEvent.click(adicionar);
+    const duracao = performance.now() - inicio;
+
+    expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
+    expect(screen.getAllByLabelText(/^Nome do participante /)).toHaveLength(200);
+    expect(duracao).toBeLessThan(500);
+  });
+
+  it('"Nome — Cargo" preenche o cargo e a área é limpa depois de adicionar', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />);
+
+    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+      target: { value: 'Ana Souza — Diretora\nBruno Lima' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+
+    expect(screen.getByLabelText('Nome do participante 1')).toHaveValue('Ana Souza');
+    expect(screen.getByLabelText('Cargo / empresa do participante 1')).toHaveValue('Diretora');
+    expect(screen.getByLabelText('Nome do participante 2')).toHaveValue('Bruno Lima');
+    expect(screen.getByLabelText('Cargo / empresa do participante 2')).toHaveValue('');
+    expect(screen.queryByLabelText(/Nomes, um por linha/)).not.toBeInTheDocument();
+  });
+
+  it('avisa quantos nomes foram ignorados pelo limite', async () => {
+    const user = userEvent.setup();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(LIMITE_PARTICIPANTES - 2),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+      target: { value: linhas(5) },
+    });
+    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '3 nomes ignorados: o limite é 500 participantes.',
+    );
+    expect(screen.getByText('500 participantes · 500 presentes')).toBeVisible();
+  });
+
+  it('no singular: "1 nome ignorado"', async () => {
+    const user = userEvent.setup();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(LIMITE_PARTICIPANTES - 1),
+    );
+    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+      target: { value: linhas(2) },
+    });
+    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '1 nome ignorado: o limite é 500 participantes.',
+    );
+  });
+
+  it('lista cheia: nada é adicionado e a pessoa é avisada', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(LIMITE_PARTICIPANTES));
+    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+      target: { value: linhas(2) },
+    });
+    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '2 nomes ignorados: o limite é 500 participantes.',
+    );
+  });
+
+  it('busca só aparece com mais de 20 linhas e ignora acento e caixa', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(20));
+    expect(screen.queryByLabelText('Buscar participante')).not.toBeInTheDocument();
+    unmount();
+
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(30, (i) => (i === 7 ? { nome: 'João da Conceição' } : {})),
+    );
+    const busca = screen.getByLabelText('Buscar participante');
+    await user.type(busca, 'JOAO da CONCEI');
+    expect(screen.getAllByLabelText(/^Nome do participante /)).toHaveLength(1);
+    expect(screen.getByLabelText('Nome do participante 7')).toHaveValue('João da Conceição');
+
+    await user.clear(busca);
+    await user.type(busca, 'inexistente');
+    expect(screen.getByText(/Nenhum participante encontrado/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
+    expect(screen.getAllByLabelText(/^Nome do participante /)).toHaveLength(30);
+  });
+
+  it('com mais de 20 linhas a tabela ganha rolagem; com 20 ou menos, não', () => {
+    const { unmount } = renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(21));
+    expect(screen.getByRole('region', { name: 'Lista de participantes' })).toHaveAttribute(
+      'data-rolagem',
+      'true',
+    );
+    unmount();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(20));
+    expect(screen.getByRole('region', { name: 'Lista de participantes' })).toHaveAttribute(
+      'data-rolagem',
+      'false',
+    );
+  });
+
+  it('marcar todos como presentes atualiza o contador', async () => {
+    const user = userEvent.setup();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(3, (i) => ({ presenca: i === 1 ? 'presente' : 'ausente' })),
+    );
+    expect(screen.getByText('3 participantes · 1 presente')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Marcar todos como presentes' }));
+    expect(screen.getByText('3 participantes · 3 presentes')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Marcar todos como presentes' })).toBeDisabled();
+  });
+
+  it('presença "justificado" abre o campo de justificativa', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(2));
+    expect(screen.queryByLabelText(/^Justificativa/)).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Presença de Pessoa 2'), 'justificado');
+    const justificativa = screen.getByLabelText('Justificativa de Pessoa 2');
+    await user.type(justificativa, 'Viagem a trabalho');
+    expect(justificativa).toHaveValue('Viagem a trabalho');
+    expect(screen.getByText('2 participantes · 1 presente')).toBeVisible();
+  });
+
+  it('remove um participante pelo botão da linha', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(3));
+    await user.click(screen.getByRole('button', { name: 'Remover Pessoa 2' }));
+    expect(screen.getByText('2 participantes · 2 presentes')).toBeVisible();
+    expect(screen.queryByDisplayValue('Pessoa 2')).not.toBeInTheDocument();
+  });
+
+  it('com 200 linhas, editar o nome de uma linha funciona e o cabeçalho continua único', async () => {
+    const user = userEvent.setup();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(200));
+    const tabela = screen.getByRole('table');
+    expect(within(tabela).getAllByRole('columnheader').length).toBeGreaterThanOrEqual(4);
+
+    const nome = screen.getByLabelText('Nome do participante 150');
+    await user.clear(nome);
+    await user.type(nome, 'Renomeado');
+    expect(nome).toHaveValue('Renomeado');
+    expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
+  });
+
+  it('mostra ✓ com ao menos um presente e "falta" quando todos estão ausentes', () => {
+    const { unmount } = renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(2));
+    expect(screen.getByText('✓')).toBeVisible();
+    unmount();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(2, () => ({ presenca: 'ausente' })),
+    );
+    expect(screen.getByText('falta: Participante presente')).toBeVisible();
+  });
+
+  it('renderiza campos extras do participante definidos pelo tipo', async () => {
+    const user = userEvent.setup();
+    const tipo: AtaTypeDefinition = {
+      ...corporativa,
+      camposParticipante: [{ id: 'unidade', rotulo: 'Unidade', tipo: 'texto', obrigatorio: true }],
+    };
+    renderizar(<ParticipantesBlock tipo={tipo} />, comParticipantes(1));
+    expect(screen.getByText('falta: Unidade')).toBeVisible();
+    await user.type(screen.getByLabelText('Unidade do participante 1'), '12');
+    expect(screen.queryByText(/falta:/)).not.toBeInTheDocument();
+  });
+});
