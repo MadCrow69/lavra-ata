@@ -13,9 +13,14 @@ const findingKey = (f: Finding): string => `${f.type}:${normalizeValue(f.type, f
  *   não contam; `[TIPO#N]` (reescrita de colisão) nem casa com a forma de marcador.
  * - `malformedMarkers`: marcadores que existem no mapa mas foram escritos fora do formato
  *   canônico (`[CPF 1]`, `[cpf_1]`), como apareceram, sem repetição.
- * - `newIdentifiers`: identificadores da saída cuja chave normalizada não aparece na entrada.
+ * - `newIdentifiers`: identificadores da saída cuja chave normalizada não aparece em
+ *   `sentInput`, sem repetição (primeira ocorrência).
+ *
+ * `sentInput` é EXATAMENTE o texto enviado ao modelo, ou seja, o texto MASCARADO (transcrição,
+ * instrução e qualquer contexto). Com o texto original, um CPF cru vazando na saída seria
+ * tratado como "já presente na entrada" e passaria despercebido.
  */
-export function validateOutput(output: string, map: MaskMap, originalInput: string): OutputReport {
+export function validateOutput(output: string, map: MaskMap, sentInput: string): OutputReport {
   const unknown = new Set<string>();
   const malformed = new Set<string>();
 
@@ -31,8 +36,14 @@ export function validateOutput(output: string, map: MaskMap, originalInput: stri
     return literal;
   });
 
-  const known = new Set(detect(originalInput).map(findingKey));
-  const newIdentifiers = detect(output).filter((f) => !known.has(findingKey(f)));
+  const seen = new Set(detect(sentInput).map(findingKey));
+  const newIdentifiers: Finding[] = [];
+  for (const f of detect(output)) {
+    const key = findingKey(f);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    newIdentifiers.push(f);
+  }
 
   const unknownMarkers = [...unknown];
   const malformedMarkers = [...malformed];

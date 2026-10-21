@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMaskMap, mask } from '../src/mask';
 import { validateOutput } from '../src/validate-output';
 
+// Nota: estes testes passam o texto original como `sentInput` (válido: o CPF é o mesmo); no uso
+// real, `sentInput` é o texto MASCARADO exatamente como enviado ao modelo.
 const original = 'CPF 529.982.247-25';
 const { map } = mask(original);
 
@@ -95,5 +97,22 @@ describe('validateOutput', () => {
     const r = validateOutput('[cpf 7]', map, original);
     expect(r.unknownMarkers).toEqual(['[CPF_7]']);
     expect(r.malformedMarkers).toEqual([]);
+  });
+
+  it('vazamento de dado cru na saída é reportado quando sentInput é o texto mascarado', () => {
+    const orig = 'CPF 529.982.247-25 e e-mail ana@exemplo.com.br';
+    const { masked, map: m } = mask(orig);
+    const saida = 'Ref 529.982.247-25 / ana@exemplo.com.br';
+    const r = validateOutput(saida, m, masked);
+    expect(r.newIdentifiers.map((f) => f.type)).toEqual(['CPF', 'EMAIL']);
+    expect(r.ok).toBe(false);
+    // com o original, o vazamento passaria despercebido
+    expect(validateOutput(saida, m, orig).newIdentifiers).toEqual([]);
+  });
+
+  it('newIdentifiers sem repetição por chave normalizada', () => {
+    const r = validateOutput('Ligar (11) 98888-7777 ou 11988887777', map, original);
+    expect(r.newIdentifiers).toHaveLength(1);
+    expect(r.newIdentifiers[0]?.value).toBe('(11) 98888-7777');
   });
 });
