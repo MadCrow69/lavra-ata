@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { extractText } from 'unpdf';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AVISO_MINUTA, RODAPE_INTERNO_IA } from '../../config/documento';
+import { AVISO_MINUTA, RODAPE_INTERNO_IA, RODAPE_PAGINADO } from '../../config/documento';
 import type { DocBloco, DocumentModel } from '../../document/model';
 import { modeloDeVolume } from '../../test/documento-volume';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
@@ -38,6 +38,15 @@ function comParagrafo(modelo: DocumentModel, texto: string): DocumentModel {
 }
 
 const tres = (i: number) => String(i).padStart(3, '0');
+
+/** Expressão regular do rodapé do modelo: texto literal, com `{pagina}` e `{total}` como números. */
+function padraoDoRodape(rodape: string): string {
+  return rodape
+    .replace(/[.*+?^$()|[\]\\]/g, String.raw`\$&`)
+    .replace('{pagina}', String.raw`\d+`)
+    .replace('{total}', String.raw`\d+`);
+}
+
 const RECHEIO =
   'revisar o orçamento anual com as áreas envolvidas e registrar as pendências '.repeat(3);
 
@@ -211,7 +220,7 @@ describe('gerarPdf: título de seção nunca fica sozinho no pé da página', ()
   const modeloComEnchimento = (paragrafos: number): DocumentModel => ({
     titulo: 'Ata de teste',
     cabecalho: { logo: null, linhas: ['Organização de teste'] },
-    rodape: 'Página {pagina} de {total}',
+    rodape: RODAPE_PAGINADO,
     rodapeInterno: null,
     blocos: [
       ...Array.from({ length: paragrafos }, (_, i): DocBloco => ({
@@ -232,9 +241,21 @@ describe('gerarPdf: título de seção nunca fica sozinho no pé da página', ()
   // só o espaço do título no pé; sem o rodapé fora da conta, esse caso reprova.
   const ENCHIMENTOS = Array.from({ length: 13 }, (_, i) => i + 25);
 
-  it('a varredura de enchimento chega a empurrar o título para a 2ª página', async () => {
+  // O rodapé impresso é o do próprio modelo, com os marcadores trocados por números.
+  const RODAPE_IMPRESSO = new RegExp(
+    String.raw`${padraoDoRodape(modeloComEnchimento(0).rodape)}\s*$`,
+  );
+
+  it('a varredura de enchimento cobre as duas pontas: título na 1ª página e depois na 2ª', async () => {
+    const primeiro = await paginas(await bytesDoPdf(modeloComEnchimento(ENCHIMENTOS[0] ?? 0)));
+    expect(primeiro).toHaveLength(1);
+    expect(primeiro[0]).toContain(TITULO);
+    expect(primeiro[0]).toMatch(RODAPE_IMPRESSO);
+
     const ultimo = await paginas(await bytesDoPdf(modeloComEnchimento(ENCHIMENTOS.at(-1) ?? 0)));
     expect(ultimo.length).toBeGreaterThanOrEqual(2);
+    expect(ultimo[0]).not.toContain(TITULO);
+    expect(ultimo[1]).toContain(TITULO);
   });
 
   it(
@@ -244,7 +265,7 @@ describe('gerarPdf: título de seção nunca fica sozinho no pé da página', ()
       for (const n of ENCHIMENTOS) {
         const texto = await paginas(await bytesDoPdf(modeloComEnchimento(n)));
         texto.forEach((pagina, i) => {
-          const semRodape = pagina.replace(/Página \d+ de \d+\s*$/, '').trim();
+          const semRodape = pagina.replace(RODAPE_IMPRESSO, '').trim();
           if (semRodape.endsWith(TITULO))
             orfas.push(`enchimento ${String(n)}, página ${String(i + 1)}`);
         });
