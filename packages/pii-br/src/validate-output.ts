@@ -58,11 +58,18 @@ export function validateOutput(output: string, map: MaskMap, sentInput: string):
   // mapa (`CPF 1` com `[CPF_1]` no mapa) OU se vier colado em pontuação de marcador (`[`, `]`,
   // `_`, `\`). Assim "o CEP 01310100" na saída segue limpo.
   for (const m of output.matchAll(LEFTOVER)) {
-    const { open, type, sep, n, close } = m.groups as Record<string, string | undefined>;
+    // `type`, `sep` e `n` sempre participam do casamento; `open` e `close` são opcionais.
+    const { open, type, sep, n, close } = m.groups as {
+      open?: string;
+      type: string;
+      sep: string;
+      n: string;
+      close?: string;
+    };
     const end = m.index + m[0].length;
     if (covered.some(([from, to]) => m.index < to && end > from)) continue;
-    const known = Object.hasOwn(map.markers, `[${(type ?? '').toUpperCase()}_${n ?? ''}]`);
-    const punctuated = open === '[' || close === ']' || /[_\\]/.test(sep ?? '');
+    const known = Object.hasOwn(map.markers, `[${type.toUpperCase()}_${n}]`);
+    const punctuated = open === '[' || close === ']' || /[_\\]/.test(sep);
     if ((known || punctuated) && !malformed.has(m[0])) malformed.set(m[0], m.index);
   }
 

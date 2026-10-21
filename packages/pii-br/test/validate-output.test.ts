@@ -157,6 +157,11 @@ describe('validateOutput: marcadores quebrados que o unmask não restaura', () =
     expect(validateOutput('Ref [CPF_9', map, original).ok).toBe(false);
   });
 
+  it('colchete de fechamento sozinho também marca a sobra; repetida, aparece uma vez', () => {
+    const r = validateOutput('Ref CPF 9] e CPF_1 e CPF_1', map, original);
+    expect(r.malformedMarkers).toEqual(['CPF 9]', 'CPF_1']);
+  });
+
   it('prosa normal com o nome do tipo e um número que não é marcador não reprova', () => {
     const prosa = [
       'Enviar ao CEP 01310100 conforme combinado.',
