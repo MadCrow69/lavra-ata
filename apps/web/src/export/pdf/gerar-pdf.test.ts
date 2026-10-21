@@ -2,9 +2,10 @@
 import { extractText } from 'unpdf';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AVISO_MINUTA, RODAPE_INTERNO_IA } from '../../config/documento';
-import type { DocumentModel } from '../../document/model';
+import type { DocBloco, DocumentModel } from '../../document/model';
 import { modeloDeVolume } from '../../test/documento-volume';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
+import { caracteresSemFonte } from './cobertura';
 import { gerarPdf } from './gerar-pdf';
 
 /** Teto de tempo da geração de 200 participantes × 200 encaminhamentos (spec: volume). */
@@ -24,6 +25,40 @@ async function paginas(bytes: Uint8Array): Promise<string[]> {
 
 const latin1 = (bytes: Uint8Array) => new TextDecoder('latin1').decode(bytes);
 
+const cp = (...pontos: number[]) => String.fromCodePoint(...pontos);
+
+/** Único aviso aceito: o pdfmake no Node pede política de acesso local (no navegador não há). */
+const AVISO_ACESSO_LOCAL = 'No local access policy defined.';
+
+/** Texto de IA/chat com o que as fontes não desenham ou o PDF descarta/troca. */
+const TEXTO_PROBLEMATICO = `Código D${cp(0x2011)}1 de ${cp(0x2068)}Nome Isolado${cp(0x2069)}, co${cp(0x00ad)}operação, Ж e ${cp(0x1f600)}.`;
+
+function comParagrafo(modelo: DocumentModel, texto: string): DocumentModel {
+  return { ...modelo, blocos: [...modelo.blocos, { tipo: 'paragrafo', partes: [{ texto }] }] };
+}
+
+const tres = (i: number) => String(i).padStart(3, '0');
+const RECHEIO =
+  'revisar o orçamento anual com as áreas envolvidas e registrar as pendências '.repeat(3);
+
+/** Troca a ação de cada encaminhamento por um texto longo (várias linhas) com marcas nas pontas. */
+function comAcoesLongas(modelo: DocumentModel): DocumentModel {
+  const trocar = (b: DocBloco): DocBloco => {
+    if (b.tipo === 'secao') return { ...b, blocos: b.blocos.map(trocar) };
+    if (b.tipo !== 'tabela' || b.colunas[0] !== 'Ação') return b;
+    return {
+      ...b,
+      linhas: b.linhas.map((l, i) => [
+        `Início da tarefa ${tres(i + 1)} ${RECHEIO}fim da tarefa ${tres(i + 1)}`,
+        ...l.slice(1),
+      ]),
+    };
+  };
+  return { ...modelo, blocos: modelo.blocos.map(trocar) };
+}
+
+const LINHAS_LONGAS = 80;
+
 /** Chamadas a `fetch` durante as gerações (medidas antes de o pdf.js do teste ler os PDFs). */
 let chamadasFetch: number;
 let simples: DocumentModel;
@@ -31,11 +66,20 @@ let bytesSimples: Uint8Array;
 let bytesComLogo: Uint8Array;
 let bytesVolume: Uint8Array;
 let tempoVolumeMs: number;
+let problematico: DocumentModel;
+let bytesProblematico: Uint8Array;
+let tempoProblematicoMs: number;
+let bytesLongas: Uint8Array;
+const avisosInesperados: unknown[][] = [];
 
 beforeAll(async () => {
   // No Node, o pdfmake avisa que não há política de acesso a arquivos locais (no navegador o
-  // aviso não existe: ver `isServer` em pdfmake/src/base.js). Silenciado só neste arquivo.
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  // aviso não existe: ver `isServer` em pdfmake/src/base.js). Só ESSE aviso é aceito; qualquer
+  // outro fica registrado e reprova o teste "nenhum aviso inesperado".
+  vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+    if (typeof args[0] === 'string' && args[0].startsWith(AVISO_ACESSO_LOCAL)) return;
+    avisosInesperados.push(args);
+  });
   const fetchEspiao = vi.spyOn(globalThis, 'fetch');
 
   simples = modeloDeVolume({ participantes: 3, encaminhamentos: 3 });
@@ -46,6 +90,16 @@ beforeAll(async () => {
   const inicio = performance.now();
   bytesVolume = await bytesDoPdf(modeloDeVolume({ participantes: 200, encaminhamentos: 200 }));
   tempoVolumeMs = performance.now() - inicio;
+  problematico = comParagrafo(
+    modeloDeVolume({ participantes: 1, encaminhamentos: 1 }),
+    TEXTO_PROBLEMATICO,
+  );
+  const inicioProblematico = performance.now();
+  bytesProblematico = await bytesDoPdf(problematico);
+  tempoProblematicoMs = performance.now() - inicioProblematico;
+  bytesLongas = await bytesDoPdf(
+    comAcoesLongas(modeloDeVolume({ participantes: 1, encaminhamentos: LINHAS_LONGAS })),
+  );
   chamadasFetch = fetchEspiao.mock.calls.length;
   fetchEspiao.mockRestore();
 }, TEMPO_VOLUME_MS * 2);
@@ -72,6 +126,10 @@ describe('gerarPdf', () => {
     expect(simples.rodapeInterno).not.toBeNull();
     const texto = (await paginas(bytesSimples)).join(' ');
     expect(texto).not.toContain(RODAPE_INTERNO_IA);
+  });
+
+  it('nenhum aviso inesperado no console durante as gerações', () => {
+    expect(avisosInesperados).toEqual([]);
   });
 
   it('com logo, o PDF embute uma imagem; sem logo, nenhuma', () => {
@@ -113,5 +171,37 @@ describe('gerarPdf com 200 participantes e 200 encaminhamentos', () => {
 
   it('nenhuma requisição de rede em nenhuma das gerações (simples, logo e volume)', () => {
     expect(chamadasFetch).toBe(0);
+  });
+});
+
+describe('gerarPdf com texto de IA/chat que as fontes não desenham', () => {
+  it('gera sem lançar e dentro do teto de tempo', () => {
+    expect(latin1(bytesProblematico.subarray(0, 5))).toBe('%PDF-');
+    expect(tempoProblematicoMs).toBeLessThan(TEMPO_MAXIMO_VOLUME_MS);
+  });
+
+  it('hífen inquebrável sai como "-"; isolamento bidi e hífen suave não chegam ao PDF', async () => {
+    const texto = (await paginas(bytesProblematico)).join(' ');
+    expect(texto).toContain('D-1');
+    expect(texto).toContain('Nome Isolado');
+    expect(texto).toContain('cooperação');
+    for (const ponto of [0x2011, 0x2068, 0x2069, 0x00ad]) expect(texto).not.toContain(cp(ponto));
+  });
+
+  it('o aviso prévio lista exatamente o que sairia sem desenho: Ж e o emoji', () => {
+    expect(caracteresSemFonte(problematico)).toEqual(['Ж', cp(0x1f600)]);
+  });
+});
+
+describe('gerarPdf: linha de tabela longa nunca se parte entre páginas', () => {
+  it('início e fim de cada ação longa estão na mesma página', async () => {
+    const texto = await paginas(bytesLongas);
+    expect(texto.length).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i <= LINHAS_LONGAS; i += 1) {
+      const comInicio = texto.findIndex((p) => p.includes(`Início da tarefa ${tres(i)}`));
+      const comFim = texto.findIndex((p) => p.includes(`fim da tarefa ${tres(i)}`));
+      expect(comInicio, `tarefa ${tres(i)}`).toBeGreaterThanOrEqual(0);
+      expect(comFim, `tarefa ${tres(i)}`).toBe(comInicio);
+    }
   });
 });

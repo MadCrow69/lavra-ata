@@ -1,5 +1,6 @@
 import { textosDoDocumento } from '../../document/build-model';
-import type { DocumentModel } from '../../document/model';
+import type { DocBloco, DocumentModel } from '../../document/model';
+import { COBERTURA_GERADA } from './cobertura-gerada';
 
 /**
  * Cobertura Unicode das fontes embutidas no PDF. Puro (sem pdfmake): pode ir para o bundle
@@ -18,97 +19,72 @@ export const FONTES_PDF: Record<FamiliaPdf, { latin: string; ext: string }> = {
 };
 
 /**
- * Faixas de cada subset, copiadas do `unicode.json` do pacote @fontsource de cada fonte (Inter
- * 5.3.0 e Source Serif 4 5.3.1) — o `unicode-range` dos arquivos `.woff` embutidos. Cada família
- * tem as suas (o latin-ext diverge em U+20C1–20C4); `cobertura.test.ts` confere contra os pacotes.
+ * Faixas de cada subset com glifo REAL, geradas do cmap dos `.woff` embutidos
+ * (`scripts/gerar-cobertura-fontes.mjs` → `cobertura-gerada.ts`). O `unicode-range` do pacote
+ * não serve: declara pontos sem glifo (U+2010, U+2011, U+202F…), que sairiam como caixinha.
  */
 export const FAIXAS_FONTE: Record<FamiliaPdf, { latin: readonly Faixa[]; ext: readonly Faixa[] }> =
-  {
-    corpo: {
-      latin: [
-        [0x0000, 0x00ff],
-        [0x0131, 0x0131],
-        [0x0152, 0x0153],
-        [0x02bb, 0x02bc],
-        [0x02c6, 0x02c6],
-        [0x02da, 0x02da],
-        [0x02dc, 0x02dc],
-        [0x0304, 0x0304],
-        [0x0308, 0x0308],
-        [0x0329, 0x0329],
-        [0x2000, 0x206f],
-        [0x20ac, 0x20ac],
-        [0x2122, 0x2122],
-        [0x2191, 0x2191],
-        [0x2193, 0x2193],
-        [0x2212, 0x2212],
-        [0x2215, 0x2215],
-        [0xfeff, 0xfeff],
-        [0xfffd, 0xfffd],
-      ],
-      ext: [
-        [0x0100, 0x02ba],
-        [0x02bd, 0x02c5],
-        [0x02c7, 0x02cc],
-        [0x02ce, 0x02d7],
-        [0x02dd, 0x02ff],
-        [0x0304, 0x0304],
-        [0x0308, 0x0308],
-        [0x0329, 0x0329],
-        [0x1d00, 0x1dbf],
-        [0x1e00, 0x1e9f],
-        [0x1ef2, 0x1eff],
-        [0x2020, 0x2020],
-        [0x20a0, 0x20ab],
-        [0x20ad, 0x20c0],
-        [0x2113, 0x2113],
-        [0x2c60, 0x2c7f],
-        [0xa720, 0xa7ff],
-      ],
-    },
-    titulo: {
-      latin: [
-        [0x0000, 0x00ff],
-        [0x0131, 0x0131],
-        [0x0152, 0x0153],
-        [0x02bb, 0x02bc],
-        [0x02c6, 0x02c6],
-        [0x02da, 0x02da],
-        [0x02dc, 0x02dc],
-        [0x0304, 0x0304],
-        [0x0308, 0x0308],
-        [0x0329, 0x0329],
-        [0x2000, 0x206f],
-        [0x20ac, 0x20ac],
-        [0x2122, 0x2122],
-        [0x2191, 0x2191],
-        [0x2193, 0x2193],
-        [0x2212, 0x2212],
-        [0x2215, 0x2215],
-        [0xfeff, 0xfeff],
-        [0xfffd, 0xfffd],
-      ],
-      ext: [
-        [0x0100, 0x02ba],
-        [0x02bd, 0x02c5],
-        [0x02c7, 0x02cc],
-        [0x02ce, 0x02d7],
-        [0x02dd, 0x02ff],
-        [0x0304, 0x0304],
-        [0x0308, 0x0308],
-        [0x0329, 0x0329],
-        [0x1d00, 0x1dbf],
-        [0x1e00, 0x1e9f],
-        [0x1ef2, 0x1eff],
-        [0x2020, 0x2020],
-        [0x20a0, 0x20ab],
-        [0x20ad, 0x20c4],
-        [0x2113, 0x2113],
-        [0x2c60, 0x2c7f],
-        [0xa720, 0xa7ff],
-      ],
-    },
-  };
+  COBERTURA_GERADA;
+
+/**
+ * Trocas feitas só no PDF, para caracteres comuns em texto de IA e em colagens de chat que as
+ * fontes embutidas não desenham mas têm equivalente visual com glifo (`cobertura.test.ts` confere
+ * as duas pontas). Espaços tipográficos viram espaço; hífen inquebrável vira hífen comum.
+ */
+export const SUBSTITUICOES_PDF: ReadonlyMap<number, string> = new Map([
+  // Espaços tipográficos (en quad, em quad, 1/3, 1/4, 1/6 de eme, figura, pontuação, fino
+  // extra, matemático médio, ideográfico) → espaço comum.
+  [0x2000, ' '],
+  [0x2001, ' '],
+  [0x2003, ' '],
+  [0x2004, ' '],
+  [0x2005, ' '],
+  [0x2006, ' '],
+  [0x2007, ' '],
+  [0x2008, ' '],
+  [0x200a, ' '],
+  [0x205f, ' '],
+  [0x3000, ' '],
+  // Espaço fino inquebrável (comum antes de "%" e em números) → espaço inquebrável (U+00A0).
+  [0x202f, String.fromCodePoint(0x00a0)],
+  // Separadores de linha e de parágrafo → quebra de linha.
+  [0x2028, '\n'],
+  [0x2029, '\n'],
+  // Hífens e traços sem glifo → o equivalente desenhado.
+  [0x2010, '-'],
+  [0x2011, '-'],
+  [0x2043, '-'],
+  [0x2012, '–'],
+  [0x2015, '—'],
+  // Aspas invertidas → aspas comuns.
+  [0x201b, '‘'],
+  [0x201f, '“'],
+  // Pontos-guia e ponto de hifenização.
+  [0x2024, '.'],
+  [0x2025, '..'],
+  [0x2027, '·'],
+]);
+
+/** Formatação invisível (`\p{Cf}`: U+00AD, U+200B–U+200F, U+2060–U+2069, U+FEFF…). */
+const FORMATACAO = /^\p{Cf}$/u;
+
+/** Seletores de variação (U+FE00–U+FE0F): não desenham nada sozinhos. */
+const ehSeletorDeVariacao = (ponto: number): boolean => ponto >= 0xfe00 && ponto <= 0xfe0f;
+
+/**
+ * Texto como o PDF o imprime: NFC, sem formatação invisível nem seletor de variação, e com as
+ * trocas de `SUBSTITUICOES_PDF`. `separarPorFonte` e `caracteresSemFonte` partem daqui, então o
+ * aviso de "sem fonte" fala exatamente do que sairia no arquivo.
+ */
+export function prepararTextoPdf(texto: string): string {
+  let saida = '';
+  for (const caractere of texto.normalize('NFC')) {
+    const ponto = caractere.codePointAt(0) ?? 0;
+    if (FORMATACAO.test(caractere) || ehSeletorDeVariacao(ponto)) continue;
+    saida += SUBSTITUICOES_PDF.get(ponto) ?? caractere;
+  }
+  return saida;
+}
 
 const dentro = (faixas: readonly Faixa[], ponto: number): boolean =>
   faixas.some(([inicio, fim]) => ponto >= inicio && ponto <= fim);
@@ -123,7 +99,7 @@ function subsetDe(familia: FamiliaPdf, ponto: number): Subset {
 }
 
 /**
- * Divide o texto (normalizado em NFC) em trechos consecutivos da mesma fonte: o que está no subset
+ * Divide o texto (já preparado por `prepararTextoPdf`) em trechos consecutivos da mesma fonte: o que está no subset
  * `latin` (ou em nenhum dos dois, que sai sem desenho e é avisado antes) usa a fonte latin; o que
  * só o `latin-ext` cobre usa a segunda fonte. Percorre por ponto de código, nunca por metade UTF-16.
  */
@@ -132,7 +108,7 @@ export function separarPorFonte(
   familia: FamiliaPdf,
 ): { text: string; font: string }[] {
   const trechos: { text: string; font: string }[] = [];
-  for (const caractere of texto.normalize('NFC')) {
+  for (const caractere of prepararTextoPdf(texto)) {
     const ponto = caractere.codePointAt(0) ?? 0;
     const fonte =
       subsetDe(familia, ponto) === 'ext' ? FONTES_PDF[familia].ext : FONTES_PDF[familia].latin;
@@ -143,34 +119,42 @@ export function separarPorFonte(
   return trechos;
 }
 
-/**
- * Caracteres que ninguém vê e que não pedem desenho (espaço, controle, U+200B–U+200D, seletores
- * de variação U+FE0E/U+FE0F, U+2060): não contam como "sem fonte".
- */
-const INVISIVEIS = new Set([0x200b, 0x200c, 0x200d, 0xfe0e, 0xfe0f, 0x2060]);
-const ESPACO_OU_CONTROLE = /^[\s\p{Cc}]$/u;
+const ehControle = (caractere: string): boolean => /^\p{Cc}$/u.test(caractere);
 
-function invisivel(caractere: string): boolean {
-  return ESPACO_OU_CONTROLE.test(caractere) || INVISIVEIS.has(caractere.codePointAt(0) ?? 0);
+/** Textos impressos na família serifada: título da ata, subtítulos e títulos de seção. */
+function textosEmSerifa(modelo: DocumentModel): string[] {
+  const titulos = (bloco: DocBloco): string[] => {
+    switch (bloco.tipo) {
+      case 'titulo':
+      case 'subtitulo':
+        return [bloco.texto];
+      case 'secao':
+        return [bloco.titulo, ...bloco.blocos.flatMap(titulos)];
+      default:
+        return [];
+    }
+  };
+  return [modelo.titulo, ...modelo.blocos.flatMap(titulos)];
 }
 
 /**
- * Caracteres impressos no PDF que nenhuma das fontes embutidas desenha (cirílico, emoji, CJK…),
- * únicos, por ponto de código, na ordem em que aparecem. Normaliza em NFC (acento decomposto
- * colado de outro app não acusa) e ignora espaço, controle e invisíveis. Conservador: o caractere
- * precisa de desenho nas DUAS famílias (corpo e título), porque `textosDoDocumento` não diz qual
- * delas imprime cada texto — erra só para o lado de avisar.
+ * Caracteres impressos no PDF que a fonte que os imprime não desenha (cirílico, emoji, CJK, "‰"…),
+ * únicos, por ponto de código, na ordem em que aparecem. Parte do mesmo texto que o PDF recebe
+ * (`prepararTextoPdf`: NFC, sem invisíveis, com as trocas) e ignora controles (quebra de linha, tabulação).
+ * Todo texto é conferido na família do corpo; título e títulos de seção também na serifada
+ * (`definicao.ts` os imprime nela).
  */
 export function caracteresSemFonte(modelo: DocumentModel): string[] {
-  const vistos = new Set<string>();
-  for (const texto of textosDoDocumento(modelo)) {
-    for (const caractere of texto.normalize('NFC')) {
-      if (vistos.has(caractere) || invisivel(caractere)) continue;
-      const ponto = caractere.codePointAt(0) ?? 0;
-      if (subsetDe('corpo', ponto) === null || subsetDe('titulo', ponto) === null) {
-        vistos.add(caractere);
+  const faltando = new Set<string>();
+  const conferir = (textos: string[], familia: FamiliaPdf) => {
+    for (const texto of textos) {
+      for (const caractere of prepararTextoPdf(texto)) {
+        if (faltando.has(caractere) || ehControle(caractere)) continue;
+        if (subsetDe(familia, caractere.codePointAt(0) ?? 0) === null) faltando.add(caractere);
       }
     }
-  }
-  return [...vistos];
+  };
+  conferir(textosDoDocumento(modelo), 'corpo');
+  conferir(textosEmSerifa(modelo), 'titulo');
+  return [...faltando];
 }

@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import unicodeInter from '@fontsource/inter/unicode.json?raw';
-import unicodeSourceSerif from '@fontsource/source-serif-4/unicode.json?raw';
 import { RODAPE_PAGINADO } from '../../config/documento';
 import type { DocumentModel } from '../../document/model';
 import { modeloDeVolume, NOME_DECOMPOSTO } from '../../test/documento-volume';
-import { caracteresSemFonte, FAIXAS_FONTE, FONTES_PDF, separarPorFonte } from './cobertura';
+import {
+  caracteresSemFonte,
+  FAIXAS_FONTE,
+  FONTES_PDF,
+  prepararTextoPdf,
+  separarPorFonte,
+  SUBSTITUICOES_PDF,
+  type FamiliaPdf,
+} from './cobertura';
+import { COBERTURA_GERADA } from './cobertura-gerada';
 
-/** "U+0000-00FF,U+0131" → [[0x0, 0xff], [0x131, 0x131]] (formato do unicode-range do CSS). */
-function faixasDoCss(unicodeRange: string): [number, number][] {
-  return unicodeRange.split(',').map((faixa) => {
-    const [inicio = '', fim] = faixa.trim().replace(/^U\+/, '').split('-');
-    return [parseInt(inicio, 16), parseInt(fim ?? inicio, 16)];
-  });
-}
+const cp = (...pontos: number[]) => String.fromCodePoint(...pontos);
 
-function subsets(json: string): Record<string, string> {
-  return JSON.parse(json) as Record<string, string>;
+/** O subset (latin/ext) da família desenha o ponto de código? */
+function desenha(familia: FamiliaPdf, ponto: number): boolean {
+  const { latin, ext } = FAIXAS_FONTE[familia];
+  return [...latin, ...ext].some(([a, b]) => ponto >= a && ponto <= b);
 }
 
 function modeloCom(texto: string, extras: Partial<DocumentModel> = {}): DocumentModel {
@@ -29,17 +32,22 @@ function modeloCom(texto: string, extras: Partial<DocumentModel> = {}): Document
   };
 }
 
-describe('faixas de cada fonte = metadados do pacote @fontsource correspondente', () => {
-  it('Inter (corpo): latin e latin-ext de @fontsource/inter/unicode.json', () => {
-    const inter = subsets(unicodeInter);
-    expect(FAIXAS_FONTE.corpo.latin).toEqual(faixasDoCss(inter.latin ?? ''));
-    expect(FAIXAS_FONTE.corpo.ext).toEqual(faixasDoCss(inter['latin-ext'] ?? ''));
+describe('cobertura vem dos glifos reais (cobertura-gerada.ts)', () => {
+  it('FAIXAS_FONTE é a cobertura gerada do cmap dos .woff embutidos', () => {
+    expect(FAIXAS_FONTE).toBe(COBERTURA_GERADA);
   });
 
-  it('Source Serif 4 (título): latin e latin-ext do próprio pacote, não as do Inter', () => {
-    const serif = subsets(unicodeSourceSerif);
-    expect(FAIXAS_FONTE.titulo.latin).toEqual(faixasDoCss(serif.latin ?? ''));
-    expect(FAIXAS_FONTE.titulo.ext).toEqual(faixasDoCss(serif['latin-ext'] ?? ''));
+  it('o que a ata em pt-BR usa está desenhado no corpo e no título', () => {
+    const ptBr = 'ÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúçºª—–“”‘’•…€%';
+    for (const familia of ['corpo', 'titulo'] as const) {
+      for (const c of ptBr) expect(desenha(familia, c.codePointAt(0) ?? 0), c).toBe(true);
+    }
+  });
+
+  it('o que o unicode-range declara mas não tem glifo NÃO conta como coberto', () => {
+    for (const ponto of [0x2010, 0x2011, 0x202f, 0x2030, 0x00ad]) {
+      expect(desenha('corpo', ponto), ponto.toString(16)).toBe(false);
+    }
   });
 
   it('nomes das famílias registradas no pdfmake', () => {
@@ -47,6 +55,35 @@ describe('faixas de cada fonte = metadados do pacote @fontsource correspondente'
       corpo: { latin: 'Inter', ext: 'InterExt' },
       titulo: { latin: 'SourceSerif', ext: 'SourceSerifExt' },
     });
+  });
+});
+
+describe('prepararTextoPdf', () => {
+  it('normaliza em NFC', () => {
+    expect(prepararTextoPdf(NOME_DECOMPOSTO)).toBe('João Decomposto');
+  });
+
+  it('remove formatação invisível (Cf) e seletores de variação', () => {
+    const sujo = `a${cp(0x200b)}b${cp(0x200e)}c${cp(0x2068)}d${cp(0x2069)}e${cp(0x00ad)}f${cp(0xfeff)}g${cp(0x2764, 0xfe0f)}`;
+    expect(prepararTextoPdf(sujo)).toBe(`abcdefg${cp(0x2764)}`);
+  });
+
+  it('troca hífen inquebrável, espaço fino inquebrável e espaços tipográficos', () => {
+    expect(prepararTextoPdf(`D${cp(0x2011)}1 e 50${cp(0x202f)}%`)).toBe(`D-1 e 50${cp(0x00a0)}%`);
+    expect(prepararTextoPdf(`a${cp(0x2003)}b${cp(0x2009)}c`)).toBe(`a b${cp(0x2009)}c`);
+  });
+
+  it('cada troca vai de algo sem glifo para algo desenhado nas duas famílias', () => {
+    for (const [origem, destino] of SUBSTITUICOES_PDF) {
+      expect(desenha('corpo', origem) && desenha('titulo', origem), origem.toString(16)).toBe(
+        false,
+      );
+      for (const c of destino) {
+        if (c === '\n') continue;
+        const ponto = c.codePointAt(0) ?? 0;
+        expect(desenha('corpo', ponto) && desenha('titulo', ponto), ponto.toString(16)).toBe(true);
+      }
+    }
   });
 });
 
@@ -116,6 +153,24 @@ describe('caracteresSemFonte', () => {
       rodapeInterno: 'Минута',
     });
     expect(caracteresSemFonte(modelo)).toEqual(['中', 'Ω', 'א']);
+  });
+
+  it('acusa o que a fonte não desenha mesmo dentro do unicode-range declarado ("‰")', () => {
+    expect(caracteresSemFonte(modeloCom('Margem de 5‰'))).toEqual(['‰']);
+  });
+
+  it('não acusa o que o PDF troca ou descarta (hífen inquebrável, isolamento bidi, hífen suave)', () => {
+    const texto = `D${cp(0x2011)}1 ${cp(0x2068)}Nome${cp(0x2069)} co${cp(0x00ad)}operação 50${cp(0x202f)}%`;
+    expect(caracteresSemFonte(modeloCom(texto))).toEqual([]);
+  });
+
+  it('título confere na família serifada; o corpo, só na do corpo', () => {
+    // U+012C (Ĭ): o Inter desenha, o Source Serif 4 embutido não.
+    const breve = cp(0x012c);
+    expect(desenha('corpo', 0x012c)).toBe(true);
+    expect(desenha('titulo', 0x012c)).toBe(false);
+    expect(caracteresSemFonte(modeloCom(`Nome ${breve}`))).toEqual([]);
+    expect(caracteresSemFonte(modeloCom('ok', { titulo: `Ata ${breve}` }))).toEqual([breve]);
   });
 
   it('o rascunho de volume (pt-BR, latin-ext e NFD) não tem caractere sem fonte', () => {
