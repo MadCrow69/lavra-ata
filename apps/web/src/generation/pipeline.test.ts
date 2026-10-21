@@ -1,6 +1,7 @@
 import { createMaskMap, mask } from '@lavra/pii-br';
 import { describe, expect, it, vi } from 'vitest';
 import { cipa } from '../ata-types/cipa';
+import { condominio } from '../ata-types/condominio';
 import { corporativa } from '../ata-types/corporativa';
 import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { ErroCadeia, ErroProvedor, erroProvedor } from '../ai/errors';
@@ -639,5 +640,80 @@ describe('regerarSecao: CIPA (primeiro tipo registrado com extras enviados à IA
     }
     expect(r.blocos).toEqual([par(`Aprovada por consenso a correção de ${CPF}.`)]);
     expect(r.avisos).toEqual([]);
+  });
+});
+
+describe('regerarSecao: condomínio (extras que ficam no navegador num tipo registrado)', () => {
+  const UNIDADE = 'Apto 101';
+  const FRACAO = '0,0125';
+
+  it('envia o vínculo; unidade, fração, CNPJ, endereço e local nunca saem, nem como marcador', async () => {
+    const d0: AtaDraft = {
+      ...rascunho(),
+      tipoId: condominio.id,
+      dados: {
+        condominio: 'Condomínio Edifício Exemplo',
+        cnpj: '11.222.333/0001-81',
+        endereco: 'Rua das Flores, 100',
+        natureza: 'ordinaria',
+        chamada: 'segunda',
+        data: '2026-10-14',
+        modalidade: 'presencial',
+        local: 'Salão de festas',
+        presidente: 'Ana Souza',
+        secretario: 'Bruno Lima',
+      },
+      participantes: [
+        {
+          ...ANA,
+          papel: '',
+          extras: { unidade: UNIDADE, vinculo: 'proprietario', fracao: FRACAO },
+        },
+        // CPF digitado na unidade (extra que não segue): não sai, nem como CPF nem como marcador.
+        {
+          ...ANA,
+          id: 'p2',
+          nome: 'Bruno Lima',
+          papel: '',
+          extras: { unidade: CPF_2, vinculo: 'locatario' },
+        },
+      ],
+      transcricao: `Ana: o CPF ${CPF} foi corrigido no cadastro.`,
+    };
+    const mapa = mask(d0.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      d0,
+      {
+        secoes: {
+          ordem_do_dia: [par(`Item 1: correção do CPF ${CPF}. [PREENCHER: resultado da votação]`)],
+        },
+      },
+      mapa,
+    );
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve({ blocos: [par('Item 1: correção de [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, condominio, 'ordem_do_dia', null, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Ana Souza — Proprietário(a) — presente');
+    expect(usuario).toContain('Bruno Lima — Locatário(a) — presente');
+    expect(usuario).toContain('[PREENCHER: resultado da votação]');
+    for (const vazado of [
+      CPF,
+      CPF_2,
+      UNIDADE,
+      FRACAO,
+      'Edifício Exemplo',
+      '11.222.333',
+      'Rua das Flores',
+      'Salão de festas',
+    ]) {
+      expect(usuario).not.toContain(vazado);
+    }
+    // Dados da reunião e participantes (antes do texto atual, que traz o CPF da transcrição).
+    const dadosEnviados = usuario.slice(0, usuario.indexOf('\nSeção: '));
+    expect(dadosEnviados).toContain('Participantes (nome — vínculo — presença)');
+    expect(dadosEnviados).not.toMatch(/\[CPF_\d+\]/);
+    expect(r.blocos).toEqual([par(`Item 1: correção de ${CPF}.`)]);
   });
 });
