@@ -1,0 +1,25 @@
+# Dependências
+node_modules/
+
+# Build e cobertura
+dist/
+coverage/
+*.tsbuildinfo
+
+# Testes E2E
+playwright-report/
+test-results/
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Editores e SO
+.DS_Store
+Thumbs.db
+.idea/
+*.log
+
+# Mockups locais do brainstorming
+.superpowers/
