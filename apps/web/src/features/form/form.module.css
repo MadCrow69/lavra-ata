@@ -237,7 +237,7 @@
   color: var(--cor-texto);
 }
 
-.tabela input[aria-invalid='true'] {
+.tabela :is(input, select)[aria-invalid='true'] {
   border-color: var(--cor-erro);
   border-width: 2px;
 }
@@ -368,4 +368,53 @@
   .celulaAcao {
     width: auto;
   }
+}
+
+/* ---------- Resumo e preenchimento em lote dos participantes ---------- */
+
+.resumoTexto {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
+.alertaResumo {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border-left: 4px solid var(--cor-destaque);
+  background: var(--cor-fundo);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--cor-destaque-texto);
+}
+
+.preencherVazios {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+}
+
+.preencherTitulo {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.preencherSelect {
+  min-height: 44px;
+  min-width: 12rem;
+  max-width: 100%;
+  padding: var(--espaco-1) var(--espaco-2);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+}
+
+.preencherContagem {
+  color: var(--cor-texto-suave);
+  font-size: 0.875rem;
 }

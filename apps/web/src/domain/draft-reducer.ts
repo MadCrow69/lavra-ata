@@ -26,14 +26,19 @@ export function criarRascunho(tipoId: string = TIPO_PADRAO_ID): AtaDraft {
   };
 }
 
-function novoParticipante(nome: string, papel: string): Participante {
+function novoParticipante(
+  nome: string,
+  complemento: string,
+  destino: string | undefined,
+): Participante {
+  const noExtra = destino !== undefined && complemento !== '';
   return {
     id: crypto.randomUUID(),
     nome,
-    papel,
+    papel: destino === undefined ? complemento : '',
     presenca: 'presente',
     justificativa: '',
-    extras: {},
+    extras: noExtra ? { [destino]: complemento } : {},
   };
 }
 
@@ -58,7 +63,8 @@ function registrarTroca(
 export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
   switch (action.type) {
     case 'definirTipo':
-      return { ...state, tipoId: action.tipoId };
+      // A ata gerada vale para o tipo anterior (as seções mudam); todo o resto é mantido.
+      return { ...state, tipoId: action.tipoId, resultado: null };
     case 'definirTom':
       return { ...state, tom: action.tom };
     case 'definirCampo':
@@ -67,13 +73,28 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
       return { ...state, pauta: action.itens };
     case 'adicionarParticipantes': {
       const validos = action.nomes
-        .map((nome, i) => ({ nome: nome.trim(), papel: (action.papeis?.[i] ?? '').trim() }))
+        .map((nome, i) => ({
+          nome: nome.trim(),
+          complemento: (action.complementos?.[i] ?? '').trim(),
+        }))
         .filter((p) => p.nome !== '');
       const { adicionados } = calcularAdicao(state.participantes.length, validos.length);
-      const novos = validos.slice(0, adicionados).map((p) => novoParticipante(p.nome, p.papel));
+      const novos = validos
+        .slice(0, adicionados)
+        .map((p) => novoParticipante(p.nome, p.complemento, action.destino));
       return novos.length === 0
         ? state
         : { ...state, participantes: [...state.participantes, ...novos] };
+    }
+    case 'preencherExtrasVazios': {
+      const vazio = (p: Participante) => (p.extras[action.campo] ?? '').trim() === '';
+      if (!state.participantes.some(vazio)) return state;
+      return {
+        ...state,
+        participantes: state.participantes.map((p) =>
+          vazio(p) ? { ...p, extras: { ...p.extras, [action.campo]: action.valor } } : p,
+        ),
+      };
     }
     case 'atualizarParticipante':
       return {

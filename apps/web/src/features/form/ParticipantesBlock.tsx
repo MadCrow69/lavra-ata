@@ -1,5 +1,13 @@
 import { memo, useId, useMemo, useRef, useState, type Dispatch, type SubmitEvent } from 'react';
-import { camposFaltando } from '../../ata-types/registry';
+import {
+  camposFaltando,
+  colunasDeParticipantes,
+  mensagemObrigatorio,
+  problemaDoCampo,
+  rotuloDaOpcao,
+  rotuloDoCampo,
+  type ColunaParticipante,
+} from '../../ata-types/registry';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
 import { LARGURA_CARTOES_REM } from '../../config/ui';
@@ -21,6 +29,7 @@ import {
   analisarLista,
   contarRepetidos,
   descreverAdicao,
+  descreverPreenchimento,
   normalizarBusca,
   type LinhaParticipante,
 } from './lista-participantes';
@@ -31,135 +40,211 @@ const CONSULTA_CARTOES = `(max-width: ${String(LARGURA_CARTOES_REM)}rem)`;
 interface LinhaProps {
   participante: Participante;
   posicao: number;
-  tipo: AtaTypeDefinition;
+  colunas: ColunaParticipante[];
+  /** Os dados da reunião decidem a obrigatoriedade e a validade dos extras (ver `mesmaLinha`). */
+  dados: Record<string, string>;
   dispatch: Dispatch<DraftAction>;
 }
 
-function CampoExtra({
-  campo,
-  valor,
-  rotulo,
-  onChange,
-}: {
+/** Mensagem do problema do valor de um extra, ou `null`. Mesmo critério da lista "falta". */
+function erroDoExtra(
+  campo: CampoDef,
+  p: Participante,
+  dados: Record<string, string>,
+): string | null {
+  const problema = problemaDoCampo(campo, p.extras[campo.id], dados);
+  if (problema === null) return null;
+  return problema.tipo === 'vazio' ? mensagemObrigatorio(campo, dados) : problema.mensagem;
+}
+
+function errosDaLinha({ participante, colunas, dados }: LinhaProps): (string | null)[] {
+  return colunas.map((c) => (c.campo ? erroDoExtra(c.campo, participante, dados) : null));
+}
+
+function mesmasColunas(a: ColunaParticipante[], b: ColunaParticipante[]): boolean {
+  return (
+    a === b ||
+    (a.length === b.length &&
+      a.every((c, i) => c.id === b[i]?.id && c.rotulo === b[i].rotulo && c.campo === b[i].campo))
+  );
+}
+
+/**
+ * Uma linha só redesenha se mudou algo que ela mostra. `dados` muda a cada tecla de outro bloco:
+ * ele só conta pelo que decide aqui (colunas visíveis e mensagens de erro dos extras); senão as
+ * centenas de linhas redesenhariam a cada tecla digitada em "Dados da reunião".
+ */
+function mesmaLinha(a: LinhaProps, b: LinhaProps): boolean {
+  if (
+    a.participante !== b.participante ||
+    a.posicao !== b.posicao ||
+    a.dispatch !== b.dispatch ||
+    !mesmasColunas(a.colunas, b.colunas)
+  ) {
+    return false;
+  }
+  if (a.dados === b.dados) return true;
+  const antes = errosDaLinha(a);
+  const depois = errosDaLinha(b);
+  return antes.every((erro, i) => erro === depois[i]);
+}
+
+interface CampoExtraProps {
   campo: CampoDef;
   valor: string;
   rotulo: string;
+  erro: string | null;
+  erroId: string;
   onChange: (valor: string) => void;
-}) {
-  if (campo.tipo === 'escolha') {
-    return (
-      <select
-        {...marcarCampo(campo.id)}
-        aria-label={rotulo}
-        value={valor}
-        onChange={(e) => {
-          onChange(e.target.value);
-        }}
-      >
-        <option value="">Selecione…</option>
-        {campo.opcoes?.map((o) => (
-          <option key={o.valor} value={o.valor}>
-            {o.rotulo}
-          </option>
-        ))}
-      </select>
-    );
-  }
+}
+
+function CampoExtra({ campo, valor, rotulo, erro, erroId, onChange }: CampoExtraProps) {
+  const acessibilidade = {
+    'aria-label': rotulo,
+    'aria-invalid': erro !== null,
+    'aria-describedby': erro === null ? undefined : erroId,
+  };
   return (
-    <input
-      type="text"
-      {...marcarCampo(campo.id)}
-      aria-label={rotulo}
-      value={valor}
-      onChange={(e) => {
-        onChange(e.target.value);
-      }}
-    />
+    <>
+      {campo.tipo === 'escolha' ? (
+        <select
+          {...marcarCampo(campo.id)}
+          {...acessibilidade}
+          // Valor que o tipo não oferece (ex.: veio de outro tipo) aparece como "Selecione…".
+          value={campo.opcoes?.some((o) => o.valor === valor) ? valor : ''}
+          onChange={(e) => {
+            onChange(e.target.value);
+          }}
+        >
+          <option value="">Selecione…</option>
+          {campo.opcoes?.map((o) => (
+            <option key={o.valor} value={o.valor}>
+              {o.rotulo}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type="text"
+          {...marcarCampo(campo.id)}
+          {...acessibilidade}
+          {...(campo.teclado ? { inputMode: campo.teclado } : {})}
+          value={valor}
+          onChange={(e) => {
+            onChange(e.target.value);
+          }}
+        />
+      )}
+      {erro === null ? null : (
+        <p id={erroId} className={styles.erroLinha}>
+          <span aria-hidden="true">⚠ </span>
+          {erro}
+        </p>
+      )}
+    </>
   );
 }
 
 /** Uma linha da tabela. Memoizada: com centenas de linhas, editar uma não redesenha as outras. */
-const Linha = memo(function Linha({ participante: p, posicao, tipo, dispatch }: LinhaProps) {
+const Linha = memo(function Linha(props: LinhaProps) {
+  const { participante: p, posicao, colunas, dispatch } = props;
   const atualizar = (patch: Partial<Participante>) => {
     dispatch({ type: 'atualizarParticipante', id: p.id, patch });
   };
   const nomeVazio = p.nome.trim() === '';
   const quem = nomeVazio ? `participante ${String(posicao)}` : p.nome;
-  const erroNomeId = useId();
+  const baseId = useId();
+  const erros = errosDaLinha(props);
+
+  const celula = (coluna: ColunaParticipante, indice: number) => {
+    switch (coluna.id) {
+      case 'nome':
+        return (
+          <td key={coluna.id} data-rotulo={coluna.rotulo}>
+            <input
+              type="text"
+              {...marcarCampo('nome')}
+              aria-label={`Nome do participante ${String(posicao)}`}
+              aria-invalid={nomeVazio}
+              aria-describedby={nomeVazio ? `${baseId}-nome` : undefined}
+              value={p.nome}
+              onChange={(e) => {
+                atualizar({ nome: e.target.value });
+              }}
+            />
+            {nomeVazio ? (
+              <p id={`${baseId}-nome`} className={styles.erroLinha}>
+                <span aria-hidden="true">⚠ </span>
+                Informe o nome.
+              </p>
+            ) : null}
+          </td>
+        );
+      case 'papel':
+        return (
+          <td key={coluna.id} data-rotulo={coluna.rotulo}>
+            <input
+              type="text"
+              aria-label={`${coluna.rotulo} do participante ${String(posicao)}`}
+              value={p.papel}
+              onChange={(e) => {
+                atualizar({ papel: e.target.value });
+              }}
+            />
+          </td>
+        );
+      case 'presenca':
+        return (
+          <td key={coluna.id} data-rotulo={coluna.rotulo}>
+            <select
+              aria-label={`Presença de ${quem}`}
+              value={p.presenca}
+              onChange={(e) => {
+                const presenca = PRESENCAS.find((x) => x === e.target.value);
+                if (presenca) atualizar({ presenca });
+              }}
+            >
+              {PRESENCAS.map((valor) => (
+                <option key={valor} value={valor}>
+                  {ROTULO_PRESENCA[valor]}
+                </option>
+              ))}
+            </select>
+            {p.presenca === 'justificado' ? (
+              <input
+                type="text"
+                className={styles.justificativa}
+                aria-label={`Justificativa de ${quem}`}
+                placeholder="Justificativa"
+                value={p.justificativa}
+                onChange={(e) => {
+                  atualizar({ justificativa: e.target.value });
+                }}
+              />
+            ) : null}
+          </td>
+        );
+      default:
+        return coluna.campo ? (
+          <td key={coluna.id} data-rotulo={coluna.rotulo}>
+            <CampoExtra
+              campo={coluna.campo}
+              valor={p.extras[coluna.id] ?? ''}
+              rotulo={`${coluna.rotulo} do participante ${String(posicao)}`}
+              erro={erros[indice] ?? null}
+              erroId={`${baseId}-${coluna.id}`}
+              onChange={(valor) => {
+                atualizar({ extras: { ...p.extras, [coluna.id]: valor } });
+              }}
+            />
+          </td>
+        ) : null;
+    }
+  };
 
   return (
     <tr data-id={p.id}>
-      <td data-rotulo="Nome">
-        <input
-          type="text"
-          {...marcarCampo('nome')}
-          aria-label={`Nome do participante ${String(posicao)}`}
-          aria-invalid={nomeVazio}
-          aria-describedby={nomeVazio ? erroNomeId : undefined}
-          value={p.nome}
-          onChange={(e) => {
-            atualizar({ nome: e.target.value });
-          }}
-        />
-        {nomeVazio ? (
-          <p id={erroNomeId} className={styles.erroLinha}>
-            <span aria-hidden="true">⚠ </span>
-            Informe o nome.
-          </p>
-        ) : null}
-      </td>
-      {tipo.rotuloPapel === null ? null : (
-        <td data-rotulo={tipo.rotuloPapel}>
-          <input
-            type="text"
-            aria-label={`${tipo.rotuloPapel} do participante ${String(posicao)}`}
-            value={p.papel}
-            onChange={(e) => {
-              atualizar({ papel: e.target.value });
-            }}
-          />
-        </td>
-      )}
-      {tipo.camposParticipante.map((campo) => (
-        <td key={campo.id} data-rotulo={campo.rotulo}>
-          <CampoExtra
-            campo={campo}
-            valor={p.extras[campo.id] ?? ''}
-            rotulo={`${campo.rotulo} do participante ${String(posicao)}`}
-            onChange={(valor) => {
-              atualizar({ extras: { ...p.extras, [campo.id]: valor } });
-            }}
-          />
-        </td>
-      ))}
-      <td data-rotulo="Presença">
-        <select
-          aria-label={`Presença de ${quem}`}
-          value={p.presenca}
-          onChange={(e) => {
-            const presenca = PRESENCAS.find((x) => x === e.target.value);
-            if (presenca) atualizar({ presenca });
-          }}
-        >
-          {PRESENCAS.map((valor) => (
-            <option key={valor} value={valor}>
-              {ROTULO_PRESENCA[valor]}
-            </option>
-          ))}
-        </select>
-        {p.presenca === 'justificado' ? (
-          <input
-            type="text"
-            className={styles.justificativa}
-            aria-label={`Justificativa de ${quem}`}
-            placeholder="Justificativa"
-            value={p.justificativa}
-            onChange={(e) => {
-              atualizar({ justificativa: e.target.value });
-            }}
-          />
-        ) : null}
-      </td>
+      {colunas.map(celula)}
       <td data-rotulo="Ação" className={styles.celulaAcao}>
         <button
           type="button"
@@ -175,18 +260,78 @@ const Linha = memo(function Linha({ participante: p, posicao, tipo, dispatch }: 
       </td>
     </tr>
   );
-});
+}, mesmaLinha);
+
+interface PreencherVaziosProps {
+  campo: CampoDef;
+  rotulo: string;
+  /** Quantos participantes estão sem valor neste campo. */
+  vazios: number;
+  onAplicar: (valor: string) => void;
+}
+
+/** "Preencher os vazios — {campo}": aplica um valor só a quem ainda não tem (nunca sobrescreve). */
+function PreencherVazios({ campo, rotulo, vazios, onAplicar }: PreencherVaziosProps) {
+  const [valor, setValor] = useState('');
+  const tituloId = useId();
+  return (
+    <div role="group" aria-labelledby={tituloId} className={styles.preencherVazios}>
+      <span id={tituloId} className={styles.preencherTitulo}>
+        {`Preencher os vazios — ${rotulo}`}
+      </span>
+      <select
+        className={styles.preencherSelect}
+        aria-label={`Valor para os vazios — ${rotulo}`}
+        value={valor}
+        onChange={(e) => {
+          setValor(e.target.value);
+        }}
+      >
+        <option value="">Selecione…</option>
+        {campo.opcoes?.map((o) => (
+          <option key={o.valor} value={o.valor}>
+            {o.rotulo}
+          </option>
+        ))}
+      </select>
+      <Button
+        disabled={vazios === 0 || valor === ''}
+        onClick={() => {
+          onAplicar(valor);
+          setValor('');
+        }}
+      >
+        Aplicar
+      </Button>
+      <span className={styles.preencherContagem}>
+        {vazios === 0
+          ? 'Ninguém está sem valor.'
+          : `${String(vazios)} ${plural(vazios, 'participante sem valor', 'participantes sem valor')}.`}
+      </span>
+    </div>
+  );
+}
+
+/** Texto em que a busca procura: nome, papel e extras (valor digitado e rótulo da opção). */
+function textoDeBusca(p: Participante, colunas: ColunaParticipante[]): string {
+  const extras = colunas.flatMap((c) => {
+    if (!c.campo) return [];
+    const valor = p.extras[c.id] ?? '';
+    return [valor, rotuloDaOpcao(c.campo, valor) ?? ''];
+  });
+  return normalizarBusca([p.nome, p.papel, ...extras].join(' '));
+}
 
 export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const { state, dispatch } = useDraft();
-  const { participantes } = state;
+  const { participantes, dados } = state;
   const [colando, setColando] = useState(false);
   const [texto, setTexto] = useState('');
   // `base` = lista de participantes logo após a ação; se a lista mudar por outro caminho
   // (editar, remover), o aviso sai de cena para nunca afirmar uma contagem velha.
   const [aviso, setAviso] = useState<{ texto: string; base: Participante[] | null } | null>(null);
   const [novoNome, setNovoNome] = useState('');
-  const [novoPapel, setNovoPapel] = useState('');
+  const [novoComplemento, setNovoComplemento] = useState('');
   const [erroNovo, setErroNovo] = useState<string | undefined>(undefined);
   const novoNomeRef = useRef<HTMLInputElement>(null);
   const [busca, setBusca] = useState('');
@@ -195,9 +340,24 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const listaId = useId();
   const telaDeCartoes = useConsultaMidia(CONSULTA_CARTOES, false);
 
+  const colunas = useMemo(() => colunasDeParticipantes(tipo, dados), [tipo, dados]);
+  // Para onde vai o "X" de "Nome — X": o extra declarado pelo tipo ou, sem ele, o papel.
+  const campoComplemento = tipo.camposParticipante.find((c) => c.id === tipo.campoComplemento);
+  const destino = campoComplemento?.id;
+  const rotuloComplemento = campoComplemento
+    ? rotuloDoCampo(campoComplemento, dados)
+    : tipo.rotuloPapel;
+  const complementoDe = (p: Participante): string =>
+    destino === undefined ? p.papel : (p.extras[destino] ?? '');
+
   const faltando = camposFaltando(state, tipo)
     .filter((f) => f.bloco === 'participantes')
     .map((f) => f.rotulo);
+
+  const resumo = useMemo(
+    () => tipo.resumoDosParticipantes?.({ dados, participantes }) ?? null,
+    [tipo, dados, participantes],
+  );
 
   if (aviso) {
     if (aviso.base === null) setAviso({ texto: aviso.texto, base: participantes });
@@ -220,22 +380,46 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     const todas = participantes.map((p, i) => ({ p, posicao: i + 1 }));
     if (recolhida) return todas.filter(({ p }) => p.id === emEdicao || p.nome.trim() === '');
     if (termo === '') return todas;
-    return todas.filter(
-      ({ p }) => p.id === emEdicao || normalizarBusca(`${p.nome} ${p.papel}`).includes(termo),
-    );
-  }, [participantes, termo, emEdicao, recolhida]);
+    return todas.filter(({ p }) => p.id === emEdicao || textoDeBusca(p, colunas).includes(termo));
+  }, [participantes, termo, emEdicao, recolhida, colunas]);
+
+  // Campos de escolha sem valor em alguém: o controle "Preencher os vazios" de cada um.
+  const preenchiveis = useMemo(
+    () =>
+      colunas.flatMap((c) =>
+        c.campo?.tipo === 'escolha'
+          ? [
+              {
+                coluna: c,
+                campo: c.campo,
+                vazios: participantes.filter((p) => (p.extras[c.id] ?? '').trim() === '').length,
+              },
+            ]
+          : [],
+      ),
+    [colunas, participantes],
+  );
 
   /** Adiciona as linhas, avisa o resultado e devolve quantas entraram. */
   const registrar = (linhas: LinhaParticipante[]): number => {
-    const { adicionados, ignorados } = calcularAdicao(total, linhas.length);
+    // Tipo sem lugar para o complemento: ele fica no nome, nunca é descartado em silêncio.
+    const efetivas =
+      rotuloComplemento === null
+        ? linhas.map(({ nome, complemento }) => ({
+            nome: complemento === '' ? nome : `${nome} — ${complemento}`,
+            complemento: '',
+          }))
+        : linhas;
+    const { adicionados, ignorados } = calcularAdicao(total, efetivas.length);
     const repetidos = contarRepetidos(
-      linhas.slice(0, adicionados).map((l) => l.nome),
-      participantes.map((p) => p.nome),
+      efetivas.slice(0, adicionados),
+      participantes.map((p) => ({ nome: p.nome, complemento: complementoDe(p) })),
     );
     dispatch({
       type: 'adicionarParticipantes',
-      nomes: linhas.map((l) => l.nome),
-      papeis: linhas.map((l) => l.papel),
+      nomes: efetivas.map((l) => l.nome),
+      complementos: efetivas.map((l) => l.complemento),
+      ...(destino === undefined ? {} : { destino }),
     });
     setAviso({ texto: descreverAdicao({ adicionados, ignorados, repetidos }), base: null });
     return adicionados;
@@ -263,9 +447,9 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       novoNomeRef.current?.focus();
       return;
     }
-    if (registrar([{ nome, papel: novoPapel.trim() }]) > 0) {
+    if (registrar([{ nome, complemento: novoComplemento.trim() }]) > 0) {
       setNovoNome('');
-      setNovoPapel('');
+      setNovoComplemento('');
     }
     setErroNovo(undefined);
     novoNomeRef.current?.focus();
@@ -282,8 +466,21 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     });
   };
 
+  const preencherVazios = (campo: CampoDef, rotulo: string, valor: string, vazios: number) => {
+    dispatch({ type: 'preencherExtrasVazios', campo: campo.id, valor });
+    setAviso({
+      texto: descreverPreenchimento(rotulo, rotuloDaOpcao(campo, valor) ?? valor, vazios),
+      base: null,
+    });
+  };
+
   return (
-    <FormBlock numero={3} titulo="Participantes" bloco="participantes" faltando={faltando}>
+    <FormBlock
+      numero={3}
+      titulo={tipo.rotulos.participantes}
+      bloco="participantes"
+      faltando={faltando}
+    >
       <div className={styles.barra}>
         <p className={styles.contador} aria-live="polite">
           {`${String(total)} ${plural(total, 'participante', 'participantes')} · ${String(presentes)} ${plural(presentes, 'presente', 'presentes')}`}
@@ -303,6 +500,18 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </div>
       </div>
 
+      {resumo?.texto ? (
+        <p role="status" className={styles.resumoTexto}>
+          {resumo.texto}
+        </p>
+      ) : null}
+      {resumo?.alertas.map((alerta) => (
+        <p key={alerta} role="note" className={styles.alertaResumo}>
+          <span aria-hidden="true">⚠ </span>
+          {alerta}
+        </p>
+      ))}
+
       <form className={styles.novoParticipante} onSubmit={adicionarUm} noValidate>
         <Field rotulo="Nome do novo participante" obrigatorio erro={erroNovo}>
           {(controle) => (
@@ -319,15 +528,27 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             />
           )}
         </Field>
-        {tipo.rotuloPapel === null ? null : (
-          <Field rotulo={`${tipo.rotuloPapel} (opcional)`}>
+        {rotuloComplemento === null ? null : (
+          <Field
+            rotulo={
+              campoComplemento?.obrigatorio === true
+                ? rotuloComplemento
+                : `${rotuloComplemento} (opcional)`
+            }
+            ajuda={
+              campoComplemento?.obrigatorio === true
+                ? 'Se não tiver agora, preencha depois na lista.'
+                : undefined
+            }
+          >
             {(controle) => (
               <input
                 {...controle}
                 type="text"
-                value={novoPapel}
+                {...(campoComplemento?.teclado ? { inputMode: campoComplemento.teclado } : {})}
+                value={novoComplemento}
                 onChange={(e) => {
-                  setNovoPapel(e.target.value);
+                  setNovoComplemento(e.target.value);
                 }}
               />
             )}
@@ -342,7 +563,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
 
       {colando ? (
         <div className={styles.painelColar}>
-          <Field rotulo="Nomes, um por linha" ajuda="Aceita “Nome — Cargo”.">
+          <Field
+            rotulo="Nomes, um por linha"
+            ajuda={rotuloComplemento === null ? undefined : `Aceita “Nome — ${rotuloComplemento}”.`}
+          >
             {(controle) => (
               <textarea
                 {...controle}
@@ -382,6 +606,17 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </p>
       ) : (
         <>
+          {preenchiveis.map(({ coluna, campo, vazios }) => (
+            <PreencherVazios
+              key={coluna.id}
+              campo={campo}
+              rotulo={coluna.rotulo}
+              vazios={vazios}
+              onAplicar={(valor) => {
+                preencherVazios(campo, coluna.rotulo, valor, vazios);
+              }}
+            />
+          ))}
           {comRolagem ? (
             <div className={styles.busca}>
               <Field rotulo="Buscar participante">
@@ -441,14 +676,11 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                 <table className={styles.tabela}>
                   <thead>
                     <tr>
-                      <th scope="col">Nome</th>
-                      {tipo.rotuloPapel === null ? null : <th scope="col">{tipo.rotuloPapel}</th>}
-                      {tipo.camposParticipante.map((campo) => (
-                        <th key={campo.id} scope="col">
-                          {campo.rotulo}
+                      {colunas.map((coluna) => (
+                        <th key={coluna.id} scope="col">
+                          {coluna.rotulo}
                         </th>
                       ))}
-                      <th scope="col">Presença</th>
                       <th scope="col">
                         <span className={styles.somenteLeitor}>Ação</span>
                       </th>
@@ -465,7 +697,8 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                         key={p.id}
                         participante={p}
                         posicao={posicao}
-                        tipo={tipo}
+                        colunas={colunas}
+                        dados={dados}
                         dispatch={dispatch}
                       />
                     ))}

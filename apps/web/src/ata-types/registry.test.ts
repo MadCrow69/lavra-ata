@@ -140,6 +140,50 @@ describe('problemasDoRegistro', () => {
     }
   });
 
+  it('visivelSe que testa um id com Object.hasOwn também é problema (Proxy: getOwnPropertyDescriptor)', () => {
+    const fora = comCampo(TIPO_DE_TESTE, 'motivo', {
+      visivelSe: (dados) => Object.hasOwn(dados, 'codigo'),
+    });
+    const problemas = problemasDoRegistro([fora]);
+    expect(problemas).toHaveLength(1);
+    expect(problemas[0]).toContain('codigo');
+    const dentro = comCampo(TIPO_DE_TESTE, 'motivo', {
+      visivelSe: (dados) => Object.hasOwn(dados, 'natureza'),
+    });
+    expect(problemasDoRegistro([dentro])).toEqual([]);
+  });
+
+  it('mais de um grupo de assinaturas exige título em todos', () => {
+    const pessoas = [{ nome: 'Ana', papel: 'Presidente' }];
+    const semTitulo: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      assinaturas: () => [
+        { titulo: null, pessoas },
+        { titulo: 'Membros', pessoas },
+      ],
+    };
+    const problemas = problemasDoRegistro([semTitulo]);
+    expect(problemas).toHaveLength(1);
+    expect(problemas[0]).toContain('assinaturas');
+    // Um grupo sozinho pode ficar sem título; grupo vazio não conta.
+    const unico: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      assinaturas: () => [
+        { titulo: null, pessoas },
+        { titulo: null, pessoas: [] },
+      ],
+    };
+    expect(problemasDoRegistro([unico])).toEqual([]);
+    const tituladosTodos: AtaTypeDefinition = {
+      ...TIPO_DE_TESTE,
+      assinaturas: () => [
+        { titulo: 'Mesa', pessoas },
+        { titulo: 'Membros', pessoas },
+      ],
+    };
+    expect(problemasDoRegistro([tituladosTodos])).toEqual([]);
+  });
+
   it('`in` com id de camposNoPrompt continua permitido', () => {
     const copia = comCampo(TIPO_DE_TESTE, 'motivo', {
       visivelSe: (dados) => 'natureza' in dados && dados.natureza === 'extraordinaria',

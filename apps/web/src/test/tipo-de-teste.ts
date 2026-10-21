@@ -52,6 +52,7 @@ const CAMPOS: CampoDef[] = [
     tipo: 'texto',
     obrigatorio: false,
     validar: (valor) => (/^\d+$/.test(valor) ? null : 'Use só números.'),
+    teclado: 'numeric',
   },
   { id: 'presidente', rotulo: 'Presidente', tipo: 'texto', obrigatorio: false },
 ];

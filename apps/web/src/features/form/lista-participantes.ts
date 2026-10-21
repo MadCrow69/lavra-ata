@@ -3,7 +3,7 @@ import { plural } from '../../ui/plural';
 
 export interface LinhaParticipante {
   nome: string;
-  papel: string;
+  complemento: string;
 }
 
 /** Travessão e meia-risca valem com ou sem espaços; hífen só com espaços (senão é parte do nome). */
@@ -24,9 +24,9 @@ export function analisarLista(texto: string): LinhaParticipante[] {
 
     const achado = SEPARADOR.exec(linha);
     const nome = (achado ? linha.slice(0, achado.index) : linha).trim();
-    const papel = achado ? linha.slice(achado.index + achado[0].length).trim() : '';
+    const complemento = achado ? linha.slice(achado.index + achado[0].length).trim() : '';
     if (nome === '' || !TEM_LETRA_OU_NUMERO.test(nome)) continue;
-    resultado.push({ nome, papel });
+    resultado.push({ nome, complemento });
   }
   return resultado;
 }
@@ -36,10 +36,30 @@ export function normalizarBusca(texto: string): string {
   return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-/** Quantos dos nomes novos já constam na lista (sem diferenciar caixa nem acento). */
-export function contarRepetidos(novos: string[], existentes: string[]): number {
-  const conhecidos = new Set(existentes.map(normalizarBusca));
-  return novos.filter((nome) => conhecidos.has(normalizarBusca(nome))).length;
+/** Par nome + complemento normalizados; JSON evita que um separador no texto una dois pares. */
+function chaveDeRepeticao({ nome, complemento }: LinhaParticipante): string {
+  return JSON.stringify([normalizarBusca(nome), normalizarBusca(complemento)]);
+}
+
+/**
+ * Quantos dos novos já constam na lista: mesmo nome E mesmo complemento, sem diferenciar caixa nem
+ * acento. Dois "Ana" em unidades diferentes são pessoas diferentes; sem complemento, só o nome conta.
+ */
+export function contarRepetidos(
+  novos: readonly LinhaParticipante[],
+  existentes: readonly LinhaParticipante[],
+): number {
+  const conhecidos = new Set(existentes.map(chaveDeRepeticao));
+  return novos.filter((linha) => conhecidos.has(chaveDeRepeticao(linha))).length;
+}
+
+/** Aviso depois de "Preencher os vazios": que valor entrou em quantos participantes. */
+export function descreverPreenchimento(
+  rotuloCampo: string,
+  rotuloValor: string,
+  quantos: number,
+): string {
+  return `${rotuloCampo} “${rotuloValor}” aplicado a ${String(quantos)} ${plural(quantos, 'participante', 'participantes')} sem valor.`;
 }
 
 export interface ResumoAdicao {

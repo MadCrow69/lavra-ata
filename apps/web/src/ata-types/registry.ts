@@ -1,6 +1,6 @@
 import { PESOS_COLUNA } from '../config/documento';
 import { LIMITE_TRANSCRICAO } from '../config/limits';
-import type { AtaDraft } from '../domain/draft';
+import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
 import { corporativa } from './corporativa';
 import { rotuloDaOpcao, textoLimpo } from './texto-modelo';
 import type { AtaTypeDefinition, CampoDef, CampoFaltando } from './types';
@@ -110,7 +110,7 @@ export function colunasDeParticipantes(
 
 /**
  * `dados` que lança ao tocar um id fora de `permitidos` (a cópia enviada à IA só tem esses): ler
- * (`dados.x`), testar (`'x' in dados`) ou enumerar (`Object.keys`, `Object.entries`, espalhar),
+ * (`dados.x`), testar (`'x' in dados`, `Object.hasOwn`) ou enumerar (`Object.keys`, `Object.entries`, espalhar),
  * porque enumerar veria só a cópia e esconderia a dependência dos demais campos.
  */
 function dadosSoDoPrompt(permitidos: ReadonlySet<string>): Record<string, string> {
@@ -130,6 +130,10 @@ function dadosSoDoPrompt(permitidos: ReadonlySet<string>): Record<string, string
         conferir(chave);
         return false;
       },
+      getOwnPropertyDescriptor(_alvo, chave) {
+        conferir(chave);
+        return undefined;
+      },
       ownKeys() {
         throw new Error('enumera os dados, que a cópia enviada à IA não garante');
       },
@@ -147,6 +151,42 @@ function falhaDoVisivelSe(campo: CampoDef, permitidos: ReadonlySet<string>): str
   }
 }
 
+/**
+ * Entrada "cheia" só para provar invariantes dos tipos: todo campo preenchido (primeira opção nos
+ * de escolha) e dois participantes presentes com todos os extras preenchidos.
+ */
+function entradaDeProva(tipo: AtaTypeDefinition): EntradaDoDocumento {
+  const valorDe = (c: CampoDef): string =>
+    c.opcoes?.[0]?.valor ?? (c.tipo === 'data' ? '2026-01-15' : c.tipo === 'hora' ? '10:00' : 'x');
+  const extras = Object.fromEntries(tipo.camposParticipante.map((c) => [c.id, valorDe(c)]));
+  return {
+    dados: Object.fromEntries(tipo.campos.map((c) => [c.id, valorDe(c)])),
+    pauta: ['x'],
+    participantes: ['a', 'b'].map((id) => ({
+      id,
+      nome: `Pessoa ${id}`,
+      papel: 'x',
+      presenca: 'presente',
+      justificativa: '',
+      extras,
+    })),
+    resultado: null,
+  };
+}
+
+/** Problema dos grupos de assinatura do tipo (sobre `entradaDeProva`), ou `null`. */
+function problemaDeAssinaturas(tipo: AtaTypeDefinition): string | null {
+  try {
+    const grupos = tipo.assinaturas(entradaDeProva(tipo)).filter((g) => g.pessoas.length > 0);
+    if (grupos.length > 1 && grupos.some((g) => (g.titulo ?? '').trim() === '')) {
+      return `${tipo.id}: com mais de um grupo de assinaturas, todos precisam de título (a região “Assinaturas” do documento se repetiria).`;
+    }
+    return null;
+  } catch {
+    return `${tipo.id}: assinaturas lança com uma entrada completa.`;
+  }
+}
+
 /** As `opcoes` de um contêm as do outro (em qualquer direção). */
 function opcoesContidas(a: CampoDef, b: CampoDef): boolean {
   const va = (a.opcoes ?? []).map((o) => o.valor);
@@ -160,7 +200,8 @@ function opcoesContidas(a: CampoDef, b: CampoDef): boolean {
  * mesmo id = mesmo significado, para a troca de tipo preservar o valor. (b) Ids de `campos` e de
  * `camposParticipante` não colidem. (c) `campoComplemento` é id de extra de texto. (d) Todo id de
  * `camposNoPrompt` existe em `campos` e o `visivelSe` desses campos, e o dos extras de participante
- * com `enviarParaIA`, só toca ids dessa lista (ler, testar com `in` ou enumerar).
+ * com `enviarParaIA`, só toca ids dessa lista (ler, testar com `in`/`Object.hasOwn` ou enumerar).
+ * (e) Com mais de um grupo de assinaturas (para uma entrada completa), todos têm título.
  */
 export function problemasDoRegistro(tipos: readonly AtaTypeDefinition[]): string[] {
   const problemas: string[] = [];
@@ -185,6 +226,9 @@ export function problemasDoRegistro(tipos: readonly AtaTypeDefinition[]): string
         );
       }
     }
+
+    const problemaAssinaturas = problemaDeAssinaturas(tipo);
+    if (problemaAssinaturas !== null) problemas.push(problemaAssinaturas);
 
     const noPrompt = new Set(tipo.camposNoPrompt);
     for (const id of tipo.camposNoPrompt) {
@@ -247,7 +291,7 @@ export function camposFaltando(d: AtaDraft, tipo: AtaTypeDefinition): CampoFalta
     }
   }
   if (!d.pauta.some((item) => item.trim() !== '')) {
-    faltas.push({ bloco: 'dados', campo: 'pauta', rotulo: 'Pauta' });
+    faltas.push({ bloco: 'dados', campo: 'pauta', rotulo: tipo.rotulos.pauta });
   }
 
   if (!d.participantes.some((p) => p.presenca === 'presente')) {

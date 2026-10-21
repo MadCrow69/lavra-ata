@@ -76,10 +76,16 @@ class Mascarador {
  */
 function rascunhoMascarado(d: AtaDraft, tipo: AtaTypeDefinition, m: Mascarador): AtaDraft {
   const transcricao = m.mascarar(d.transcricao);
-  // Dos extras de participante só seguem os marcados com `enviarParaIA` (e visíveis), mascarados;
-  // unidade, fração, participação etc. ficam no navegador e nem entram no mapa de marcadores.
+  const dados: Record<string, string> = {};
+  for (const id of tipo.camposNoPrompt) {
+    const valor = d.dados[id];
+    if (valor !== undefined) dados[id] = m.mascarar(valor);
+  }
+  // Dos extras de participante só seguem os marcados com `enviarParaIA`, mascarados; unidade,
+  // fração, participação etc. ficam no navegador e nem entram no mapa de marcadores. A visibilidade
+  // é decidida sobre a cópia mascarada (a mesma que a IA vê): uma decisão só, sem ler o original.
   const idsDosExtras = tipo.camposParticipante
-    .filter((c) => c.enviarParaIA === true && ehVisivel(c, d.dados))
+    .filter((c) => c.enviarParaIA === true && ehVisivel(c, dados))
     .map((c) => c.id);
   const extrasParaIA = (p: Participante): Record<string, string> =>
     Object.fromEntries(
@@ -88,11 +94,6 @@ function rascunhoMascarado(d: AtaDraft, tipo: AtaTypeDefinition, m: Mascarador):
         return valor === undefined ? [] : [[id, m.mascarar(valor)]];
       }),
     );
-  const dados: Record<string, string> = {};
-  for (const id of tipo.camposNoPrompt) {
-    const valor = d.dados[id];
-    if (valor !== undefined) dados[id] = m.mascarar(valor);
-  }
   return {
     ...d,
     transcricao,

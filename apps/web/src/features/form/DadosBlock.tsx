@@ -4,6 +4,7 @@ import {
   ehObrigatorio,
   ehVisivel,
   mensagemObrigatorio,
+  problemaDoCampo,
   rotuloDoCampo,
 } from '../../ata-types/registry';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
@@ -13,7 +14,9 @@ import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
 import styles from './form.module.css';
 
-const MENSAGEM_PAUTA = 'Informe ao menos um item de pauta.';
+function mensagemPautaVazia(rotulo: string): string {
+  return `Informe ao menos um item em “${rotulo}”.`;
+}
 
 function paraItens(texto: string): string[] {
   return texto
@@ -37,8 +40,14 @@ interface CampoDadoProps {
 function CampoDado({ campo, dados, tocado, onChange, onBlur }: CampoDadoProps) {
   const valor = dados[campo.id] ?? '';
   const obrigatorio = ehObrigatorio(campo, dados);
+  // Inválido vale mesmo em campo opcional (ex.: formato errado); vazio só se for obrigatório.
+  const problema = tocado ? problemaDoCampo(campo, valor, dados) : null;
   const erro =
-    tocado && obrigatorio && valor.trim() === '' ? mensagemObrigatorio(campo, dados) : undefined;
+    problema === null
+      ? undefined
+      : problema.tipo === 'vazio'
+        ? mensagemObrigatorio(campo, dados)
+        : problema.mensagem;
 
   return (
     <Field
@@ -54,11 +63,14 @@ function CampoDado({ campo, dados, tocado, onChange, onBlur }: CampoDadoProps) {
           value: valor,
           onBlur,
         };
+        const modoTeclado = campo.teclado ? { inputMode: campo.teclado } : {};
         switch (campo.tipo) {
           case 'escolha':
+            // Valor que o tipo não oferece (ex.: veio de outro tipo): mostra "Selecione…".
             return (
               <select
                 {...comuns}
+                value={campo.opcoes?.some((o) => o.valor === valor) ? valor : ''}
                 onChange={(e) => {
                   onChange(e.target.value);
                 }}
@@ -84,6 +96,7 @@ function CampoDado({ campo, dados, tocado, onChange, onBlur }: CampoDadoProps) {
             return (
               <input
                 {...comuns}
+                {...modoTeclado}
                 type={campo.tipo === 'data' ? 'date' : campo.tipo === 'hora' ? 'time' : 'text'}
                 onChange={(e) => {
                   onChange(e.target.value);
@@ -97,6 +110,8 @@ function CampoDado({ campo, dados, tocado, onChange, onBlur }: CampoDadoProps) {
 }
 
 interface PautaCampoProps {
+  /** Título da pauta neste tipo de ata (ex.: "Ordem do dia"). */
+  rotulo: string;
   pauta: string[];
   tocado: boolean;
   onChange: (itens: string[]) => void;
@@ -104,7 +119,7 @@ interface PautaCampoProps {
 }
 
 /** Pauta: um item por linha. Guarda o texto cru para o Enter não ser engolido ao tirar linhas vazias. */
-function PautaCampo({ pauta, tocado, onChange, onBlur }: PautaCampoProps) {
+function PautaCampo({ rotulo, pauta, tocado, onChange, onBlur }: PautaCampoProps) {
   const [texto, setTexto] = useState(() => pauta.join('\n'));
 
   // Rascunho trocado por fora (nova ata, exemplo): o texto passa a refletir a pauta.
@@ -112,10 +127,10 @@ function PautaCampo({ pauta, tocado, onChange, onBlur }: PautaCampoProps) {
     setTexto(pauta.join('\n'));
   }
 
-  const erro = tocado && pauta.length === 0 ? MENSAGEM_PAUTA : undefined;
+  const erro = tocado && pauta.length === 0 ? mensagemPautaVazia(rotulo) : undefined;
   return (
     <Field
-      rotulo="Pauta"
+      rotulo={rotulo}
       obrigatorio
       erro={erro}
       ajuda="Um item por linha, na ordem em que foram tratados."
@@ -170,6 +185,7 @@ export function DadosBlock({ tipo }: { tipo: AtaTypeDefinition }) {
           ))}
         <div className={styles.linhaInteira}>
           <PautaCampo
+            rotulo={tipo.rotulos.pauta}
             pauta={state.pauta}
             tocado={tocados.has('pauta')}
             onChange={(itens) => {

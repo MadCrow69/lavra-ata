@@ -522,6 +522,30 @@ describe('gerarAta: extras de participante', () => {
     expect(usuario).toContain('<transcricao>\nAna: concordo.\n</transcricao>');
   });
 
+  it('a visibilidade do extra enviado é decidida sobre a cópia mascarada dos dados (uma decisão só)', async () => {
+    const lidos: Record<string, string>[] = [];
+    const tipo = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+        c.id === 'vinculo'
+          ? {
+              ...c,
+              visivelSe: (dados: Record<string, string>) => {
+                lidos.push({ ...dados });
+                return true;
+              },
+            }
+          : c,
+      ),
+    };
+    const { opcoes } = adaptadores({ openai: () => Promise.resolve(respostaDoTeste()) });
+    const d = { ...dTeste(), dados: { ...dTeste().dados, modalidade: `híbrida ${CPF}` } };
+    await gerarAta(d, tipo, CADEIA, sinal(), opcoes);
+    expect(lidos.length).toBeGreaterThan(0);
+    expect(JSON.stringify(lidos)).not.toContain(CPF);
+    expect(lidos.every((dados) => dados.modalidade?.includes('[CPF_') === true)).toBe(true);
+  });
+
   it('extra marcado para a IA segue, mas mascarado', async () => {
     const tipo = {
       ...TIPO_DE_TESTE,

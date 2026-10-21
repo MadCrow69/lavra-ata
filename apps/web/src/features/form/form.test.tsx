@@ -6,6 +6,7 @@ import type { AtaTypeDefinition } from '../../ata-types/types';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
 import type { AtaDraft, Participante } from '../../domain/draft';
 import { criarRascunho } from '../../domain/draft-reducer';
+import { TIPO_DE_TESTE } from '../../test/tipo-de-teste';
 import { DadosBlock } from './DadosBlock';
 import { ParticipantesBlock } from './ParticipantesBlock';
 import { TipoBlock } from './TipoBlock';
@@ -583,5 +584,195 @@ describe('ParticipantesBlock no celular (lista longa recolhida)', () => {
     vi.unstubAllGlobals();
     renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(30));
     expect(nomesNaTela()).toBe(30);
+  });
+});
+
+describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
+  function membros(n: number, parcial: (i: number) => Partial<Participante> = () => ({})) {
+    return {
+      ...criarRascunho(TIPO_DE_TESTE.id),
+      participantes: Array.from({ length: n }, (_, i) =>
+        participante(i + 1, {
+          extras: { unidade: `Apto ${String(100 + i + 1)}`, vinculo: 'proprietario' },
+          ...parcial(i + 1),
+        }),
+      ),
+    };
+  }
+
+  describe('DadosBlock', () => {
+    it('usa o título da pauta do tipo (rótulo, falta e erro)', async () => {
+      const user = userEvent.setup();
+      renderizar(<DadosBlock tipo={TIPO_DE_TESTE} />);
+      const pauta = screen.getByLabelText(/^Ordem do dia/);
+      expect(screen.queryByLabelText(/^Pauta/)).not.toBeInTheDocument();
+      expect(screen.getByText(/falta:.*Ordem do dia/)).toBeVisible();
+      await user.click(pauta);
+      await user.tab();
+      expect(screen.getByText('Informe ao menos um item em “Ordem do dia”.')).toBeVisible();
+    });
+
+    it('formato inválido de campo opcional aparece ao sair do campo, com teclado numérico', async () => {
+      const user = userEvent.setup();
+      renderizar(<DadosBlock tipo={TIPO_DE_TESTE} />);
+      const codigo = screen.getByLabelText(/^Código/);
+      expect(codigo).toHaveAttribute('inputmode', 'numeric');
+      await user.type(codigo, 'abc');
+      expect(screen.queryByText('Use só números.')).not.toBeInTheDocument();
+      await user.tab();
+      expect(screen.getByText('Use só números.')).toBeVisible();
+      expect(codigo).toHaveAttribute('aria-invalid', 'true');
+      expect(codigo).toHaveAccessibleDescription('Use só números.');
+      expect(screen.getByText(/falta:.*Código \(corrigir\)/)).toBeVisible();
+    });
+
+    it('escolha vinda de outro tipo (fora das opções) mostra "Selecione…" e a falta', () => {
+      renderizar(
+        <DadosBlock tipo={TIPO_DE_TESTE} />,
+        rascunhoCom({ tipoId: TIPO_DE_TESTE.id, dados: { modalidade: 'remota' } }),
+      );
+      expect(screen.getByLabelText(/^Modalidade/)).toHaveValue('');
+      expect(screen.getByText(/falta:.*Modalidade \(corrigir\)/)).toBeVisible();
+    });
+  });
+
+  describe('ParticipantesBlock', () => {
+    it('título, colunas e células seguem o tipo, sem coluna de papel', () => {
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(2));
+      expect(screen.getByRole('region', { name: 'Membros' })).toBeVisible();
+      const tabela = screen.getByRole('table');
+      const cabecalhos = within(tabela)
+        .getAllByRole('columnheader')
+        .map((c) => c.textContent);
+      expect(cabecalhos).toEqual([
+        'Nome',
+        'Unidade',
+        'Vínculo',
+        'Fração ideal',
+        'Presença',
+        'Ação',
+      ]);
+      expect(screen.queryByLabelText(/^Cargo/)).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Unidade do participante 2')).toHaveValue('Apto 102');
+      expect(screen.getByLabelText('Vínculo do participante 1')).toHaveValue('proprietario');
+    });
+
+    it('coluna de extra que o tipo esconde para os dados não aparece', () => {
+      const tipo: AtaTypeDefinition = {
+        ...TIPO_DE_TESTE,
+        camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+          c.id === 'fracao' ? { ...c, visivelSe: (d) => d.natureza === 'extraordinaria' } : c,
+        ),
+      };
+      renderizar(<ParticipantesBlock tipo={tipo} />, membros(1));
+      expect(screen.queryByLabelText('Fração ideal do participante 1')).not.toBeInTheDocument();
+    });
+
+    it('"Colar lista" com “Nome — X” grava X no campo de complemento do tipo', async () => {
+      const user = userEvent.setup();
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />);
+      await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+      expect(screen.getByText('Aceita “Nome — Unidade”.')).toBeVisible();
+      fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+        target: { value: 'Ana Souza — Apto 101\nBruno Lima' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      expect(screen.getByLabelText('Nome do participante 1')).toHaveValue('Ana Souza');
+      expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('Apto 101');
+      expect(screen.getByLabelText('Unidade do participante 2')).toHaveValue('');
+    });
+
+    it('adicionar um participante usa o rótulo do campo de complemento', async () => {
+      const user = userEvent.setup();
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />);
+      await user.type(screen.getByLabelText(/^Nome do novo participante/), 'Ana Souza');
+      await user.type(screen.getByLabelText(/^Unidade/), 'Apto 7');
+      await user.click(screen.getByRole('button', { name: 'Adicionar participante' }));
+      expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('Apto 7');
+    });
+
+    it('mesmo nome em unidades diferentes não é duplicidade; mesmo nome e unidade é', async () => {
+      const user = userEvent.setup();
+      renderizar(
+        <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
+        membros(1, () => ({ nome: 'Ana Souza', extras: { unidade: 'Apto 101' } })),
+      );
+      const colar = async (texto: string) => {
+        await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+        fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+          target: { value: texto },
+        });
+        await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      };
+      await colar('ana souza — apto 102');
+      expect(screen.getByText('1 participante adicionado.')).toBeVisible();
+      await colar('Ana Souza — Apto 101');
+      expect(screen.getByText(/1 já estava na lista/)).toBeVisible();
+    });
+
+    it('unidade sem número mostra a mensagem na célula e a falta “(corrigir)”', async () => {
+      const user = userEvent.setup();
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(2));
+      const celula = screen.getByLabelText('Unidade do participante 1');
+      expect(screen.queryByText(/falta:/)).not.toBeInTheDocument();
+      await user.clear(celula);
+      await user.type(celula, 'Apto');
+      expect(screen.getByText('Informe a unidade com número (ex.: Apto 101).')).toBeVisible();
+      expect(celula).toHaveAttribute('aria-invalid', 'true');
+      expect(celula).toHaveAccessibleDescription('Informe a unidade com número (ex.: Apto 101).');
+      expect(screen.getByLabelText('Unidade do participante 2')).toHaveAttribute(
+        'aria-invalid',
+        'false',
+      );
+      expect(screen.getByText('falta: Unidade (corrigir)')).toBeVisible();
+    });
+
+    it('“Preencher os vazios — Vínculo” aplica só a quem está sem valor e anuncia', async () => {
+      const user = userEvent.setup();
+      renderizar(
+        <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
+        membros(4, (i) => ({
+          extras: { unidade: `Apto ${String(i)}`, ...(i === 1 ? { vinculo: 'procurador' } : {}) },
+        })),
+      );
+      const grupo = screen.getByRole('group', { name: 'Preencher os vazios — Vínculo' });
+      const aplicar = within(grupo).getByRole('button', { name: 'Aplicar' });
+      expect(aplicar).toBeDisabled();
+      await user.selectOptions(within(grupo).getByRole('combobox'), 'proprietario');
+      await user.click(aplicar);
+      expect(screen.getByLabelText('Vínculo do participante 1')).toHaveValue('procurador');
+      for (const n of [2, 3, 4]) {
+        expect(screen.getByLabelText(`Vínculo do participante ${String(n)}`)).toHaveValue(
+          'proprietario',
+        );
+      }
+      expect(
+        screen.getByText('Vínculo “Proprietário(a)” aplicado a 3 participantes sem valor.'),
+      ).toHaveAttribute('role', 'status');
+      // Ninguém sem valor: o controle fica parado.
+      expect(within(grupo).getByRole('button', { name: 'Aplicar' })).toBeDisabled();
+    });
+
+    it('a busca cobre os campos extras (“101” acha “Apto 101”)', async () => {
+      const user = userEvent.setup();
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(30));
+      await user.type(screen.getByLabelText('Buscar participante'), '101');
+      expect(screen.getAllByLabelText(/^Nome do participante /)).toHaveLength(1);
+      expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('Apto 101');
+    });
+
+    it('resumo do tipo: texto em status e alerta em nota', () => {
+      renderizar(
+        <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
+        membros(3, (i) => (i > 1 ? { presenca: 'ausente' } : {})),
+      );
+      expect(screen.getByText('3 unidades informadas').closest('[role="status"]')).not.toBeNull();
+      expect(screen.getByRole('note')).toHaveTextContent('Menos de dois membros presentes.');
+    });
+
+    it('sem alerta, nenhuma nota aparece', () => {
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(3));
+      expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    });
   });
 });
