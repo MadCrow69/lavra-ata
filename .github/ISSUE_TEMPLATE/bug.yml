@@ -1,0 +1,60 @@
+name: Relatar um problema
+description: Algo não funciona como esperado.
+title: '[Problema] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Não cole sua chave de API nem dados reais** (CPF, CNPJ, e-mails, nomes, trechos de reuniões verdadeiras). Use apenas dados fictícios.
+        Para falhas de segurança, use o [relato privado de vulnerabilidades](https://github.com/MadCrow69/lavra-ata/security/advisories/new).
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir
+      description: Descreva o passo a passo, usando dados fictícios.
+      placeholder: |
+        1. Abrir o Lavra
+        2. Escolher o tipo de ata
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: O que você esperava
+    validations:
+      required: true
+  - type: textarea
+    id: obtido
+    attributes:
+      label: O que aconteceu
+      description: Inclua a mensagem de erro, se houver, sem expor chaves ou dados pessoais.
+    validations:
+      required: true
+  - type: input
+    id: navegador
+    attributes:
+      label: Navegador e versão
+      placeholder: Chrome 130, Firefox 131, Safari 18
+    validations:
+      required: true
+  - type: dropdown
+    id: provedor
+    attributes:
+      label: Provedor de IA
+      options:
+        - OpenAI
+        - Google (Gemini)
+        - Anthropic
+        - Modo exemplo (sem chave)
+        - Não se aplica
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmacoes
+    attributes:
+      label: Confirmações
+      options:
+        - label: Não colei minha chave de API nem dados reais neste relato.
+          required: true

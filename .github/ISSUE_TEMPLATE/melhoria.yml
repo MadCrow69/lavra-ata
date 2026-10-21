@@ -1,0 +1,35 @@
+name: Sugerir uma melhoria
+description: Ideia de funcionalidade ou aprimoramento.
+title: '[Melhoria] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use apenas dados fictícios e não cole chaves de API.
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qual problema isso resolve?
+      description: Descreva a situação de uso em que falta algo.
+    validations:
+      required: true
+  - type: textarea
+    id: proposta
+    attributes:
+      label: O que você propõe
+    validations:
+      required: true
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Alternativas consideradas
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmacoes
+    attributes:
+      label: Confirmações
+      options:
+        - label: Não incluí chaves de API nem dados reais.
+          required: true

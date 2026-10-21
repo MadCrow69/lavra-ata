@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Relatar vulnerabilidade
+    url: https://github.com/MadCrow69/lavra-ata/security/advisories/new
+    about: Relate falhas de segurança de forma privada. Não abra issue pública para isso.
