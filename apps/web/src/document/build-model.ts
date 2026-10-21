@@ -27,7 +27,7 @@ const CHAVE_SECOES_PENDENTES = 'pendente';
 
 const TITULO_PARTICIPANTES = 'Participantes';
 const TITULO_PAUTA = 'Pauta';
-const TITULO_ENCAMINHAMENTOS = 'Encaminhamentos';
+export const TITULO_ENCAMINHAMENTOS = 'Encaminhamentos';
 const TITULO_SECOES_PENDENTES = 'Seções da ata';
 const COLUNAS_ENCAMINHAMENTOS = ['Ação', 'Responsável', 'Prazo', 'Status'];
 

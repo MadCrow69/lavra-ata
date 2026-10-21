@@ -14,6 +14,7 @@ import styles from './preview.module.css';
 import revisao from './revisao.module.css';
 import { SectionActions } from './SectionActions';
 import { SectionEditor } from './SectionEditor';
+import { comSecoesVazias } from './secoes-vazias';
 
 /** Atributo que marca cada lacuna `[PREENCHER: …]` como alvo do contador. */
 const ATRIBUTO_LACUNA = 'data-preencher';
@@ -239,6 +240,8 @@ function SecaoGerada({ bloco, opcoesCadeia }: { bloco: DocSecao; opcoesCadeia?: 
   const avisos = resultado?.avisos[chave] ?? [];
   const chavesAvisos = chavesUnicas(avisos);
   const editada = resultado?.editadas.includes(chave) ?? false;
+  // Marcador só da tela: o modelo do documento não traz seções sem conteúdo.
+  const vazia = bloco.blocos.length === 0;
   const [editando, setEditando] = useState(false);
   const editarRef = useRef<HTMLButtonElement>(null);
   const estavaEditandoRef = useRef(false);
@@ -281,14 +284,17 @@ function SecaoGerada({ bloco, opcoesCadeia }: { bloco: DocSecao; opcoesCadeia?: 
         ) : (
           <SectionEditor chave={chave} titulo={titulo} onFechar={fechar} />
         )
+      ) : vazia ? (
+        <p className={revisao.secaoVazia}>Seção sem conteúdo</p>
       ) : (
         <Blocos blocos={bloco.blocos} rotulo={titulo} />
       )}
       <SectionActions
         chave={chave}
         titulo={titulo}
-        atribuicao={textoDeAtribuicao(resultado?.atribuicao[chave], editada)}
+        atribuicao={vazia ? null : textoDeAtribuicao(resultado?.atribuicao[chave], editada)}
         editada={editada}
+        vazia={vazia}
         editando={editando}
         onEditar={() => {
           setEditando(true);
@@ -421,6 +427,11 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
     [dados, pauta, participantes, resultado, tipo],
   );
   const lacunas = useMemo(() => contarPreencher(modelo), [modelo]);
+  // Seções sem conteúdo aparecem na tela como marcador (o modelo do documento as omite).
+  const blocosDaTela = useMemo(
+    () => (resultado ? comSecoesVazias(modelo.blocos, tipo) : modelo.blocos),
+    [modelo, tipo, resultado],
+  );
   const chavesLinhas = chavesUnicas(modelo.cabecalho.linhas);
   const folhaRef = useRef<HTMLElement>(null);
   /** Posição da última lacuna levada ao foco (o clique no botão tira o foco dela). */
@@ -487,7 +498,7 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
           <Texto texto={modelo.titulo} />
         </h2>
         <Blocos
-          blocos={modelo.blocos}
+          blocos={blocosDaTela}
           rotulo={modelo.titulo}
           {...(opcoesCadeia ? { opcoesCadeia } : {})}
         />

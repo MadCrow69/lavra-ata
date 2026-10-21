@@ -10,6 +10,18 @@
   position: relative;
 }
 
+/* ---------- Seção sem conteúdo (marcador só da tela) ---------- */
+
+.secaoVazia {
+  margin: 0;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px dashed var(--cor-folha-borda);
+  color: var(--cor-folha-suave);
+  font-family: var(--fonte-interface);
+  font-size: 0.875em;
+  font-style: italic;
+}
+
 /* ---------- Avisos acima da seção: ícone + texto ---------- */
 
 .avisos {

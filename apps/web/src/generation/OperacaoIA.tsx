@@ -22,8 +22,11 @@ interface OperacaoIAApi {
   iniciar: (operacao: OperacaoIA) => AbortController | null;
   /** Libera a vez. Só vale para o controle que a reservou (um controle antigo não libera outro). */
   concluir: (controle: AbortController) => void;
-  /** Aborta a operação em andamento; a vez só é liberada quando quem a iniciou chamar `concluir`. */
-  cancelar: () => void;
+  /**
+   * Aborta a operação que `controle` reservou (um controle antigo não cancela a operação de
+   * outro). A vez só é liberada quando quem a iniciou chamar `concluir`.
+   */
+  cancelar: (controle: AbortController) => void;
 }
 
 const OperacaoIAContext = createContext<OperacaoIAApi | null>(null);
@@ -58,8 +61,9 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
     setOperacao(null);
   }, []);
 
-  const cancelar = useCallback(() => {
-    ativaRef.current?.controle.abort();
+  const cancelar = useCallback((controle: AbortController) => {
+    if (ativaRef.current?.controle !== controle) return;
+    controle.abort();
   }, []);
 
   // Sair da tela no meio de uma chamada a cancela (o resultado tardio é descartado pelo pipeline).

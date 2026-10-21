@@ -6,6 +6,7 @@ import {
   type StatusEncaminhamento,
 } from '../../domain/draft';
 import { useDraft } from '../../domain/DraftContext';
+import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
 import { Button } from '../../ui/Button';
 import styles from './revisao.module.css';
 
@@ -24,7 +25,19 @@ export interface EncaminhamentosEditorProps {
 }
 
 const AJUDA_PRAZO =
-  'Prazo: escreva a data como AAAA-MM-DD (aparece na folha como dd/mm/aaaa) ou use um texto livre, como “na próxima reunião”.';
+  'Prazo: escreva a data como AAAA-MM-DD (aparece na folha como dd/mm/aaaa) ou use um texto livre, como “na próxima reunião”. Para remover os encaminhamentos da ata, apague todas as linhas e salve.';
+
+/** Mesmos encaminhamentos, campo a campo (a ordem das chaves do objeto não importa). */
+function mesmosEncaminhamentos(a: Encaminhamento[], b: Encaminhamento[]): boolean {
+  if (a.length !== b.length) return false;
+  for (const [i, x] of a.entries()) {
+    const y = b[i];
+    if (y === undefined) return false;
+    if (x.acao !== y.acao || x.responsavel !== y.responsavel) return false;
+    if (x.prazo !== y.prazo || x.status !== y.status) return false;
+  }
+  return true;
+}
 
 function vazia(l: Linha): boolean {
   return l.acao.trim() === '' && l.responsavel.trim() === '' && l.prazo.trim() === '';
@@ -34,10 +47,12 @@ function vazia(l: Linha): boolean {
  * Editor de linhas dos encaminhamentos (ação, responsável, prazo e status). O prazo é um campo de
  * texto: vale `AAAA-MM-DD` (vira `dd/mm/aaaa` na folha) ou texto livre, como "na próxima reunião"
  * (um `type="date"` não aceitaria o texto livre que a IA também produz). Linha totalmente vazia é
- * descartada; linha com dados e sem ação impede salvar.
+ * descartada; linha com dados e sem ação impede salvar. Salvar sem nenhuma linha remove os
+ * encaminhamentos da ata. Enquanto a ata inteira é gerada, salvar fica parado.
  */
 export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEditorProps) {
   const { state, dispatch } = useDraft();
+  const { operacao } = useOperacaoIA();
   const [atuais] = useState<Encaminhamento[]>(() => state.resultado?.encaminhamentos ?? []);
   const [linhas, setLinhas] = useState<Linha[]>(() => atuais.map((e, i) => ({ ...e, id: i })));
   const proximoIdRef = useRef(atuais.length);
@@ -48,6 +63,8 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
   const novaLinhaRef = useRef<number | null>(null);
   const baseId = useId();
   const ajudaPrazoId = `${baseId}-prazo-ajuda`;
+  const motivoId = `${baseId}-motivo`;
+  const ataOcupada = operacao?.tipo === 'ata';
 
   const focarAcao = (id: number) => {
     raizRef.current
@@ -86,6 +103,7 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
   };
 
   const salvar = () => {
+    if (ataOcupada) return;
     const itens: Encaminhamento[] = [];
     for (const [i, l] of linhas.entries()) {
       if (vazia(l)) continue;
@@ -103,12 +121,8 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
         status: l.status,
       });
     }
-    if (itens.length === 0) {
-      setErro('Inclua ao menos um encaminhamento. Sem nenhum, a seção some da ata.');
-      return;
-    }
     // Sem mudança real não há o que marcar como "editado por você".
-    if (JSON.stringify(itens) !== JSON.stringify(atuais)) {
+    if (!mesmosEncaminhamentos(itens, atuais)) {
       dispatch({
         type: 'substituirEncaminhamentos',
         itens,
@@ -225,11 +239,21 @@ export function EncaminhamentosEditor({ titulo, onFechar }: EncaminhamentosEdito
           {erro}
         </p>
       )}
+      {ataOcupada ? (
+        <p id={motivoId} className={styles.ajuda}>
+          {MOTIVO_IA_OCUPADA}
+        </p>
+      ) : null}
       <div className={styles.botoes}>
         <Button ref={adicionarRef} onClick={adicionar}>
           Adicionar encaminhamento
         </Button>
-        <Button variante="primario" onClick={salvar}>
+        <Button
+          variante="primario"
+          disabled={ataOcupada}
+          aria-describedby={ataOcupada ? motivoId : undefined}
+          onClick={salvar}
+        >
           Salvar
         </Button>
         <Button onClick={onFechar}>Cancelar</Button>

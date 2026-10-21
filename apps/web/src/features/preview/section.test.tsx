@@ -241,7 +241,22 @@ describe('revisão por seção: editar', () => {
     expect(within(s).getByRole('button', { name: 'Editar seção Resumo' })).toHaveFocus();
   });
 
-  it('Cancelar também descarta; salvar sem mudar não marca a seção como editada', async () => {
+  it('Cancelar descarta o que foi digitado e não marca a seção como editada', async () => {
+    const { user } = renderizar();
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
+    await user.type(
+      within(s).getByRole('textbox', { name: 'Texto da seção Resumo' }),
+      ' Texto descartado.',
+    );
+    await user.click(within(s).getByRole('button', { name: 'Cancelar' }));
+    expect(within(s).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(within(s).getByText('Foi tratado o reembolso.')).toBeVisible();
+    expect(lerResultado()).toEqual(resultado());
+    expect(within(s).getByRole('button', { name: 'Editar seção Resumo' })).toHaveFocus();
+  });
+
+  it('salvar sem mudar nada não marca a seção como editada', async () => {
     const { user } = renderizar();
     const s = secao('Resumo');
     await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
@@ -250,15 +265,19 @@ describe('revisão por seção: editar', () => {
     expect(within(s).getByText('Gerado por OpenAI · gpt-6-luna')).toBeVisible();
   });
 
-  it('não deixa salvar a seção vazia e explica como proceder', async () => {
+  it('apagar todo o texto e salvar remove a seção da folha e deixa o marcador', async () => {
     const { user } = renderizar();
-    const s = secao('Resumo');
-    await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
-    await user.clear(within(s).getByRole('textbox', { name: 'Texto da seção Resumo' }));
+    const s = secao('Decisões');
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Decisões' }));
+    await user.clear(within(s).getByRole('textbox', { name: 'Texto da seção Decisões' }));
     await user.click(within(s).getByRole('button', { name: 'Salvar' }));
-    expect(within(s).getByRole('alert')).toHaveTextContent(/não pode ficar vazia/);
-    expect(within(s).getByRole('textbox', { name: 'Texto da seção Resumo' })).toBeVisible();
-    expect(lerResultado()).toEqual(resultado());
+
+    expect(lerResultado().secoes.decisoes).toEqual([]);
+    expect(lerResultado().editadas).toEqual(['decisoes']);
+    expect(within(s).queryByText('Aprovar')).not.toBeInTheDocument();
+    expect(within(s).getByText('Seção sem conteúdo')).toBeVisible();
+    expect(within(s).queryByText('Editado por você')).not.toBeInTheDocument();
+    expect(within(s).getByRole('button', { name: 'Escrever seção Decisões' })).toHaveFocus();
   });
 
   it('a dica do formato do texto está ligada ao campo', async () => {
@@ -267,7 +286,7 @@ describe('revisão por seção: editar', () => {
     await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
     expect(
       within(s).getByRole('textbox', { name: 'Texto da seção Resumo' }),
-    ).toHaveAccessibleDescription(/linha em branco.*“- ”/);
+    ).toHaveAccessibleDescription(/linha em branco.*“- ”.*parágrafo depois da lista/);
   });
 });
 
@@ -651,5 +670,202 @@ describe('revisão por seção: encaminhamentos', () => {
     expect(r.encaminhamentos).toHaveLength(200);
     expect(r.encaminhamentos[199]?.acao).toBe('Ação final');
     expect(r.encaminhamentos[0]).toEqual(muitos[0]);
+  });
+});
+
+describe('revisão por seção: seções sem conteúdo', () => {
+  it('seção que a IA deixou vazia aparece como marcador na posição do documento', () => {
+    renderizar();
+    const ordem = Array.from(document.querySelectorAll('[data-secao]')).map((e) =>
+      e.getAttribute('data-secao'),
+    );
+    expect(ordem).toEqual([
+      'resumo',
+      'discussao',
+      'decisoes',
+      'pendencias',
+      'riscos',
+      'proxima_reuniao',
+      'encaminhamentos',
+    ]);
+    const riscos = secao('Riscos');
+    expect(within(riscos).getByText('Seção sem conteúdo')).toBeVisible();
+    expect(within(riscos).getByRole('button', { name: 'Escrever seção Riscos' })).toBeEnabled();
+    expect(within(riscos).getByRole('button', { name: 'Gerar esta seção (Riscos)' })).toBeEnabled();
+    // Ajustar só faz sentido com texto para ajustar.
+    expect(within(riscos).queryByRole('button', { name: /Ajustar/ })).not.toBeInTheDocument();
+    expect(within(riscos).queryByText(/Gerado por|Editado por/)).not.toBeInTheDocument();
+  });
+
+  it('"Gerar esta seção" preenche o marcador, sem pedir confirmação', async () => {
+    const { user, gerar } = renderizar({
+      impl: { gemini: () => Promise.resolve(respostaBlocos('Risco de atraso no reembolso.')) },
+    });
+    const riscos = secao('Riscos');
+    await user.click(within(riscos).getByRole('button', { name: 'Gerar esta seção (Riscos)' }));
+    expect(await within(riscos).findByText('Risco de atraso no reembolso.')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(within(riscos).queryByText('Seção sem conteúdo')).not.toBeInTheDocument();
+    expect(within(riscos).getByText('Gerado por Gemini · gemini-3.8-flash')).toBeVisible();
+    expect(within(riscos).getByRole('button', { name: 'Regerar seção Riscos' })).toBeEnabled();
+    expect(gerar.gemini.mock.calls[0]?.[1].usuario).toContain('Texto atual da seção: vazio.');
+    expect(lerResultado().secoes.riscos).toEqual([
+      { tipo: 'paragrafo', texto: 'Risco de atraso no reembolso.', itens: [] },
+    ]);
+  });
+
+  it('"Escrever" abre o editor vazio e o texto salvo ocupa o lugar do marcador', async () => {
+    const { user } = renderizar();
+    const riscos = secao('Riscos');
+    await user.click(within(riscos).getByRole('button', { name: 'Escrever seção Riscos' }));
+    const campo = within(riscos).getByRole('textbox', { name: 'Texto da seção Riscos' });
+    expect(campo).toHaveValue('');
+    await user.type(campo, 'Prazo apertado.');
+    await user.click(within(riscos).getByRole('button', { name: 'Salvar' }));
+    expect(within(riscos).getByText('Prazo apertado.')).toBeVisible();
+    expect(within(riscos).getByText('Editado por você')).toBeVisible();
+    expect(within(riscos).getByRole('button', { name: 'Editar seção Riscos' })).toHaveFocus();
+  });
+
+  it('salvar vazio sobre um marcador não muda nada', async () => {
+    const { user } = renderizar();
+    const riscos = secao('Riscos');
+    await user.click(within(riscos).getByRole('button', { name: 'Escrever seção Riscos' }));
+    await user.click(within(riscos).getByRole('button', { name: 'Salvar' }));
+    expect(lerResultado()).toEqual(resultado());
+  });
+
+  it('apagar todas as linhas dos encaminhamentos os remove da ata e deixa o marcador', async () => {
+    const { user } = renderizar();
+    const s = secao('Encaminhamentos');
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
+    await user.click(within(s).getByRole('button', { name: 'Remover encaminhamento 1' }));
+    await user.click(within(s).getByRole('button', { name: 'Remover encaminhamento 1' }));
+    await user.click(within(s).getByRole('button', { name: 'Salvar' }));
+    expect(lerResultado().encaminhamentos).toEqual([]);
+    expect(lerResultado().editadas).toEqual(['encaminhamentos']);
+    expect(within(s).queryByRole('table')).not.toBeInTheDocument();
+    expect(within(s).getByText('Seção sem conteúdo')).toBeVisible();
+  });
+
+  it('"Gerar esta seção" nos encaminhamentos vazios preenche a tabela', async () => {
+    const { user } = renderizar({
+      inicial: rascunho({ resultado: resultado({ encaminhamentos: [] }) }),
+      impl: {
+        gemini: () =>
+          Promise.resolve({
+            encaminhamentos: [
+              { acao: 'Pagar o fornecedor', responsavel: 'Ana', prazo: '', status: 'pendente' },
+            ],
+          }),
+      },
+    });
+    const s = secao('Encaminhamentos');
+    await user.click(within(s).getByRole('button', { name: 'Gerar esta seção (Encaminhamentos)' }));
+    expect(await within(s).findByText('Pagar o fornecedor')).toBeVisible();
+    expect(within(s).getByRole('table')).toBeVisible();
+  });
+});
+
+describe('revisão por seção: ajustes finos', () => {
+  it('editor aberto quando a ata inteira começa a gerar: Salvar fica parado com o motivo à vista', async () => {
+    const espera = pendente();
+    const { user } = renderizar({ impl: { gemini: espera.gerar }, comBarra: true });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
+    await user.type(
+      within(s).getByRole('textbox', { name: 'Texto da seção Resumo' }),
+      ' Mais um trecho.',
+    );
+    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
+    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+
+    const editor = within(s).getByRole('group', { name: 'Editar seção Resumo' });
+    expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeDisabled();
+    expect(within(editor).getByText(MOTIVO_OCUPADA)).toBeVisible();
+
+    await user.click(
+      within(screen.getByRole('region', { name: 'Gerar ata' })).getByRole('button', {
+        name: 'Cancelar',
+      }),
+    );
+    await waitFor(() => {
+      expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeEnabled();
+    });
+    expect(within(editor).queryByText(MOTIVO_OCUPADA)).not.toBeInTheDocument();
+  });
+
+  it('o mesmo vale para o editor de encaminhamentos', async () => {
+    const espera = pendente();
+    const { user } = renderizar({ impl: { gemini: espera.gerar }, comBarra: true });
+    const s = secao('Encaminhamentos');
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
+    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
+    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    const editor = within(s).getByRole('group', { name: 'Editar seção Encaminhamentos' });
+    expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeDisabled();
+    expect(within(editor).getByText(MOTIVO_OCUPADA)).toBeVisible();
+  });
+
+  it('encaminhamentos: salvar sem tocar (chaves em outra ordem) não marca como editado', async () => {
+    const reordenado = [
+      {
+        status: 'em_andamento',
+        prazo: '2026-10-30',
+        responsavel: 'Ana Souza',
+        acao: 'Enviar a planilha',
+      },
+    ] as unknown as ResultadoAta['encaminhamentos'];
+    const { user } = renderizar({
+      inicial: rascunho({ resultado: resultado({ encaminhamentos: reordenado }) }),
+    });
+    const s = secao('Encaminhamentos');
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
+    await user.click(within(s).getByRole('button', { name: 'Salvar' }));
+    expect(lerResultado().editadas).toEqual([]);
+    expect(within(s).getByText('Gerado por OpenAI · gpt-6-luna')).toBeVisible();
+  });
+
+  it('encaminhamentos: espaços nas pontas não contam como mudança; mudança real conta', async () => {
+    const { user } = renderizar();
+    const s = secao('Encaminhamentos');
+    const acao = () =>
+      within(within(s).getByRole('group', { name: 'Encaminhamento 1' })).getByRole('textbox', {
+        name: 'Ação',
+      });
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
+    await user.type(acao(), '  ');
+    await user.click(within(s).getByRole('button', { name: 'Salvar' }));
+    expect(lerResultado().editadas).toEqual([]);
+
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
+    await user.type(acao(), ' final');
+    await user.click(within(s).getByRole('button', { name: 'Salvar' }));
+    expect(lerResultado().editadas).toEqual(['encaminhamentos']);
+  });
+
+  it('abrir Editar encerra o aviso de "Regeração cancelada" da seção', async () => {
+    const espera = pendente();
+    const { user } = renderizar({ impl: { gemini: espera.gerar } });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    await user.click(within(s).getByRole('button', { name: 'Cancelar regeração da seção Resumo' }));
+    expect(await within(s).findByText(/Regeração cancelada/)).toBeVisible();
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
+    expect(within(s).queryByText(/Regeração cancelada/)).not.toBeInTheDocument();
+  });
+
+  it('abrir Editar encerra o aviso de erro da seção', async () => {
+    const { user } = renderizar({
+      impl: {
+        gemini: () =>
+          Promise.reject(erroProvedor('muito_longo', 'gemini', { modelo: 'gemini-3.8-flash' })),
+      },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    expect(await within(s).findByRole('alert')).toBeVisible();
+    await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
+    expect(within(s).queryByRole('alert')).not.toBeInTheDocument();
   });
 });

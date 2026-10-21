@@ -160,7 +160,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia }: GenerateBarPro
           <Button
             ref={cancelarRef}
             onClick={() => {
-              cancelar();
+              if (controleRef.current) cancelar(controleRef.current);
             }}
           >
             Cancelar

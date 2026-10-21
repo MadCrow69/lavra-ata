@@ -57,10 +57,29 @@ describe('OperacaoIA', () => {
       controle = result.current.iniciar({ tipo: 'ata' });
     });
     act(() => {
-      result.current.cancelar();
+      if (controle) result.current.cancelar(controle);
     });
     expect((controle as AbortController | null)?.signal.aborted).toBe(true);
     expect(result.current.operacao).toEqual({ tipo: 'ata' });
+  });
+
+  it('cancelar com o controle de uma operação que já acabou não aborta a atual', () => {
+    const { result } = renderHook(() => useOperacaoIA(), { wrapper: envolver });
+    let antigo: AbortController | null = null;
+    let atual: AbortController | null = null;
+    act(() => {
+      antigo = result.current.iniciar({ tipo: 'ata' });
+    });
+    act(() => {
+      if (antigo) result.current.concluir(antigo);
+    });
+    act(() => {
+      atual = result.current.iniciar({ tipo: 'secao', chave: 'riscos' });
+    });
+    act(() => {
+      if (antigo) result.current.cancelar(antigo);
+    });
+    expect((atual as AbortController | null)?.signal.aborted).toBe(false);
   });
 
   it('desmontar o provedor cancela a operação em andamento', () => {

@@ -39,6 +39,8 @@ export interface SectionActionsProps {
   atribuicao: string | null;
   /** A seção foi alterada à mão: regerar pede confirmação. */
   editada: boolean;
+  /** Seção sem conteúdo (placeholder da tela): Escrever / Gerar esta seção, sem Ajustar. */
+  vazia?: boolean;
   /** O editor da seção está aberto (as ações ficam paradas até fechar). */
   editando: boolean;
   onEditar: () => void;
@@ -60,6 +62,7 @@ export function SectionActions({
   titulo,
   atribuicao,
   editada,
+  vazia = false,
   editando,
   onEditar,
   editarRef,
@@ -97,6 +100,7 @@ export function SectionActions({
       ? MOTIVO_IA_OCUPADA
       : null;
   const iaParada = semChave || operacao !== null || editando;
+  const ajusteAberto = ajustando && !vazia;
   // Editar à mão fica livre, salvo quando um resultado de IA vai substituir o que a pessoa fizer.
   const edicaoParada = editando || operacao?.tipo === 'ata' || estaOcupada;
 
@@ -197,7 +201,8 @@ export function SectionActions({
 
   const aoClicarRegerar = () => {
     if (iaParada) return;
-    if (editada) setConfirmando(true);
+    // Seção vazia não tem edições para perder.
+    if (editada && !vazia) setConfirmando(true);
     else void executar(null, 'regerar');
   };
 
@@ -209,6 +214,13 @@ export function SectionActions({
     ajustarRef.current?.focus();
   };
 
+  /** Abrir o editor encerra os avisos de uma tentativa anterior (cancelada ou com erro). */
+  const aoClicarEditar = () => {
+    setErro(null);
+    setCancelada(false);
+    onEditar();
+  };
+
   const instrucaoLimpa = instrucao.trim();
   const descricao = motivo === null ? undefined : motivoId;
 
@@ -218,7 +230,7 @@ export function SectionActions({
         {atribuicao === null ? <span /> : <p className={styles.atribuicao}>{atribuicao}</p>}
         <div
           className={styles.acoes}
-          data-fixa={motivo !== null || estaOcupada || ajustando ? '' : undefined}
+          data-fixa={motivo !== null || estaOcupada || ajusteAberto ? '' : undefined}
         >
           <div className={styles.botoesAcao}>
             <button
@@ -226,37 +238,39 @@ export function SectionActions({
               type="button"
               className={styles.acao}
               disabled={edicaoParada}
-              aria-label={`Editar seção ${titulo}`}
+              aria-label={`${vazia ? 'Escrever' : 'Editar'} seção ${titulo}`}
               aria-describedby={operacao !== null && !estaOcupada ? motivoId : undefined}
-              onClick={onEditar}
+              onClick={aoClicarEditar}
             >
-              Editar
+              {vazia ? 'Escrever' : 'Editar'}
             </button>
             <button
               ref={regerarRef}
               type="button"
               className={styles.acao}
               disabled={iaParada}
-              aria-label={`Regerar seção ${titulo}`}
+              aria-label={vazia ? `Gerar esta seção (${titulo})` : `Regerar seção ${titulo}`}
               aria-describedby={descricao}
               onClick={aoClicarRegerar}
             >
-              Regerar
+              {vazia ? 'Gerar esta seção' : 'Regerar'}
             </button>
-            <button
-              ref={ajustarRef}
-              type="button"
-              className={styles.acao}
-              disabled={iaParada}
-              aria-label={`Ajustar seção ${titulo} com instrução`}
-              aria-describedby={descricao}
-              aria-expanded={ajustando}
-              onClick={() => {
-                setAjustando((aberto) => !aberto);
-              }}
-            >
-              Ajustar
-            </button>
+            {vazia ? null : (
+              <button
+                ref={ajustarRef}
+                type="button"
+                className={styles.acao}
+                disabled={iaParada}
+                aria-label={`Ajustar seção ${titulo} com instrução`}
+                aria-describedby={descricao}
+                aria-expanded={ajustando}
+                onClick={() => {
+                  setAjustando((aberto) => !aberto);
+                }}
+              >
+                Ajustar
+              </button>
+            )}
           </div>
           {motivo === null ? null : (
             <p id={motivoId} className={styles.motivo}>
@@ -266,7 +280,7 @@ export function SectionActions({
         </div>
       </div>
 
-      {ajustando ? (
+      {ajusteAberto ? (
         <div
           role="group"
           aria-label={`Ajustar seção ${titulo} com instrução`}
@@ -322,7 +336,9 @@ export function SectionActions({
             <Button
               ref={cancelarRef}
               aria-label={`Cancelar regeração da seção ${titulo}`}
-              onClick={cancelar}
+              onClick={() => {
+                if (controleRef.current) cancelar(controleRef.current);
+              }}
             >
               Cancelar
             </Button>

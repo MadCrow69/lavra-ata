@@ -164,7 +164,10 @@ describe('A4Preview depois de gerar', () => {
     expect(screen.getByRole('heading', { name: 'Resumo' })).toBeInTheDocument();
     expect(screen.getByText('Foi tratado o reembolso.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Decisões' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Riscos' })).not.toBeInTheDocument();
+    // Seção sem conteúdo: na tela é um marcador (o modelo do documento a omite).
+    expect(
+      within(screen.getByRole('region', { name: 'Riscos' })).getByText('Seção sem conteúdo'),
+    ).toBeInTheDocument();
     expect(screen.queryByText(TEXTO_SECOES_PENDENTES)).not.toBeInTheDocument();
     expect(screen.getByText(/foi lavrada a presente ata/)).toBeInTheDocument();
     expect(screen.getByText(AVISO_MINUTA)).toBeInTheDocument();
