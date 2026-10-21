@@ -1,3 +1,5 @@
+import { LOGO_CAIXA_PT, PT_POR_POLEGADA, PX_POR_POLEGADA } from '../config/documento';
+
 export interface Dimensoes {
   largura: number;
   altura: number;
@@ -27,4 +29,24 @@ export function encaixar(
     largura: Math.max(1, Math.round(origem.largura * escala)),
     altura: Math.max(1, Math.round(origem.altura * escala)),
   };
+}
+
+/**
+ * Tamanho da logo no PDF e no DOCX, em pixels a 96 px/pol.: a logo (já rasterizada) reduzida até
+ * caber em `LOGO_CAIXA_PT`, mantendo a proporção e **nunca ampliada** — o mesmo resultado nos dois
+ * formatos (o PDF converte para pontos com `pxParaPt`).
+ */
+export function logoNoDocumentoPx(logo: Dimensoes): Dimensoes {
+  return encaixar(logo, {
+    largura: ptParaPx(LOGO_CAIXA_PT.largura),
+    altura: ptParaPx(LOGO_CAIXA_PT.altura),
+  });
+}
+
+export function ptParaPx(pt: number): number {
+  return (pt * PX_POR_POLEGADA) / PT_POR_POLEGADA;
+}
+
+export function pxParaPt(px: number): number {
+  return (px * PT_POR_POLEGADA) / PX_POR_POLEGADA;
 }

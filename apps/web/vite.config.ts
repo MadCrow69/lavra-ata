@@ -30,7 +30,11 @@ export default defineConfig({
     __COMMIT_SHA__: JSON.stringify(process.env.GITHUB_SHA ?? 'dev'),
   },
   build: {
-    // Nenhum asset vira data: URI — img-src/font-src exigem arquivos reais.
+    // Assets referenciados (CSS, `?url`, import comum) não viram data: URI — img-src/font-src da
+    // interface exigem arquivos reais. A ÚNICA exceção são os imports `?inline` explícitos das
+    // fontes do PDF (`src/export/pdf/arquivos-fonte.ts`): o Vite os inlina mesmo com limite 0, e o
+    // base64 vai para o VFS do pdfmake dentro do chunk sob demanda (sem fetch: connect-src não
+    // tem 'self').
     assetsInlineLimit: 0,
   },
 });

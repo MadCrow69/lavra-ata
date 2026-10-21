@@ -37,6 +37,8 @@ export const PAGINA_DOCUMENTO = { margemPt: 56, margemInferiorPt: 64 } as const;
 /** Tamanhos de texto (pt) do PDF e do DOCX. */
 export const TIPOGRAFIA_DOCUMENTO = {
   corpoPt: 10.5,
+  /** Texto das tabelas: menor, para "30/10/2026" caber inteiro na coluna de prazo (15%). */
+  tabelaPt: 9.5,
   tituloPt: 16,
   secaoPt: 12.5,
   subtituloPt: 11,
@@ -48,11 +50,55 @@ export const TIPOGRAFIA_DOCUMENTO = {
 /** Caixa (pt) em que a logo cabe no documento; a logo nunca é ampliada. */
 export const LOGO_CAIXA_PT = { largura: 180, altura: 48 } as const;
 
-/** Cor do texto no PDF e no DOCX: grafite (folha sóbria). */
-export const COR_TEXTO_DOCUMENTO = '#1f2a37';
+/**
+ * Densidades da conversão pixel ↔ ponto. A logo (PNG medido em pixels) sai no PDF e no DOCX no
+ * tamanho natural a 96 px/pol., reduzida para caber em `LOGO_CAIXA_PT`, nunca ampliada. Converter
+ * multiplicando e depois dividindo mantém as contas exatas (1 px = 0,75 pt).
+ */
+export const PX_POR_POLEGADA = 96;
+export const PT_POR_POLEGADA = 72;
 
-/** Fundo das lacunas `[PREENCHER: …]` no PDF e no DOCX. */
-export const COR_FUNDO_PREENCHER = '#f3dcc9';
+/** Espaçamentos e traços (pt) do PDF. Fonte única: nada de número solto em `definicao.ts`. */
+export const ESPACOS_PDF = {
+  /** Entre a logo e as linhas do cabeçalho. */
+  entreLogoECabecalhoPt: 16,
+  /** Depois do timbre (logo + linhas), antes do título. */
+  aposTimbrePt: 16,
+  /** Depois do título da ata. */
+  aposTituloPt: 16,
+  /** Antes de um subtítulo ou título de seção. */
+  antesDeSecaoPt: 14,
+  /** Depois de um subtítulo ou título de seção. */
+  aposSecaoPt: 6,
+  /** Depois de parágrafo, lista ou tabela. */
+  aposBlocoPt: 8,
+  /** Entre itens de lista. */
+  entreItensPt: 2,
+  /** Altura reservada acima da linha de assinatura. */
+  espacoParaAssinarPt: 36,
+  /** Entre as duas assinaturas da mesma linha. */
+  entreAssinaturasPt: 32,
+  /** Margem interna da caixa do aviso de minuta. */
+  respiroDoAvisoPt: 6,
+  /** Distância do rodapé paginado à borda inferior da área de conteúdo. */
+  rodapeTopoPt: 24,
+  /** Espessura da linha de assinatura. */
+  linhaAssinaturaPt: 0.75,
+  /** Espessura da borda fina (caixa do aviso). */
+  bordaFinaPt: 0.5,
+} as const;
+
+/**
+ * Cor do texto no PDF e no DOCX: a tinta da folha (`--cor-folha-tinta` em tokens.css). O arquivo
+ * reproduz a folha; `config/documento.test.ts` confere a igualdade.
+ */
+export const COR_TEXTO_DOCUMENTO = '#1a1a1a';
+
+/**
+ * Fundo das lacunas `[PREENCHER: …]` no PDF e no DOCX: o mesmo da folha
+ * (`--cor-folha-lacuna-fundo` em tokens.css), conferido por `config/documento.test.ts`.
+ */
+export const COR_FUNDO_PREENCHER = '#fbebd9';
 
 /** Famílias do DOCX: o Word as resolve no computador de quem abre (nada é embutido). */
 export const FONTES_DOCX = { titulo: 'Cambria', corpo: 'Calibri' } as const;

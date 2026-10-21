@@ -33,6 +33,15 @@ export function dataOuNulo(iso: string | undefined): string | null {
   return formatarOuNulo(formatarData, iso);
 }
 
+/**
+ * Prazo de encaminhamento: data `AAAA-MM-DD` válida vira `dd/mm/aaaa`; qualquer outro texto
+ * ("próxima reunião") é mantido, aparado; vazio → `null` (a folha mostra traço, as tarefas por
+ * responsável omitem o prazo). Fonte única da regra.
+ */
+export function prazoOuNulo(prazo: string | undefined): string | null {
+  return dataOuNulo(prazo) ?? (textoLimpo(prazo) || null);
+}
+
 export function dataPorExtensoOuNulo(iso: string | undefined): string | null {
   return formatarOuNulo(formatarDataPorExtenso, iso);
 }

@@ -1,4 +1,4 @@
-import { dataOuNulo, textoLimpo } from '../ata-types/texto-modelo';
+import { prazoOuNulo, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import {
   AVISO_MINUTA,
@@ -22,6 +22,7 @@ import {
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { ROTULO_CURTO } from '../config/models';
 import type { DocBloco, DocumentModel, Inline, LogoDoc } from './model';
+import { partesDoRodape } from './rodape';
 
 /** Lacuna que a pessoa completa à mão: `[PREENCHER: o que falta]`. Sempre em maiúsculas. */
 const LACUNA = /\[PREENCHER(?::[^\]]*)?\]/g;
@@ -51,42 +52,48 @@ function contarEmTexto(texto: string): number {
   return Array.from(texto.matchAll(LACUNA)).length;
 }
 
-function contarEmInline(partes: Inline[]): number {
-  return partes.filter((p) => p.destaque === 'preencher').length;
-}
+const juntar = (partes: Inline[]): string => partes.map((p) => p.texto).join('');
 
-function contarEmBloco(bloco: DocBloco): number {
+function textosDoBloco(bloco: DocBloco): string[] {
   switch (bloco.tipo) {
     case 'titulo':
     case 'subtitulo':
     case 'aviso':
-      return contarEmTexto(bloco.texto);
+      return [bloco.texto];
     case 'paragrafo':
-      return contarEmInline(bloco.partes);
+      return [juntar(bloco.partes)];
     case 'lista':
-      return bloco.itens.reduce((soma, item) => soma + contarEmInline(item), 0);
+      return bloco.itens.map(juntar);
     case 'secao':
-      return bloco.blocos.reduce((soma, b) => soma + contarEmBloco(b), 0);
+      return [bloco.titulo, ...bloco.blocos.flatMap(textosDoBloco)];
     case 'tabela':
-      return bloco.linhas.reduce(
-        (soma, linha) => soma + linha.reduce((s, celula) => s + contarEmTexto(celula), 0),
-        0,
-      );
+      return [...bloco.colunas, ...bloco.linhas.flat()];
     case 'assinaturas':
-      return bloco.pessoas.reduce(
-        (soma, p) => soma + contarEmTexto(p.nome) + contarEmTexto(p.papel),
-        0,
-      );
+      return bloco.pessoas.flatMap((p) => [p.nome, p.papel]);
   }
 }
 
-/** Quantas lacunas `[PREENCHER: …]` o documento ainda tem (texto, listas e células de tabela). */
-export function contarPreencher(modelo: DocumentModel): number {
-  return (
-    contarEmTexto(modelo.titulo) +
-    modelo.cabecalho.linhas.reduce((soma, l) => soma + contarEmTexto(l), 0) +
-    modelo.blocos.reduce((soma, b) => soma + contarEmBloco(b), 0)
+/**
+ * Todo texto que os arquivos (PDF e DOCX) imprimem, na ordem do documento: título, linhas do
+ * cabeçalho, blocos (títulos de seção, parágrafos e itens de lista com as lacunas no lugar,
+ * cabeçalho e células das tabelas, assinaturas, aviso de minuta) e o texto fixo do rodapé
+ * paginado. **Nunca** `rodapeInterno`, que só aparece na tela.
+ */
+export function textosDoDocumento(modelo: DocumentModel): string[] {
+  const rodape = partesDoRodape(modelo.rodape).flatMap((p) =>
+    p.tipo === 'texto' ? [p.texto] : [],
   );
+  return [
+    modelo.titulo,
+    ...modelo.cabecalho.linhas,
+    ...modelo.blocos.flatMap(textosDoBloco),
+    rodape.join(''),
+  ];
+}
+
+/** Quantas lacunas `[PREENCHER: …]` o documento ainda tem (todo texto impresso). */
+export function contarPreencher(modelo: DocumentModel): number {
+  return textosDoDocumento(modelo).reduce((soma, texto) => soma + contarEmTexto(texto), 0);
 }
 
 function paragrafo(texto: string): DocBloco {
@@ -128,9 +135,9 @@ function tabelaDeParticipantes(d: EntradaDoDocumento, tipo: AtaTypeDefinition): 
   };
 }
 
-/** Texto do prazo: data `AAAA-MM-DD` válida vira `dd/mm/aaaa`; qualquer outro texto é mantido. */
+/** Célula do prazo (regra em `prazoOuNulo`); sem prazo, o traço de célula vazia. */
 function celulaPrazo(prazo: string): string {
-  return dataOuNulo(prazo) ?? (textoLimpo(prazo) || CELULA_VAZIA);
+  return prazoOuNulo(prazo) ?? CELULA_VAZIA;
 }
 
 function tabelaDeEncaminhamentos(itens: Encaminhamento[]): DocBloco {

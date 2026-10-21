@@ -13,5 +13,8 @@ export default defineConfig({
     // Os testes de tela no jsdom levam segundos sob carga (CI, cobertura, 4 workers); com o padrão
     // de 5 s, um corpo assíncrono estourado seguia digitando no DOM do teste seguinte.
     testTimeout: 20_000,
+    // O Vitest troca CSS por string vazia (inclusive `?raw`); tokens.css é lido como texto pelo
+    // teste que confere as cores do PDF/DOCX contra a folha.
+    css: { include: [/styles\/tokens\.css/] },
   },
 });
