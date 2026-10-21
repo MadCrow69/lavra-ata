@@ -609,6 +609,48 @@ describe('Gemini: chave inválida vem como HTTP 400', () => {
   });
 });
 
+describe('429: cota esgotada x limite por minuto', () => {
+  it('429 com insufficient_quota vira falta de crédito, sem retry', async () => {
+    fetchFalso.mockResolvedValueOnce(
+      json(
+        {
+          error: {
+            message: 'You exceeded your current quota, please check your plan and billing details.',
+            type: 'insufficient_quota',
+            code: 'insufficient_quota',
+          },
+        },
+        429,
+      ),
+    );
+    const e = await erroDe(openaiAdapter.gerar(cfgOpenai, req()));
+    expect(e).toMatchObject({
+      tipo: 'chave_invalida',
+      provedor: 'openai',
+      status: 429,
+      repetivel: false,
+    });
+    expect(e.message).toContain('sem crédito ou saldo');
+  });
+
+  it('429 de cota por minuto do Gemini continua limite', async () => {
+    fetchFalso.mockResolvedValueOnce(
+      json(
+        {
+          error: {
+            code: 429,
+            status: 'RESOURCE_EXHAUSTED',
+            message: 'Quota exceeded for metric generate_content_free_tier_requests',
+          },
+        },
+        429,
+      ),
+    );
+    const e = await erroDe(geminiAdapter.gerar(cfgGemini, req()));
+    expect(e).toMatchObject({ tipo: 'limite', repetivel: true });
+  });
+});
+
 describe('retry só para falha de nível HTTP/rede', () => {
   it('resposta 200 classificada como instavel não é repetível', async () => {
     fetchFalso.mockResolvedValueOnce(json({ status: 'failed', output: [] }));

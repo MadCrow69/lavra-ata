@@ -7,6 +7,7 @@ import { KeysProvider } from '../../ai/KeysContext';
 import { criarKeyStore, type KeyStore } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
 import { RASCUNHO } from '../../config/storage-keys';
+import { ESPERA_SALVAR_RASCUNHO_MS } from '../../config/ui';
 import type { AtaDraft } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
@@ -199,6 +200,23 @@ describe('Workbench: fluxo de ponta a ponta', () => {
     expect(localStorage.length).toBe(0);
   });
 
+  it('salva o rascunho pendente ao desmontar (limite de erro)', () => {
+    vi.useFakeTimers();
+    try {
+      const { unmount } = renderizar();
+      fireEvent.change(screen.getByLabelText(/^Assunto/), { target: { value: 'Planejamento' } });
+      // Desmonta antes de `ESPERA_SALVAR_RASCUNHO_MS`: o que estava pendente não pode se perder.
+      act(() => {
+        vi.advanceTimersByTime(ESPERA_SALVAR_RASCUNHO_MS - 1);
+      });
+      expect(carregarRascunho()?.dados.assunto ?? '').not.toBe('Planejamento');
+      unmount();
+      expect(carregarRascunho()?.dados.assunto).toBe('Planejamento');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('esconder a aba grava o rascunho na hora, sem esperar o debounce', async () => {
     const { user } = renderizar();
     await user.type(screen.getByLabelText(/^Assunto/), 'Reembolsos');
@@ -364,6 +382,32 @@ describe('Workbench: estados depois de gerar', () => {
     // Cancelar por aqui é cancelar pela pessoa: a barra registra e a ata não muda.
     expect(within(painel).getByText('Geração cancelada. A ata não foi alterada.')).toBeVisible();
     expect(within(folha()).queryByText(`Reembolso a ${CPF}.`)).not.toBeInTheDocument();
+  });
+
+  it('o aviso "Geração cancelada" some depois de "Nova ata"', async () => {
+    simularLargura(false);
+    salvarRascunho(completo());
+    const { user } = renderizar({
+      store: comChave(),
+      gerar: (_cfg, req) =>
+        new Promise((_resolve, reject) => {
+          req.signal.addEventListener('abort', () => {
+            reject(erroProvedor('cancelado', 'openai'));
+          });
+        }),
+    });
+    await user.click(botaoGerar());
+    await user.click(screen.getByRole('tab', { name: 'Documento' }));
+    const painel = screen.getByRole('tabpanel', { name: 'Documento' });
+    await user.click(within(painel).getByRole('button', { name: 'Cancelar geração da ata' }));
+    expect(within(painel).getByText('Geração cancelada. A ata não foi alterada.')).toBeVisible();
+
+    await user.click(screen.getByRole('tab', { name: 'Editar' }));
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+    await user.click(screen.getByRole('button', { name: 'Apagar e começar' }));
+    await user.click(screen.getByRole('tab', { name: 'Documento' }));
+
+    expect(screen.queryByText(/Geração cancelada/)).not.toBeInTheDocument();
   });
 
   it('no celular, se a geração falha com a pessoa no Documento, volta ao Editar com o erro', async () => {

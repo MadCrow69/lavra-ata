@@ -3,6 +3,7 @@ import '@fontsource-variable/source-serif-4';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { OPCOES_RAIZ } from './shell/erros-raiz';
 import './styles/tokens.css';
 import './styles/base.css';
 
@@ -11,7 +12,7 @@ if (!container) {
   throw new Error('Elemento #root não encontrado em index.html.');
 }
 
-createRoot(container).render(
+createRoot(container, OPCOES_RAIZ).render(
   <StrictMode>
     <App />
   </StrictMode>,

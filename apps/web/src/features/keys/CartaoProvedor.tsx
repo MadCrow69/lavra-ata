@@ -129,6 +129,8 @@ export function CartaoProvedor({
       if (e instanceof ErroProvedor && e.tipo === 'cancelado') return;
       if (e instanceof ErroProvedor && e.tipo === 'chave_invalida') {
         registrar('invalida');
+        // Sem saldo não é chave mal copiada: a causa e a ação vêm na mensagem do provedor.
+        if (e.semCredito) setFalha(e.message);
       } else if (e instanceof ErroProvedor) {
         // A mensagem já vem sem a chave dos adaptadores; a troca abaixo é a segunda barreira.
         setFalha(e.message.split(testada).join('[chave removida]'));

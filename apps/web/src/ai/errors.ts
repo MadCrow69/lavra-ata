@@ -12,6 +12,8 @@ export class ErroProvedor extends Error {
    * não é repetível — o padrão é `tipo` ser `limite` ou `instavel`, e os adaptadores desligam.
    */
   readonly repetivel: boolean;
+  /** A conta do provedor está sem crédito ou saldo (a chave em si pode estar correta). */
+  readonly semCredito: boolean;
 
   constructor(
     tipo: ErroTipo,
@@ -19,12 +21,14 @@ export class ErroProvedor extends Error {
     mensagem: string,
     status?: number,
     repetivel: boolean = tipo === 'limite' || tipo === 'instavel',
+    semCredito = false,
   ) {
     super(mensagem);
     this.name = 'ErroProvedor';
     this.tipo = tipo;
     this.provedor = provedor;
     this.repetivel = repetivel;
+    this.semCredito = semCredito;
     if (status !== undefined) this.status = status;
   }
 }
@@ -120,7 +124,7 @@ export function erroProvedor(
   );
 }
 
-/** Causa curta de cada erro, para listas compactas (ex.: "OpenAI falhou: limite de uso"). */
+/** Causa curta de cada erro, para listas compactas (ex.: "OpenAI falhou (limite de uso)"). */
 const RESUMO_DO_ERRO: Record<ErroTipo, string> = {
   chave_invalida: 'chave recusada ou sem crédito',
   limite: 'limite de uso',

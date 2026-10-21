@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { gerarComFallback } from './chain';
 import { ErroCadeia, ErroProvedor } from './errors';
+import { openaiAdapter } from './providers/openai';
 import type {
   ErroTipo,
   GenerateRequest,
@@ -137,6 +138,44 @@ describe('gerarComFallback', () => {
     expect(gerar.openai).toHaveBeenCalledTimes(1);
     expect(r.provedor).toBe('gemini');
     expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: tipo });
+  });
+
+  it('cota esgotada da OpenAI passa direto para o próximo e marca a chave como recusada', async () => {
+    const fetchFalso = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              message:
+                'You exceeded your current quota, please check your plan and billing details.',
+              type: 'insufficient_quota',
+              code: 'insufficient_quota',
+            },
+          }),
+          { status: 429, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchFalso);
+    try {
+      const { a } = adaptadores({ gemini: () => Promise.resolve({ ok: 2 }) });
+      const aoRecusarChave = vi.fn();
+      // Sem avançar os timers: se houvesse espera de retry, a promessa não resolveria.
+      const r = await gerarComFallback(cadeia, reqCom(), {
+        adaptadores: { ...a, openai: openaiAdapter },
+        aoRecusarChave,
+      });
+
+      expect(fetchFalso).toHaveBeenCalledTimes(1);
+      expect(r.provedor).toBe('gemini');
+      expect(r.falhas).toHaveLength(1);
+      expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: 'chave_invalida' });
+      expect(r.falhas[0]?.mensagem).toContain('sem crédito ou saldo');
+      expect(aoRecusarChave).toHaveBeenCalledTimes(1);
+      expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('cancelado interrompe a cadeia e não tenta o próximo', async () => {

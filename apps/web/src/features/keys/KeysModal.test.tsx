@@ -6,6 +6,7 @@ import { ErroProvedor, erroProvedor } from '../../ai/errors';
 import { KeysProvider, useKeys } from '../../ai/KeysContext';
 import { criarKeyStore } from '../../ai/keys';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
+import { erroSemCredito } from '../../ai/providers/comum';
 import { MODELOS, URL_CHAVE } from '../../config/models';
 import { CHAVES } from '../../config/storage-keys';
 import { KeysModal } from './KeysModal';
@@ -239,6 +240,17 @@ describe('KeysModal', () => {
       ),
     ).toBeInTheDocument();
     expect(within(cartao('Google Gemini')).queryByText('Chave válida')).not.toBeInTheDocument();
+  });
+
+  it('conta sem crédito mostra a mensagem de saldo, não "verifique se copiou a chave inteira"', async () => {
+    const { user } = await montar({
+      testar: { openai: () => Promise.reject(erroSemCredito('openai', 429)) },
+    });
+    await user.type(campoChave('OpenAI'), CHAVE);
+    await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
+    const c = cartao('OpenAI');
+    expect(await within(c).findByText(/sem crédito ou saldo/)).toBeInTheDocument();
+    expect(within(c).queryByText(/verifique se copiou/)).not.toBeInTheDocument();
   });
 
   it('erro de rede/limite mostra a mensagem do provedor, não "chave inválida"; texto com a chave é limpo', async () => {

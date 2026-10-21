@@ -25,6 +25,11 @@ export interface ChamadaHttp {
 }
 
 const PADRAO_SEM_CREDITO = /credit balance|insufficient|billing|quota/i;
+/**
+ * Cota esgotada com 429: só o código da OpenAI. O `PADRAO_SEM_CREDITO` amplo não vale para 429,
+ * porque o "quota" do Gemini é o limite por minuto (que melhora esperando).
+ */
+const PADRAO_COTA_ESGOTADA = /insufficient_quota/i;
 const PADRAO_CHAVE_INVALIDA = /API key not valid|API_KEY_INVALID/i;
 const PADRAO_MUITO_LONGO =
   /context[_ ]length|prompt is too long|maximum context|exceeds the maximum number of (input )?tokens|input token count|too many tokens|request too large/i;
@@ -67,6 +72,18 @@ function lerCorpoDeErro(texto: string): CorpoDeErro {
   return { mensagem, pistas: [mensagem, ...pistas].join(' '), temParam };
 }
 
+/** Conta sem crédito ou saldo: a chave não adianta até a pessoa recarregar; sem retry. */
+export function erroSemCredito(provedor: ProviderId, status: number): ErroProvedor {
+  return new ErroProvedor(
+    'chave_invalida',
+    provedor,
+    `A conta de ${ROTULO_PROVEDOR[provedor]} está sem crédito ou saldo. Confira o saldo e a cobrança no painel do provedor.`,
+    status,
+    false,
+    true,
+  );
+}
+
 async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProvedor> {
   const { provedor, chave, modelo } = c;
   const status = resp.status;
@@ -80,7 +97,11 @@ async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProve
   const detalhe = sanitizar(corpo.mensagem, chave);
 
   if (status === 401 || status === 403) return erroProvedor('chave_invalida', provedor, { status });
-  if (status === 429) return erroProvedor('limite', provedor, { status });
+  if (status === 429) {
+    return PADRAO_COTA_ESGOTADA.test(corpo.pistas)
+      ? erroSemCredito(provedor, status)
+      : erroProvedor('limite', provedor, { status });
+  }
   if (status >= 500 || status === 408) {
     return erroProvedor('instavel', provedor, { status, detalhe, repetivel: true });
   }
@@ -89,12 +110,7 @@ async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProve
     return erroProvedor('chave_invalida', provedor, { status });
   }
   if (PADRAO_SEM_CREDITO.test(corpo.pistas)) {
-    return new ErroProvedor(
-      'chave_invalida',
-      provedor,
-      `A conta de ${ROTULO_PROVEDOR[provedor]} está sem crédito ou saldo. Confira o saldo e a cobrança no painel do provedor.`,
-      status,
-    );
+    return erroSemCredito(provedor, status);
   }
   // As mensagens específicas do modelo só valem em chamadas que têm um modelo (nunca no teste de chave).
   if (modelo !== undefined) {

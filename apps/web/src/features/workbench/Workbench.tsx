@@ -68,6 +68,8 @@ function useSalvarRascunho(state: AtaDraft): void {
     window.addEventListener('pagehide', salvarJa);
     document.addEventListener('visibilitychange', aoMudarVisibilidade);
     return () => {
+      // Desmontar (inclusive pelo limite de erro) com o timer pendente não pode perder a última tecla.
+      salvarJa();
       window.removeEventListener('pagehide', salvarJa);
       document.removeEventListener('visibilitychange', aoMudarVisibilidade);
     };
@@ -196,7 +198,7 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
 
   const documento = (
     <div ref={documentoRef} className={styles.documento} tabIndex={-1}>
-      {largo ? null : <GeracaoNoDocumento />}
+      {largo ? null : <GeracaoNoDocumento key={`geracao-${String(rodada)}`} />}
       <A4Preview key={rodada} {...opcoes} />
     </div>
   );
