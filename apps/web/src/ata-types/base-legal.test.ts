@@ -25,7 +25,7 @@ describe('docs/base-legal.md', () => {
 
   it('a guarda morde no registro real: sem as linhas de um texto fixo da CIPA, reprova', () => {
     const linhas = md.split(/\r?\n/);
-    const daChave = (l: string) => l.startsWith('| `nomeComissao` |');
+    const daChave = (l: string) => /^\|\s*`nomeComissao`\s*\|/.test(l);
     // Piso: a chave tem linhas no arquivo (uma por norma) — todas saem.
     expect(linhas.filter(daChave).length).toBeGreaterThanOrEqual(1);
     const semLinha = linhas.filter((l) => !daChave(l)).join('\n');

@@ -39,6 +39,15 @@ const CAMPOS: CampoDef[] = [
     obrigatorioSe: (dados) => dados.natureza === 'extraordinaria',
   },
   {
+    // Campo de TEXTO com visibilidade e obrigatoriedade condicionais (o `motivo` é de escolha).
+    id: 'detalhe_extra',
+    rotulo: 'Detalhe da reunião extraordinária',
+    tipo: 'texto',
+    obrigatorio: false,
+    visivelSe: (dados) => dados.natureza === 'extraordinaria',
+    obrigatorioSe: (dados) => dados.natureza === 'extraordinaria',
+  },
+  {
     id: 'modalidade',
     rotulo: 'Modalidade',
     tipo: 'escolha',

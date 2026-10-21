@@ -247,6 +247,18 @@ describe('problemaDoCampo', () => {
     expect(problemaDoCampo(motivo, '', { natureza: 'ordinaria' })).toBeNull();
   });
 
+  it('obrigatoriedade condicional também num campo de texto', () => {
+    const detalhe = campoDe(TIPO_DE_TESTE, 'detalhe_extra');
+    expect(detalhe.tipo).toBe('texto');
+    expect(problemaDoCampo(detalhe, '  ', { natureza: 'extraordinaria' })).toEqual({
+      tipo: 'vazio',
+    });
+    expect(
+      problemaDoCampo(detalhe, 'Pedido da representação', { natureza: 'extraordinaria' }),
+    ).toBeNull();
+    expect(problemaDoCampo(detalhe, '', { natureza: 'ordinaria' })).toBeNull();
+  });
+
   it('campo invisível → null, mesmo vazio ou inválido', () => {
     const invisivel: CampoDef = { ...natureza, visivelSe: () => false };
     expect(problemaDoCampo(invisivel, '', {})).toBeNull();
@@ -347,6 +359,14 @@ describe('camposFaltando com extras de participante', () => {
       campo: 'motivo',
       rotulo: 'Motivo da reunião extraordinária',
     });
+    expect(camposFaltando(extra, TIPO_DE_TESTE)).toContainEqual({
+      bloco: 'dados',
+      campo: 'detalhe_extra',
+      rotulo: 'Detalhe da reunião extraordinária',
+    });
+    expect(camposFaltando(ordinaria, TIPO_DE_TESTE).map((f) => f.campo)).not.toContain(
+      'detalhe_extra',
+    );
   });
 
   it('campo de dados com formato inválido → corrigir', () => {

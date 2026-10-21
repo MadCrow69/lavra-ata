@@ -44,7 +44,7 @@ const CASOS: Caso[] = [
       presidente: 'Carla Mendes',
       secretario: 'Diego Faria',
     },
-    extras: (i) => ({ representacao: i % 2 ? 'empregados' : 'empregador', condicao: 'titular' }),
+    extras: (i) => ({ representacao: i % 2 ? 'empregados' : 'organizacao', condicao: 'titular' }),
     noPdf: ['Comissão Interna de Prevenção de Acidentes e de Assédio', 'Representação', '5.6.3.2'],
     aviso: cipa.textosFixos?.avisoDisponibilizacao ?? 'aviso ausente',
   },

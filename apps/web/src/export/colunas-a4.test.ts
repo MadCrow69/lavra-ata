@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { cipa } from '../ata-types/cipa';
 import { corporativa } from '../ata-types/corporativa';
 import { ATA_TYPES, colunasDeParticipantes } from '../ata-types/registry';
-import type { AtaTypeDefinition } from '../ata-types/types';
+import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import { LARGURA_UTIL_PT, RESPIRO_CELULA_PT, TIPOGRAFIA_DOCUMENTO } from '../config/documento';
 import { largurasPorPeso } from '../document/larguras';
 import { ROTULO_PRESENCA } from '../domain/draft';
@@ -13,23 +14,53 @@ type Dados = Record<string, string>;
 
 const palavras = (texto: string): string[] => texto.split(/\s+/).filter((p) => p !== '');
 
+/** Combinações dos campos dados (cada um vazio ou com uma de suas opções). */
+function combinacoes(campos: readonly CampoDef[]): Dados[] {
+  return campos.reduce<Dados[]>(
+    (todas, campo) =>
+      todas.flatMap((dados) =>
+        ['', ...(campo.opcoes ?? []).map((o) => o.valor)].map((valor) => ({
+          ...dados,
+          [campo.id]: valor,
+        })),
+      ),
+    [{}],
+  );
+}
+
+/** Ids que `visivelSe`/`rotuloPor` dos extras de participante leem para esses `dados`. */
+function idsLidos(tipo: AtaTypeDefinition, dados: Dados): Set<string> {
+  const lidos = new Set<string>();
+  const espiao = new Proxy(dados, {
+    get(alvo, chave) {
+      if (typeof chave === 'string') lidos.add(chave);
+      return typeof chave === 'string' ? alvo[chave] : undefined;
+    },
+  });
+  for (const campo of tipo.camposParticipante) {
+    campo.visivelSe?.(espiao);
+    campo.rotuloPor?.(espiao);
+  }
+  return lidos;
+}
+
 /**
- * Todas as combinações dos campos `escolha` do tipo (cada um vazio ou com uma de suas opções): os
- * rótulos e a visibilidade das colunas podem depender de mais de um campo ao mesmo tempo.
+ * As colunas da tabela de participantes só mudam com o que o `visivelSe` e o `rotuloPor` dos
+ * extras leem. LIMITE: combina só os campos `escolha` que algum deles lê (descobertos por ponto
+ * fixo — uma leitura condicional, como `a === 'x' && b`, aparece quando `a` vale `x`), em vez de
+ * todos os campos do tipo: o produto fica do tamanho das dependências reais, não do formulário
+ * (Ltda e condomínio têm muitas escolhas que não mexem nas colunas). Sem dependência: `[{}]`.
  */
 function variacoesDeDados(tipo: AtaTypeDefinition): Dados[] {
-  return tipo.campos
-    .filter((campo) => campo.tipo === 'escolha')
-    .reduce<Dados[]>(
-      (combinacoes, campo) =>
-        combinacoes.flatMap((dados) =>
-          ['', ...(campo.opcoes ?? []).map((o) => o.valor)].map((valor) => ({
-            ...dados,
-            [campo.id]: valor,
-          })),
-        ),
-      [{}],
-    );
+  const escolhas = tipo.campos.filter((c) => c.tipo === 'escolha');
+  let ids = new Set<string>();
+  for (;;) {
+    const variacoes = combinacoes(escolhas.filter((c) => ids.has(c.id)));
+    const novos = new Set(ids);
+    for (const dados of variacoes) for (const id of idsLidos(tipo, dados)) novos.add(id);
+    if (novos.size === ids.size) return variacoes;
+    ids = novos;
+  }
 }
 
 interface Resultado {
@@ -125,6 +156,12 @@ describe('colunas de participantes cabem no A4 (PDF e DOCX)', () => {
     };
     const { violacoes } = conferirTipo(combinado);
     expect(violacoes.some((v) => v.includes(PALAVRA_LONGA))).toBe(true);
+    // Limite: só natureza e modalidade são lidas (3 × 3 com o vazio); `codigo` etc. ficam fora.
+    expect(variacoesDeDados(combinado)).toHaveLength(9);
+  });
+
+  it('limite do produto: tipo cujas colunas não dependem dos dados tem uma variação só', () => {
+    expect(variacoesDeDados(cipa)).toEqual([{}]);
   });
 
   it('a corporativa mede coluna a coluna: 43 % · 29 % · 28 % do espaço útil', () => {

@@ -137,12 +137,12 @@ const CAMPOS_PARTICIPANTE: CampoDef[] = [
     tipo: 'escolha',
     obrigatorio: true,
     opcoes: [
-      { valor: 'empregador', rotulo: 'Representante do empregador' },
+      { valor: 'organizacao', rotulo: 'Representante da organização' },
       { valor: 'empregados', rotulo: 'Representante dos empregados' },
       { valor: 'convidado', rotulo: 'Convidado(a) (não membro)' },
     ],
     erroObrigatorio:
-      'Escolha a representação de cada participante (empregador, empregados ou convidado).',
+      'Escolha a representação de cada participante (organização, empregados ou convidado).',
     enviarParaIA: true,
     peso: 2,
   },
@@ -183,7 +183,7 @@ const SECOES: SecaoDef[] = [
     chave: 'discussao',
     titulo: 'Assuntos tratados',
     instrucao:
-      'Siga a ordem dos itens da pauta e, dentro deles, registre nesta ordem o que foi tratado: acidentes e doenças relacionadas ao trabalho e a análise deles; riscos e inspeções dos ambientes de trabalho; plano de trabalho da comissão; SIPAT; prevenção e combate ao assédio e a outras formas de violência no trabalho; e os demais assuntos que a conversa trouxer. Vacância de cargo ou perda de mandato entra com os motivos como foram ditos.',
+      'Siga a ordem dos itens da pauta e, dentro deles, registre nesta ordem o que foi tratado: acidentes e doenças relacionadas ao trabalho e a análise deles; riscos e inspeções dos ambientes de trabalho; plano de trabalho da comissão; SIPAT; prevenção e combate ao assédio sexual e a outras formas de violência no trabalho; e os demais assuntos que a conversa trouxer. Vacância de cargo ou perda de mandato entra com os motivos como foram ditos.',
   },
   {
     chave: 'deliberacoes',
@@ -205,7 +205,7 @@ const REGRAS_PROMPT: string[] = [
   'Não escreva diagnóstico, CID, afastamento nem outra informação de saúde de pessoa identificada. Registre o acidente, a análise feita e as medidas adotadas ou propostas.',
   'Em relato de assédio ou de outra violência no trabalho, não escreva o nome da pessoa que denunciou nem o da vítima: registre o tema, as medidas e os encaminhamentos. Esta regra prevalece sobre a de usar os nomes exatamente como aparecem.',
   'Não declare que a reunião é válida nem que houve quórum.',
-  'Use a representação de cada participante informada na lista (representante do empregador, representante dos empregados ou convidado) para atribuir as posições.',
+  'Use a representação de cada participante informada na lista (representante da organização, representante dos empregados ou convidado) para atribuir as posições.',
 ];
 
 const campo = (id: string): CampoDef | undefined => CAMPOS.find((c) => c.id === id);
@@ -264,14 +264,16 @@ function preambulo(d: EntradaDoDocumento): string {
   const natureza = naturezaOuNulo(dados)?.toLowerCase() ?? preencher('natureza da reunião');
   const reuniao = numero === null ? `reunião ${natureza}` : `a ${numero}ª reunião ${natureza}`;
   const estabelecimento = textoLimpo(dados.estabelecimento);
+  // NR-5, 5.6.2: só a reunião ORDINÁRIA é, por norma, realizada na organização.
+  const naOrganizacao = dados.natureza === 'ordinaria' ? `${TEXTOS.localNaOrganizacao}, ` : '';
 
   return [
-    `${data}, às ${hora}, ${TEXTOS.localNaOrganizacao}, em ${ou(dados.local, 'local')}${participacao(dados)}, `,
+    `${data}, às ${hora}, ${naOrganizacao}em ${ou(dados.local, 'local')}${participacao(dados)}, `,
     `realizou-se ${reuniao} da ${TEXTOS.nomeComissao} de ${ou(dados.empresa, 'empresa')}`,
     estabelecimento === '' ? '' : `, estabelecimento ${estabelecimento}`,
     `, gestão ${ou(dados.gestao, 'gestão')}${convocacao(dados)}, `,
     `presidida por ${ou(dados.presidente, 'presidente')} e secretariada por ${ou(dados.secretario, 'secretário(a)')}, ${TEXTOS.secretarioDesignado}. `,
-    'Estiveram presentes os membros e convidados relacionados a seguir.',
+    'A presença dos membros e convidados está registrada a seguir.',
   ].join('');
 }
 

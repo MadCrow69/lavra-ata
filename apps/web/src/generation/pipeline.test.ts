@@ -592,7 +592,7 @@ describe('regerarSecao: CIPA (primeiro tipo registrado com extras enviados à IA
       plataforma: 'Sala virtual',
     },
     participantes: [
-      { ...ANA, extras: { representacao: 'empregador', condicao: 'titular' } },
+      { ...ANA, extras: { representacao: 'organizacao', condicao: 'titular' } },
       {
         ...ANA,
         id: 'p2',
@@ -622,7 +622,7 @@ describe('regerarSecao: CIPA (primeiro tipo registrado com extras enviados à IA
     const r = await regerarSecao(d, cipa, 'deliberacoes', null, CADEIA, sinal(), opcoes);
     const usuario = pedidos[0]?.usuario ?? '';
     expect(usuario).toContain(
-      'Ana Souza — Diretora — Representante do empregador — Titular — presente',
+      'Ana Souza — Diretora — Representante da organização — Titular — presente',
     );
     expect(usuario).toMatch(/Bruno Lima \[CPF_\d\] — Técnico — Suplente — ausência justificada/);
     expect(usuario).toContain('Aprovada por consenso a correção do CPF [CPF_1].');

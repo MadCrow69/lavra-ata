@@ -45,13 +45,13 @@ function pessoa(
 
 /** 4 membros (um com ausência justificada) e 1 convidado presente: 4 presentes. */
 const PARTICIPANTES: Participante[] = [
-  pessoa('m1', 'Carla Mendes', { representacao: 'empregador', condicao: 'titular' }),
+  pessoa('m1', 'Carla Mendes', { representacao: 'organizacao', condicao: 'titular' }),
   pessoa('m2', 'Diego Faria', { representacao: 'empregados', condicao: 'titular' }),
   pessoa('m3', 'Elisa Prado', { representacao: 'empregados', condicao: 'suplente' }),
   pessoa(
     'm4',
     'Fábio Ramos',
-    { representacao: 'empregador', condicao: 'suplente' },
+    { representacao: 'organizacao', condicao: 'suplente' },
     { presenca: 'justificado', justificativa: 'Férias' },
   ),
   pessoa('c1', 'Gisele Torres', { representacao: 'convidado' }, { papel: 'Técnica de segurança' }),
@@ -242,13 +242,13 @@ describe('CIPA: título', () => {
 describe('CIPA: preâmbulo', () => {
   it('caso completo, presencial', () => {
     expect(cipa.preambulo(completo())).toBe(
-      'Aos catorze dias do mês de outubro de dois mil e vinte e seis, às 14h30, nas dependências da organização, em Sala de Treinamento 2, realizou-se a 3ª reunião ordinária da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA) de Empresa Exemplo Ltda., estabelecimento Unidade Centro, gestão 2026/2027, presidida por Carla Mendes e secretariada por Diego Faria, designado(a) pelos membros para redigir esta ata. Estiveram presentes os membros e convidados relacionados a seguir.',
+      'Aos catorze dias do mês de outubro de dois mil e vinte e seis, às 14h30, nas dependências da organização, em Sala de Treinamento 2, realizou-se a 3ª reunião ordinária da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA) de Empresa Exemplo Ltda., estabelecimento Unidade Centro, gestão 2026/2027, presidida por Carla Mendes e secretariada por Diego Faria, designado(a) pelos membros para redigir esta ata. A presença dos membros e convidados está registrada a seguir.',
     );
   });
 
   it('extraordinária por acidente, com detalhe', () => {
     expect(cipa.preambulo(porAcidente())).toBe(
-      'Aos catorze dias do mês de outubro de dois mil e vinte e seis, às 14h30, nas dependências da organização, em Sala de Treinamento 2, realizou-se a 3ª reunião extraordinária da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA) de Empresa Exemplo Ltda., estabelecimento Unidade Centro, gestão 2026/2027, convocada em razão de acidente do trabalho grave ou fatal: queda na expedição em 10/10/2026, presidida por Carla Mendes e secretariada por Diego Faria, designado(a) pelos membros para redigir esta ata. Estiveram presentes os membros e convidados relacionados a seguir.',
+      'Aos catorze dias do mês de outubro de dois mil e vinte e seis, às 14h30, em Sala de Treinamento 2, realizou-se a 3ª reunião extraordinária da Comissão Interna de Prevenção de Acidentes e de Assédio (CIPA) de Empresa Exemplo Ltda., estabelecimento Unidade Centro, gestão 2026/2027, convocada em razão de acidente do trabalho grave ou fatal: queda na expedição em 10/10/2026, presidida por Carla Mendes e secretariada por Diego Faria, designado(a) pelos membros para redigir esta ata. A presença dos membros e convidados está registrada a seguir.',
     );
   });
 
@@ -269,6 +269,16 @@ describe('CIPA: preâmbulo', () => {
     expect(cipa.preambulo(rascunho({ modalidade: 'hibrida' }))).toContain(
       'em Sala de Treinamento 2, com participação remota, realizou-se',
     );
+  });
+
+  it('"nas dependências da organização" só na ordinária (NR-5, 5.6.2)', () => {
+    const local = cipa.textosFixos?.localNaOrganizacao ?? '?';
+    expect(cipa.preambulo(completo())).toContain(`às 14h30, ${local}, em Sala de Treinamento 2`);
+    for (const d of [porAcidente(), porSolicitacao(), rascunho({ natureza: '' })]) {
+      const texto = cipa.preambulo(d);
+      expect(texto).not.toContain(local);
+      expect(texto).toContain('às 14h30, em Sala de Treinamento 2');
+    }
   });
 
   it('extraordinária → ordinária com o motivo ainda nos dados: o motivo some', () => {
@@ -339,7 +349,7 @@ describe('CIPA: cabeçalho, fecho e assinaturas', () => {
     expect(grupos[0]?.titulo).toBeNull();
     expect(grupos[0]?.pessoas).toHaveLength(presentes(d).length);
     expect(grupos[0]?.pessoas).toEqual([
-      { nome: 'Carla Mendes', papel: 'Representante do empregador — Titular' },
+      { nome: 'Carla Mendes', papel: 'Representante da organização — Titular' },
       { nome: 'Diego Faria', papel: 'Representante dos empregados — Titular' },
       { nome: 'Elisa Prado', papel: 'Representante dos empregados — Suplente' },
       { nome: 'Gisele Torres', papel: 'Convidado(a) (não membro)' },
