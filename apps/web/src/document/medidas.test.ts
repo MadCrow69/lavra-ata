@@ -40,6 +40,14 @@ describe('encaixar', () => {
     }
   });
 
+  it('recusa quando a saída não é finita (tamanho de SVG desnormalizado, escala infinita)', () => {
+    const desnormal = { largura: 1e-320, altura: 1e-320 };
+    expect(() => encaixar(desnormal, CAIXA, { ampliar: true })).toThrow(RangeError);
+    expect(() =>
+      encaixar({ largura: 1e-320, altura: 100 }, CAIXA, { ampliar: true }),
+    ).not.toThrow();
+  });
+
   it('nunca devolve lado menor que 1', () => {
     expect(encaixar({ largura: 5000, altura: 1 }, CAIXA)).toEqual({ largura: 1200, altura: 1 });
   });

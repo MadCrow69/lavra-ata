@@ -10,7 +10,7 @@ const medidaValida = (n: number): boolean => Number.isFinite(n) && n > 0;
 /**
  * Maior retângulo com a proporção de `origem` que cabe em `caixa`. Por padrão nunca amplia
  * (bitmap); com `ampliar` preenche a caixa (imagem vetorial). Arredonda para inteiro e nunca
- * devolve lado menor que 1. Lança `RangeError` se alguma medida não for finita e positiva.
+ * devolve lado menor que 1. Lança `RangeError` se alguma medida de entrada, ou o resultado, não for finita e positiva.
  */
 export function encaixar(
   origem: Dimensoes,
@@ -25,10 +25,15 @@ export function encaixar(
     caixa.altura / origem.altura,
     opcoes.ampliar === true ? Infinity : 1,
   );
-  return {
+  const saida = {
     largura: Math.max(1, Math.round(origem.largura * escala)),
     altura: Math.max(1, Math.round(origem.altura * escala)),
   };
+  // Entrada finita não basta: tamanho desnormalizado (1e-320) dá escala infinita e saída infinita.
+  if (![saida.largura, saida.altura].every((lado) => Number.isFinite(lado) && lado >= 1)) {
+    throw new RangeError('medidas inválidas');
+  }
+  return saida;
 }
 
 /**
