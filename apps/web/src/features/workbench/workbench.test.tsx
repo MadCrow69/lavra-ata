@@ -110,6 +110,19 @@ function simularLargura(largo: boolean): void {
   );
 }
 
+/** Celular: casa a consulta dos cartões de participantes (`max-width`), não a de duas colunas. */
+function simularCelular(): void {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: query.includes('max-width'),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  );
+}
+
 async function preencherMinimo(user: UserEvent): Promise<void> {
   await user.type(screen.getByLabelText(/^Organização/), 'Cooperativa Fictícia');
   await user.type(screen.getByLabelText(/^Assunto/), 'Reembolsos');
@@ -185,6 +198,17 @@ describe('Workbench: fluxo de ponta a ponta', () => {
     expect(bruto).not.toContain(CHAVE_OPENAI);
     expect(localStorage.length).toBe(0);
   });
+
+  it('esconder a aba grava o rascunho na hora, sem esperar o debounce', async () => {
+    const { user } = renderizar();
+    await user.type(screen.getByLabelText(/^Assunto/), 'Reembolsos');
+    expect(carregarRascunho()?.dados.assunto ?? '').not.toBe('Reembolsos');
+
+    const visibilidade = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(carregarRascunho()?.dados.assunto).toBe('Reembolsos');
+    visibilidade.mockRestore();
+  });
 });
 
 describe('Workbench: rascunho recuperado', () => {
@@ -248,6 +272,14 @@ describe('Workbench: Nova ata', () => {
     expect(screen.getByRole('button', { name: 'Nova ata' })).toHaveFocus();
   });
 
+  it('com o rascunho vazio, não pergunta: começa na hora e avisa', async () => {
+    const { user } = renderizar();
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Nova ata iniciada. Tipo e tom mantidos.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Nova ata' })).toHaveFocus();
+  });
+
   it('cancela a geração em andamento; o resultado que chega depois é descartado', async () => {
     salvarRascunho(completo());
     let sinal: AbortSignal | null = null;
@@ -300,6 +332,37 @@ describe('Workbench: estados depois de gerar', () => {
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Documento' })).toHaveAttribute('aria-selected', 'true');
     expect(within(folha()).getByText(`Reembolso a ${CPF}.`)).toBeVisible();
+    // O botão Gerar ficou na aba oculta: o foco vai para a folha.
+    expect(document.getElementById('painel-documento')?.firstElementChild).toHaveFocus();
+  });
+
+  it('no celular, 200 participantes não afastam a transcrição e o "Gerar ata": a lista começa recolhida', () => {
+    simularCelular();
+    salvarRascunho(
+      completo({
+        participantes: Array.from({ length: 200 }, (_, i) => ({
+          id: `p${String(i + 1)}`,
+          nome: `Pessoa ${String(i + 1)}`,
+          papel: '',
+          presenca: 'presente' as const,
+          justificativa: '',
+          extras: {},
+        })),
+      }),
+    );
+    renderizar();
+
+    expect(document.querySelectorAll('[data-campo="nome"]')).toHaveLength(0);
+    expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
+    expect(screen.getByLabelText(/^Transcrição da reunião/)).toBeVisible();
+    expect(botaoGerar()).toBeEnabled();
+
+    fireEvent.click(screen.getByText('Mostrar os 200 participantes'));
+    expect(document.querySelectorAll('[data-campo="nome"]')).toHaveLength(200);
+    fireEvent.change(screen.getByLabelText('Buscar participante'), {
+      target: { value: 'Pessoa 137' },
+    });
+    expect(document.querySelectorAll('[data-campo="nome"]')).toHaveLength(1);
   });
 
   it('avisos gerais aparecem uma vez só (acima da folha); no celular a aba Documento os conta', () => {
@@ -391,11 +454,14 @@ describe('Workbench: acessibilidade', () => {
     for (const link of document.querySelectorAll('a[target="_blank"]')) {
       expect(link).toHaveAccessibleName(/\(abre em nova aba\)$/);
     }
-    // Progresso da geração e notificações em regiões que anunciam sem interromper.
+    // Progresso da geração e notificações em regiões que anunciam sem interromper (já presentes
+    // antes de anunciar, para o leitor de tela perceber a mudança).
     expect(screen.getByRole('region', { name: 'Notificações' })).toHaveAttribute(
       'aria-live',
       'polite',
     );
+    const barra = screen.getByRole('region', { name: 'Gerar ata' });
+    expect(barra.querySelector('[aria-live="polite"]')).not.toBeNull();
   });
 
   it('erro de geração não é mascarado como sucesso nem some com a ata', async () => {

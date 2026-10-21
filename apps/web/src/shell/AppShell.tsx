@@ -5,16 +5,26 @@ import { Header } from './Header';
 import { ABAS, idDaAba, idDoPainel, MobileTabs, type AbaId } from './MobileTabs';
 import { useLarguraLarga } from './useLarguraLarga';
 
-export interface AppShellProps {
+/**
+ * Aba ativa em tela estreita: controlada por quem monta a casca (ex.: ir à folha ao gerar), com
+ * `aba` e `onTrocarAba` juntos, ou interna à casca, sem nenhum dos dois.
+ */
+type ControleDaAba =
+  { aba: AbaId; onTrocarAba: (aba: AbaId) => void } | { aba?: undefined; onTrocarAba?: undefined };
+
+export type AppShellProps = ControleDaAba & {
   editar: ReactNode;
   documento: ReactNode;
   onConfigurarChaves: () => void;
-  /** Aba ativa em tela estreita, quando quem monta a casca a controla (ex.: ir à folha ao gerar). */
-  aba?: AbaId;
-  onTrocarAba?: (aba: AbaId) => void;
   /** Avisos por aba, mostrados como contador na própria aba (tela estreita). */
   avisos?: Partial<Record<AbaId, number>>;
-}
+};
+
+/**
+ * Painéis de aba que entram na ordem do Tab (APG: quando o primeiro conteúdo não é focável). O
+ * Documento abre com texto (avisos, a folha); o Editar abre com controles ("Nova ata", campos).
+ */
+const PAINEL_FOCAVEL: Record<AbaId, boolean> = { editar: false, documento: true };
 
 export function AppShell({
   editar,
@@ -27,10 +37,7 @@ export function AppShell({
   const largo = useLarguraLarga();
   const [abaInterna, setAbaInterna] = useState<AbaId>('editar');
   const aba = abaControlada ?? abaInterna;
-  const trocarAba = (id: AbaId) => {
-    setAbaInterna(id);
-    onTrocarAba?.(id);
-  };
+  const trocarAba = onTrocarAba ?? setAbaInterna;
 
   const paineis: Record<AbaId, ReactNode> = { editar, documento };
 
@@ -41,8 +48,7 @@ export function AppShell({
       <main className={largo ? styles.duasColunas : styles.umaColuna}>
         {ABAS.map(({ id, rotulo }) => {
           // Em tela estreita o painel inativo fica oculto, mas montado: o que a
-          // pessoa digitou em "Editar" não se perde ao olhar o "Documento". O painel de aba entra
-          // na ordem do Tab (APG): o primeiro conteúdo dele pode não ser focável.
+          // pessoa digitou em "Editar" não se perde ao olhar o "Documento".
           const oculto = !largo && id !== aba;
           return (
             <section
@@ -52,7 +58,11 @@ export function AppShell({
               hidden={oculto}
               {...(largo
                 ? { 'aria-label': rotulo }
-                : { role: 'tabpanel', 'aria-labelledby': idDaAba(id), tabIndex: 0 })}
+                : {
+                    role: 'tabpanel',
+                    'aria-labelledby': idDaAba(id),
+                    ...(PAINEL_FOCAVEL[id] ? { tabIndex: 0 } : {}),
+                  })}
             >
               {paineis[id]}
             </section>

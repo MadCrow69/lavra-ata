@@ -2,6 +2,7 @@ import { memo, useId, useMemo, useRef, useState, type Dispatch, type SubmitEvent
 import { camposFaltando } from '../../ata-types/registry';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
+import { LARGURA_CARTOES_REM } from '../../config/ui';
 import { useDraft } from '../../domain/DraftContext';
 import { calcularAdicao } from '../../domain/participantes';
 import {
@@ -12,6 +13,7 @@ import {
 } from '../../domain/draft';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
+import { useConsultaMidia } from '../../ui/useConsultaMidia';
 import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
 import {
@@ -22,6 +24,8 @@ import {
   type LinhaParticipante,
 } from './lista-participantes';
 import styles from './form.module.css';
+
+const CONSULTA_CARTOES = `(max-width: ${String(LARGURA_CARTOES_REM)}rem)`;
 
 function plural(n: number, singular: string, pluralForma: string): string {
   return n === 1 ? singular : pluralForma;
@@ -188,6 +192,9 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const novoNomeRef = useRef<HTMLInputElement>(null);
   const [busca, setBusca] = useState('');
   const [emEdicao, setEmEdicao] = useState<string | null>(null);
+  const [listaAberta, setListaAberta] = useState(false);
+  const listaId = useId();
+  const telaDeCartoes = useConsultaMidia(CONSULTA_CARTOES, false);
 
   const faltando = camposFaltando(state, tipo)
     .filter((f) => f.bloco === 'participantes')
@@ -202,16 +209,22 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const presentes = participantes.filter((p) => p.presenca === 'presente').length;
   const comRolagem = total > PARTICIPANTES_ATE_ROLAGEM;
   const termo = comRolagem ? normalizarBusca(busca) : '';
+  // No celular a lista longa vira centenas de cartões e empurra a transcrição e "Gerar ata" para
+  // longe: ela começa recolhida (sem busca), com o resumo, a busca e os controles de adição à vista.
+  const recolhivel = comRolagem && telaDeCartoes && termo === '';
+  const recolhida = recolhivel && !listaAberta;
+  const semNome = participantes.filter((p) => p.nome.trim() === '').length;
 
-  // A linha em edição continua visível mesmo que o texto digitado deixe de casar com a busca.
+  // A linha em edição continua visível mesmo que o texto digitado deixe de casar com a busca; na
+  // lista recolhida, as linhas sem nome também (precisam de correção e o "Falta" leva até elas).
   const visiveis = useMemo(() => {
-    if (termo === '') return participantes.map((p, i) => ({ p, posicao: i + 1 }));
-    return participantes
-      .map((p, i) => ({ p, posicao: i + 1 }))
-      .filter(
-        ({ p }) => p.id === emEdicao || normalizarBusca(`${p.nome} ${p.papel}`).includes(termo),
-      );
-  }, [participantes, termo, emEdicao]);
+    const todas = participantes.map((p, i) => ({ p, posicao: i + 1 }));
+    if (recolhida) return todas.filter(({ p }) => p.id === emEdicao || p.nome.trim() === '');
+    if (termo === '') return todas;
+    return todas.filter(
+      ({ p }) => p.id === emEdicao || normalizarBusca(`${p.nome} ${p.papel}`).includes(termo),
+    );
+  }, [participantes, termo, emEdicao, recolhida]);
 
   /** Adiciona as linhas, avisa o resultado e devolve quantas entraram. */
   const registrar = (linhas: LinhaParticipante[]): number => {
@@ -385,60 +398,81 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
               </Field>
             </div>
           ) : null}
-          {visiveis.length === 0 ? (
-            <p className={styles.vazio}>
-              {`Nenhum participante encontrado para “${busca.trim()}”. `}
+          {recolhivel ? (
+            <div className={styles.alternarLista}>
               <Button
+                aria-expanded={listaAberta}
+                aria-controls={listaId}
                 onClick={() => {
-                  setBusca('');
+                  setListaAberta((v) => !v);
+                  setEmEdicao(null);
                 }}
               >
-                Limpar busca
+                {listaAberta ? 'Ocultar a lista' : `Mostrar os ${String(total)} participantes`}
               </Button>
-            </p>
-          ) : (
-            <div
-              className={styles.tabelaRolagem}
-              role="region"
-              aria-label="Lista de participantes"
-              tabIndex={0}
-              data-rolagem={comRolagem}
-            >
-              <table className={styles.tabela}>
-                <thead>
-                  <tr>
-                    <th scope="col">Nome</th>
-                    <th scope="col">{tipo.rotuloPapel}</th>
-                    {tipo.camposParticipante.map((campo) => (
-                      <th key={campo.id} scope="col">
-                        {campo.rotulo}
-                      </th>
-                    ))}
-                    <th scope="col">Presença</th>
-                    <th scope="col">
-                      <span className={styles.somenteLeitor}>Ação</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody
-                  onFocus={(e) => {
-                    const alvo = e.target instanceof Element ? e.target.closest('tr') : null;
-                    setEmEdicao(alvo instanceof HTMLElement ? (alvo.dataset.id ?? null) : null);
-                  }}
-                >
-                  {visiveis.map(({ p, posicao }) => (
-                    <Linha
-                      key={p.id}
-                      participante={p}
-                      posicao={posicao}
-                      tipo={tipo}
-                      dispatch={dispatch}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              {recolhida && semNome > 0 ? (
+                <p>{`${String(semNome)} ${plural(semNome, 'participante sem nome continua', 'participantes sem nome continuam')} à vista para correção.`}</p>
+              ) : null}
             </div>
-          )}
+          ) : null}
+          <div id={listaId}>
+            {visiveis.length === 0 ? (
+              termo === '' ? null : (
+                <p className={styles.vazio}>
+                  {`Nenhum participante encontrado para “${busca.trim()}”. `}
+                  <Button
+                    onClick={() => {
+                      setBusca('');
+                    }}
+                  >
+                    Limpar busca
+                  </Button>
+                </p>
+              )
+            ) : (
+              <div
+                className={styles.tabelaRolagem}
+                role="region"
+                aria-label="Lista de participantes"
+                tabIndex={0}
+                data-rolagem={comRolagem}
+              >
+                <table className={styles.tabela}>
+                  <thead>
+                    <tr>
+                      <th scope="col">Nome</th>
+                      <th scope="col">{tipo.rotuloPapel}</th>
+                      {tipo.camposParticipante.map((campo) => (
+                        <th key={campo.id} scope="col">
+                          {campo.rotulo}
+                        </th>
+                      ))}
+                      <th scope="col">Presença</th>
+                      <th scope="col">
+                        <span className={styles.somenteLeitor}>Ação</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    onFocus={(e) => {
+                      const alvo = e.target instanceof Element ? e.target.closest('tr') : null;
+                      setEmEdicao(alvo instanceof HTMLElement ? (alvo.dataset.id ?? null) : null);
+                    }}
+                  >
+                    {visiveis.map(({ p, posicao }) => (
+                      <Linha
+                        key={p.id}
+                        participante={p}
+                        posicao={posicao}
+                        tipo={tipo}
+                        dispatch={dispatch}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </>
       )}
     </FormBlock>

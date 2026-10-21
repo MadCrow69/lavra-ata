@@ -270,6 +270,19 @@
   }
 }
 
+.alternarLista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-2) var(--espaco-3);
+}
+
+.alternarLista p {
+  margin: 0;
+  color: var(--cor-texto-suave);
+  font-size: 0.9375rem;
+}
+
 .justificativa {
   margin-top: var(--espaco-1);
 }
@@ -302,7 +315,10 @@
   white-space: nowrap;
 }
 
-/* Telas estreitas: cada participante vira um cartão, com o rótulo de cada campo à vista. */
+/*
+ * Telas estreitas: cada participante vira um cartão, com o rótulo de cada campo à vista. O valor
+ * espelha `LARGURA_CARTOES_REM` (config/ui.ts), que recolhe a lista longa nesta mesma largura.
+ */
 @media (max-width: 40rem) {
   .tabela,
   .tabela tbody,

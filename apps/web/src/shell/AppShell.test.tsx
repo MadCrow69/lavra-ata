@@ -147,11 +147,13 @@ describe('AppShell em tela estreita', () => {
     expect(screen.getByRole('tab', { name: 'Documento' })).toHaveAttribute('tabindex', '-1');
   });
 
-  it('o painel de aba entra na ordem do Tab (APG)', () => {
+  it('só o painel que abre com texto (Documento) entra na ordem do Tab (APG)', async () => {
     simularLargura(false);
     renderizar();
 
-    expect(screen.getByRole('tabpanel', { name: 'Editar' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tabpanel', { name: 'Editar' })).not.toHaveAttribute('tabindex');
+    await userEvent.click(screen.getByRole('tab', { name: 'Documento' }));
+    expect(screen.getByRole('tabpanel', { name: 'Documento' })).toHaveAttribute('tabindex', '0');
   });
 
   it('controlada: segue a aba de quem monta a casca e avisa a troca; mostra o contador de avisos', async () => {

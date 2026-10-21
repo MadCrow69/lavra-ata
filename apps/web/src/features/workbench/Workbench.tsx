@@ -40,8 +40,9 @@ function contarAvisos(d: AtaDraft): number {
 }
 
 /**
- * Grava o rascunho na sessão `ESPERA_SALVAR_RASCUNHO_MS` depois da última alteração. Sair da aba
- * (recarregar, fechar) antes disso grava na hora, para a última tecla não se perder.
+ * Grava o rascunho na sessão `ESPERA_SALVAR_RASCUNHO_MS` depois da última alteração. Esconder a aba
+ * (trocar de app no celular, que pode descartá-la sem `pagehide`) ou sair dela (recarregar, fechar)
+ * antes disso grava na hora, para a última tecla não se perder.
  */
 function useSalvarRascunho(state: AtaDraft): void {
   const atualRef = useRef(state);
@@ -60,9 +61,14 @@ function useSalvarRascunho(state: AtaDraft): void {
     const salvarJa = () => {
       salvarRascunho(atualRef.current);
     };
+    const aoMudarVisibilidade = () => {
+      if (document.visibilityState === 'hidden') salvarJa();
+    };
     window.addEventListener('pagehide', salvarJa);
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
     return () => {
       window.removeEventListener('pagehide', salvarJa);
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade);
     };
   }, []);
 }
@@ -128,6 +134,12 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
     mostrar({ titulo: MENSAGEM_NOVA_ATA });
   };
 
+  // Rascunho vazio e IA parada: não há o que perder, então "Nova ata" não pergunta.
+  const pedirNovaAta = () => {
+    if (!temConteudo(state) && operacao === null) novaAta();
+    else setConfirmando(true);
+  };
+
   const editar = (
     <div className={styles.coluna}>
       <div className={styles.topo}>
@@ -155,12 +167,7 @@ function Bancada({ recuperou, opcoesCadeia }: BancadaProps) {
             </div>
           </div>
         ) : null}
-        <Button
-          ref={novaAtaRef}
-          onClick={() => {
-            setConfirmando(true);
-          }}
-        >
+        <Button ref={novaAtaRef} onClick={pedirNovaAta}>
           Nova ata
         </Button>
       </div>

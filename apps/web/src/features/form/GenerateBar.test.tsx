@@ -10,7 +10,7 @@ import { LIMITE_TRANSCRICAO } from '../../config/limits';
 import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
-import { OperacaoIAProvider } from '../../generation/OperacaoIA';
+import { OperacaoIAProvider, useOperacaoIA } from '../../generation/OperacaoIA';
 import { ToastProvider } from '../../ui/Toast';
 import { DadosBlock } from './DadosBlock';
 import { GenerateBar } from './GenerateBar';
@@ -341,6 +341,63 @@ describe('GenerateBar', () => {
       screen.queryByText('Seu texto já tinha um trecho parecido com um marcador.'),
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    ['o adaptador rejeita ao abortar', 'rejeita'],
+    ['o adaptador ignora o abort e responde', 'responde'],
+  ] as const)(
+    'interrompida por fora ("Nova ata"), sem remontar: %s → nada é gravado nem avisado',
+    async (_nome, comportamento) => {
+      let entregar: (v: unknown) => void = () => undefined;
+      const store = criarKeyStore(null);
+      store.definir(OPENAI);
+      const { a } = adaptadores({
+        openai: (_cfg, req) =>
+          new Promise((resolve, reject) => {
+            entregar = resolve;
+            if (comportamento === 'rejeita') {
+              req.signal.addEventListener('abort', () => {
+                reject(erroProvedor('cancelado', 'openai'));
+              });
+            }
+          }),
+      });
+      function Interromper() {
+        const { interromper } = useOperacaoIA();
+        return (
+          <button type="button" onClick={interromper}>
+            Interromper
+          </button>
+        );
+      }
+      render(
+        <KeysProvider store={store}>
+          <DraftProvider inicial={completo()}>
+            <OperacaoIAProvider>
+              <ToastProvider>
+                <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={{ adaptadores: a }} />
+                <Interromper />
+                <Espiao />
+              </ToastProvider>
+            </OperacaoIAProvider>
+          </DraftProvider>
+        </KeysProvider>,
+      );
+      const user = userEvent.setup();
+      await user.click(botaoGerar());
+      await user.click(screen.getByRole('button', { name: 'Interromper' }));
+      await act(async () => {
+        entregar(RESPOSTA);
+        await Promise.resolve();
+      });
+
+      expect(screen.getByTestId('espiao')).toHaveTextContent('sem resultado');
+      expect(screen.queryByText(/Ata gerada por/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Geração cancelada/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    },
+  );
 
   it('desmontar durante a geração cancela a chamada', async () => {
     let sinal: AbortSignal | null = null;

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from './App';
@@ -42,13 +42,18 @@ describe('App', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     const cabecalho = screen.getByRole('banner');
     expect(within(cabecalho).getByRole('button')).toHaveTextContent('IA: Gemini → OpenAI');
-    // Sem "Lembrar", a chave não foi gravada no navegador; a sessão guarda só o rascunho.
+    // Sem "Lembrar", a chave não foi gravada no navegador; a sessão guarda só o rascunho (espera
+    // o salvamento com debounce acontecer, para a conferência não passar com a sessão vazia).
+    await waitFor(
+      () => {
+        expect(sessionStorage.getItem(RASCUNHO)).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
     expect(localStorage.length).toBe(0);
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const nome = sessionStorage.key(i) ?? '';
-      expect(nome).toBe(RASCUNHO);
-      expect(sessionStorage.getItem(nome)).not.toContain('sk-teste-ficticia-0002');
-      expect(sessionStorage.getItem(nome)).not.toContain('AIzaTesteFicticia0001');
-    }
+    expect(sessionStorage.length).toBe(1);
+    const rascunho = sessionStorage.getItem(RASCUNHO) ?? '';
+    expect(rascunho).not.toContain('sk-teste-ficticia-0002');
+    expect(rascunho).not.toContain('AIzaTesteFicticia0001');
   });
 });

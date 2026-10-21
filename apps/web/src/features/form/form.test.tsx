@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
 import type { AtaTypeDefinition } from '../../ata-types/types';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
@@ -492,5 +492,98 @@ describe('ParticipantesBlock', () => {
     expect(screen.getByText('falta: Unidade')).toBeVisible();
     await user.type(screen.getByLabelText('Unidade do participante 1'), '12');
     expect(screen.queryByText(/falta:/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ParticipantesBlock no celular (lista longa recolhida)', () => {
+  /** Tela estreita: casa a consulta dos cartões (`max-width`), não a de duas colunas. */
+  function simularCelular(): void {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const nomesNaTela = () => document.querySelectorAll('[data-campo="nome"]').length;
+
+  it(
+    '200 participantes: começa recolhida, com resumo, busca e adição à vista; o botão expande e recolhe',
+    () => {
+      simularCelular();
+      renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(200));
+
+      expect(nomesNaTela()).toBe(0);
+      expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
+      expect(screen.getByLabelText('Buscar participante')).toBeVisible();
+      expect(screen.getByLabelText(/^Nome do novo participante/)).toBeVisible();
+      expect(screen.getByText('Colar lista')).toBeVisible();
+
+      const alternar = screen.getByText('Mostrar os 200 participantes');
+      expect(alternar).toHaveAttribute('aria-expanded', 'false');
+      const alvo = alternar.getAttribute('aria-controls') ?? '';
+      expect(document.getElementById(alvo)).not.toBeNull();
+
+      fireEvent.click(alternar);
+      expect(nomesNaTela()).toBe(200);
+      expect(alternar).toHaveTextContent('Ocultar a lista');
+      expect(alternar).toHaveAttribute('aria-expanded', 'true');
+      expect(
+        document.getElementById(alvo)?.contains(screen.getByLabelText('Nome do participante 150')),
+      ).toBe(true);
+
+      fireEvent.click(alternar);
+      expect(nomesNaTela()).toBe(0);
+    },
+    TEMPO_VOLUME_MS,
+  );
+
+  it('na lista recolhida, a busca mostra só o que casa; limpar a busca recolhe de novo', () => {
+    simularCelular();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(200, (i) => (i === 42 ? { nome: 'João da Conceição' } : {})),
+    );
+    const busca = screen.getByLabelText('Buscar participante');
+    fireEvent.change(busca, { target: { value: 'joao' } });
+    expect(nomesNaTela()).toBe(1);
+    expect(screen.getByLabelText('Nome do participante 42')).toHaveValue('João da Conceição');
+    expect(screen.queryByText(/^Mostrar os/)).not.toBeInTheDocument();
+
+    fireEvent.change(busca, { target: { value: '' } });
+    expect(nomesNaTela()).toBe(0);
+    expect(screen.getByText('Mostrar os 200 participantes')).toBeVisible();
+  });
+
+  it('na lista recolhida, quem está sem nome continua à vista para correção', () => {
+    simularCelular();
+    renderizar(
+      <ParticipantesBlock tipo={corporativa} />,
+      comParticipantes(30, (i) => (i === 9 ? { nome: '' } : {})),
+    );
+    expect(nomesNaTela()).toBe(1);
+    expect(screen.getByLabelText('Nome do participante 9')).toHaveAttribute('aria-invalid', 'true');
+    expect(
+      screen.getByText('1 participante sem nome continua à vista para correção.'),
+    ).toBeVisible();
+  });
+
+  it('com até 20 participantes ou em tela larga, nada se recolhe', () => {
+    simularCelular();
+    const { unmount } = renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(20));
+    expect(nomesNaTela()).toBe(20);
+    expect(screen.queryByText(/^Mostrar os/)).not.toBeInTheDocument();
+    unmount();
+    vi.unstubAllGlobals();
+    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(30));
+    expect(nomesNaTela()).toBe(30);
   });
 });

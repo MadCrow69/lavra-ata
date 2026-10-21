@@ -84,6 +84,8 @@ export function SectionActions({
   const cancelarRef = useRef<HTMLButtonElement>(null);
   const instrucaoRef = useRef<HTMLTextAreaElement>(null);
   const controleRef = useRef<AbortController | null>(null);
+  /** Controle que a pessoa cancelou aqui; abortado sem isso = interrompido por fora ("Nova ata"). */
+  const canceladoAquiRef = useRef<AbortController | null>(null);
   const origemRef = useRef<Origem>('regerar');
   const ultimaInstrucaoRef = useRef<string | null>(null);
   const baseId = useId();
@@ -153,7 +155,8 @@ export function SectionActions({
         controle.signal,
         opcoesCadeia,
       );
-      if (controleRef.current !== controle) return;
+      // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.
+      if (controleRef.current !== controle || controle.signal.aborted) return;
       const itens: (Bloco | Encaminhamento)[] = r.blocos;
       const ehEnc = chave === CHAVE_ENCAMINHAMENTOS;
       const encaminhamentos = itens.filter(ehEncaminhamento);
@@ -191,6 +194,8 @@ export function SectionActions({
       });
     } catch (e) {
       if (controleRef.current !== controle) return;
+      // Interrompida por fora: a ata em que ela valia já não existe; nada a avisar aqui.
+      if (controle.signal.aborted && canceladoAquiRef.current !== controle) return;
       if (e instanceof ErroProvedor && e.tipo === 'cancelado') setCancelada(true);
       else setErro(descreverErroDeGeracao(e, 'seção'));
     } finally {
@@ -337,7 +342,9 @@ export function SectionActions({
               ref={cancelarRef}
               aria-label={`Cancelar regeração da seção ${titulo}`}
               onClick={() => {
-                if (controleRef.current) cancelar(controleRef.current);
+                if (!controleRef.current) return;
+                canceladoAquiRef.current = controleRef.current;
+                cancelar(controleRef.current);
               }}
             >
               Cancelar

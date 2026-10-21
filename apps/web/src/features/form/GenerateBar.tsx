@@ -45,6 +45,8 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
   const { operacao, iniciar, concluir, cancelar } = useOperacaoIA();
   /** Controle da chamada desta barra: distingue a minha operação da de uma seção e o resultado tardio. */
   const controleRef = useRef<AbortController | null>(null);
+  /** Controle que a pessoa cancelou aqui; abortado sem isso = interrompido por fora ("Nova ata"). */
+  const canceladoAquiRef = useRef<AbortController | null>(null);
   const gerarRef = useRef<HTMLButtonElement>(null);
   const cancelarRef = useRef<HTMLButtonElement>(null);
   const resumoId = useId();
@@ -93,7 +95,8 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
     setEstado({ fase: 'parado' });
     try {
       const r = await gerarAta(state, tipo, cadeia, controle.signal, opcoesCadeia);
-      if (controleRef.current !== controle) return;
+      // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.
+      if (controleRef.current !== controle || controle.signal.aborted) return;
       dispatch({ type: 'registrarResultado', resultado: r.resultado, mapa: r.mapa });
       setEstado({ fase: 'parado' });
       mostrar({
@@ -105,6 +108,8 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
       onGerada?.();
     } catch (e) {
       if (controleRef.current !== controle) return;
+      // Interrompida por fora: a ata em que ela valia já não existe; nada a avisar aqui.
+      if (controle.signal.aborted && canceladoAquiRef.current !== controle) return;
       setEstado(
         e instanceof ErroProvedor && e.tipo === 'cancelado'
           ? { fase: 'cancelado' }
@@ -150,7 +155,9 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
           <Button
             ref={cancelarRef}
             onClick={() => {
-              if (controleRef.current) cancelar(controleRef.current);
+              if (!controleRef.current) return;
+              canceladoAquiRef.current = controleRef.current;
+              cancelar(controleRef.current);
             }}
           >
             Cancelar
