@@ -211,9 +211,18 @@ function textoDoRodape(modelo: string, atual: number, total: number): string {
     .join('');
 }
 
-/** Quebra antes de um título que seria o último nó da página (título órfão no pé). */
+/**
+ * Marca do nó do rodapé. O pdfmake põe o rodapé na lista de nós de cada página: sem tirá-lo da
+ * conta, todo título teria "um nó seguinte" (o próprio rodapé) e a quebra nunca dispararia.
+ */
+export const ID_NO_RODAPE = 'rodape-da-pagina';
+
+/** Quebra antes de um título que seria o último nó de conteúdo da página (título órfão no pé). */
 function quebraAntesDeTituloOrfao(no: Node, nos: NodeQueries): boolean {
-  return no.headlineLevel === 1 && nos.getFollowingNodesOnPage().length === 0;
+  return (
+    no.headlineLevel === 1 &&
+    nos.getFollowingNodesOnPage().filter((seguinte) => seguinte.id !== ID_NO_RODAPE).length === 0
+  );
 }
 
 /**
@@ -238,6 +247,7 @@ export function definicaoPdf(modelo: DocumentModel): TDocumentDefinitions {
       ...modelo.blocos.flatMap(blocoPdf),
     ],
     footer: (atual, total) => ({
+      id: ID_NO_RODAPE,
       text: separarPorFonte(textoDoRodape(modelo.rodape, atual, total), 'corpo'),
       alignment: 'center',
       fontSize: T.rodapePt,

@@ -9,7 +9,7 @@ import {
 } from '../../config/documento';
 import type { DocumentModel } from '../../document/model';
 import { LOGO_TESTE, modeloDeVolume } from '../../test/documento-volume';
-import { definicaoPdf } from './definicao';
+import { ID_NO_RODAPE, definicaoPdf } from './definicao';
 
 type Obj = Record<string, unknown>;
 
@@ -185,13 +185,30 @@ describe('definicaoPdf: rodapés, lacunas, assinaturas e aviso', () => {
 describe('definicaoPdf: título de seção não fica sozinho no pé da página', () => {
   const quebra = def.pageBreakBefore;
   const no = (n: Partial<Node>) => n as Node;
-  const consultas = (seguintes: number) =>
+  const consultas = (seguintes: number, comRodape = false) =>
     ({
-      getFollowingNodesOnPage: () => Array.from({ length: seguintes }, () => no({})),
+      getFollowingNodesOnPage: () => [
+        ...Array.from({ length: seguintes }, () => no({})),
+        // O pdfmake lista o rodapé entre os nós seguintes de toda página.
+        ...(comRodape ? [no({ id: ID_NO_RODAPE })] : []),
+      ],
     }) as unknown as NodeQueries;
 
   it('quebra antes do título que seria o último nó da página', () => {
     expect(quebra?.(no({ headlineLevel: 1 }), consultas(0))).toBe(true);
+  });
+
+  it('o rodapé da página não conta como nó que acompanha o título', () => {
+    expect(quebra?.(no({ headlineLevel: 1 }), consultas(0, true))).toBe(true);
+    expect(quebra?.(no({ headlineLevel: 1 }), consultas(1, true))).toBe(false);
+  });
+
+  it('o rodapé do documento carrega a marca que a conta ignora', () => {
+    const rodape = def.footer;
+    if (typeof rodape !== 'function') throw new Error('rodapé deveria ser função');
+    expect(rodape(1, 2, { width: 595, height: 842, orientation: 'portrait' })).toMatchObject({
+      id: ID_NO_RODAPE,
+    });
   });
 
   it('não quebra se algo o acompanha na página, nem antes de nó que não é título', () => {

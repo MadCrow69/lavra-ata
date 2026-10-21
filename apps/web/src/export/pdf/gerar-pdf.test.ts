@@ -205,3 +205,48 @@ describe('gerarPdf: linha de tabela longa nunca se parte entre páginas', () => 
     }
   });
 });
+
+describe('gerarPdf: título de seção nunca fica sozinho no pé da página', () => {
+  const TITULO = 'TITULOALVO';
+  const modeloComEnchimento = (paragrafos: number): DocumentModel => ({
+    titulo: 'Ata de teste',
+    cabecalho: { logo: null, linhas: ['Organização de teste'] },
+    rodape: 'Página {pagina} de {total}',
+    rodapeInterno: null,
+    blocos: [
+      ...Array.from({ length: paragrafos }, (_, i): DocBloco => ({
+        tipo: 'paragrafo',
+        partes: [{ texto: `Parágrafo de enchimento ${String(i)}.` }],
+      })),
+      {
+        tipo: 'secao',
+        chave: 'alvo',
+        titulo: TITULO,
+        gerada: false,
+        blocos: [{ tipo: 'paragrafo', partes: [{ texto: 'Corpo curto da seção.' }] }],
+      },
+    ],
+  });
+  // Quantos parágrafos cabem numa página depende da tipografia: a varredura cobre a virada de
+  // página inteira (de pouco enchimento até mais de uma página), então algum caso deixa só o
+  // espaço do título no pé.
+  const ENCHIMENTOS = Array.from({ length: 24 }, (_, i) => i + 17);
+
+  it('a varredura de enchimento chega a empurrar o título para a 2ª página', async () => {
+    const ultimo = await paginas(await bytesDoPdf(modeloComEnchimento(ENCHIMENTOS.at(-1) ?? 0)));
+    expect(ultimo.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('nenhuma página termina no título (o corpo da seção vai junto)', async () => {
+    const orfas: string[] = [];
+    for (const n of ENCHIMENTOS) {
+      const texto = await paginas(await bytesDoPdf(modeloComEnchimento(n)));
+      texto.forEach((pagina, i) => {
+        const semRodape = pagina.replace(/Página \d+ de \d+\s*$/, '').trim();
+        if (semRodape.endsWith(TITULO))
+          orfas.push(`enchimento ${String(n)}, página ${String(i + 1)}`);
+      });
+    }
+    expect(orfas).toEqual([]);
+  });
+});
