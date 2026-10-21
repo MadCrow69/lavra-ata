@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
     "test": "vitest run --maxWorkers=4",
     "test:ci": "vitest run --maxWorkers=2 --coverage",
     "build": "pnpm -r build",
