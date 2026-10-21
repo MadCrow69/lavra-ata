@@ -63,3 +63,13 @@ export function rotuloDaOpcao(
   if (valor === undefined || valor === '') return null;
   return campo?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null;
 }
+
+/** Rótulo do campo para os `dados` (ex.: "Local" vira "Plataforma"). Fonte única; o registro a reexporta. */
+export function rotuloDoCampo(campo: CampoDef, dados: Record<string, string>): string {
+  return campo.rotuloPor ? campo.rotuloPor(dados) : campo.rotulo;
+}
+
+/** O campo aparece para os `dados`? Fonte única; o registro a reexporta. */
+export function ehVisivel(campo: CampoDef, dados: Record<string, string>): boolean {
+  return campo.visivelSe ? campo.visivelSe(dados) : true;
+}

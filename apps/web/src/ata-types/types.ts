@@ -95,6 +95,11 @@ export interface AtaTypeDefinition {
   resumoDosParticipantes?: (
     d: Pick<AtaDraft, 'dados' | 'participantes'>,
   ) => ResumoParticipantes | null;
+  /**
+   * Tipos formais: trechos fixos do template, por chave; cada chave tem linha em
+   * `docs/base-legal.md` (conferido por `verificarBaseLegal`).
+   */
+  textosFixos?: Readonly<Record<string, string>>;
 }
 
 export type BlocoFormulario = 'dados' | 'participantes' | 'transcricao';

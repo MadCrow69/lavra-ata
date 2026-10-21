@@ -2,11 +2,14 @@ import { PESOS_COLUNA } from '../config/documento';
 import { LIMITE_TRANSCRICAO } from '../config/limits';
 import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
 import { corporativa } from './corporativa';
-import { rotuloDaOpcao, textoLimpo } from './texto-modelo';
+import { ehVisivel, rotuloDaOpcao, rotuloDoCampo, textoLimpo } from './texto-modelo';
 import type { AtaTypeDefinition, CampoDef, CampoFaltando } from './types';
 
-/** Rótulo de opção: fonte única, definida em `texto-modelo.ts` (evita ciclo com a corporativa). */
-export { rotuloDaOpcao };
+/**
+ * Rótulo de opção, rótulo de campo e visibilidade: fontes únicas, definidas em `texto-modelo.ts`
+ * (evita ciclo: os tipos as usam e o registro importa os tipos).
+ */
+export { ehVisivel, rotuloDaOpcao, rotuloDoCampo };
 
 /** Tipo de ata selecionado quando nada foi escolhido ainda. Fonte única do id padrão. */
 export const TIPO_PADRAO_ID = corporativa.id;
@@ -20,16 +23,8 @@ export function obterTipo(id: string): AtaTypeDefinition {
   return ATA_TYPES[id] ?? corporativa;
 }
 
-export function rotuloDoCampo(campo: CampoDef, dados: Record<string, string>): string {
-  return campo.rotuloPor ? campo.rotuloPor(dados) : campo.rotulo;
-}
-
 export function ehObrigatorio(campo: CampoDef, dados: Record<string, string>): boolean {
   return campo.obrigatorioSe ? campo.obrigatorioSe(dados) : campo.obrigatorio;
-}
-
-export function ehVisivel(campo: CampoDef, dados: Record<string, string>): boolean {
-  return campo.visivelSe ? campo.visivelSe(dados) : true;
 }
 
 /** Mensagem sob o campo obrigatório vazio. */
