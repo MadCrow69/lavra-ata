@@ -13,9 +13,21 @@ export interface GrupoDeTarefas {
 const COLACAO = 'pt-BR';
 const TITULO_TAREFAS = 'Tarefas por responsável';
 
-/** Aparado, NFC, espaços internos colapsados. É a grafia exibida. */
+/** Invisíveis que não mudam o que a pessoa lê: U+200B–U+200D, U+2060 e U+FEFF. */
+const INVISIVEIS = /[\u200B-\u200D\u2060\uFEFF]/gu;
+
+/**
+ * Texto em uma linha só: sem invisíveis, NFC, quebras de linha e espaços colapsados em um
+ * espaço, aparado. Uma quebra vinda da IA não pode virar linha solta nem separador de grupo no
+ * texto colado. Implementação única para título, ação, prazo livre e nome do responsável.
+ */
+function umaLinha(texto: string | undefined): string {
+  return textoLimpo(texto).replace(INVISIVEIS, '').normalize('NFC').replace(/\s+/gu, ' ').trim();
+}
+
+/** Grafia exibida do responsável. */
 function nomeExibido(responsavel: string): string {
-  return textoLimpo(responsavel).normalize('NFC').replace(/\s+/gu, ' ');
+  return umaLinha(responsavel);
 }
 
 /**
@@ -60,10 +72,11 @@ export function agruparPorResponsavel(itens: Encaminhamento[]): GrupoDeTarefas[]
 }
 
 function linhaDaTarefa(item: Encaminhamento): string {
-  const acao = textoLimpo(item.acao) || CELULA_VAZIA;
-  const prazo = prazoOuNulo(item.prazo);
+  const acao = umaLinha(item.acao) || CELULA_VAZIA;
+  const prazoBruto = prazoOuNulo(item.prazo);
+  const prazo = prazoBruto === null ? null : umaLinha(prazoBruto);
   const status = item.status === 'pendente' ? undefined : ROTULO_STATUS[item.status];
-  return `- ${acao}${prazo === null ? '' : ` (prazo: ${prazo})`}${status ? ` — ${status}` : ''}`;
+  return `- ${acao}${prazo === null || prazo === '' ? '' : ` (prazo: ${prazo})`}${status ? ` — ${status}` : ''}`;
 }
 
 /**
@@ -80,7 +93,7 @@ export function textoDasTarefas(
   const data = dataOuNulo(dataIso);
 
   const cabecalho: string[] = [];
-  const tituloLimpo = textoLimpo(titulo);
+  const tituloLimpo = umaLinha(titulo);
   if (tituloLimpo !== '') cabecalho.push(tituloLimpo);
   if (data !== null) cabecalho.push(`Reunião de ${data}`);
   if (cabecalho.length > 0) cabecalho.push('');

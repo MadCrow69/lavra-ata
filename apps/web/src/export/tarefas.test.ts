@@ -24,7 +24,7 @@ describe('agruparPorResponsavel', () => {
   });
 
   it('junta a mesma grafia em NFC e NFD', () => {
-    const grupos = agruparPorResponsavel([tarefa('José'), tarefa('José')]);
+    const grupos = agruparPorResponsavel([tarefa('José'), tarefa('Jose\u0301')]);
     expect(grupos).toHaveLength(1);
     expect(grupos[0]?.responsavel).toBe('José');
   });
@@ -58,13 +58,47 @@ describe('agruparPorResponsavel', () => {
     expect(grupos.map((g) => g.responsavel)).toEqual(['Álvaro', 'Bruno']);
   });
 
-  it('é determinístico: mesma entrada, mesma saída; grafias sem empate mantêm a ordem de aparição', () => {
+  it('é determinístico: mesma entrada, mesma saída', () => {
     const entrada = [tarefa('Carla', '1'), tarefa('Ana', '2'), tarefa('carla', '3')];
     const a = agruparPorResponsavel(entrada);
-    const b = agruparPorResponsavel(entrada);
-    expect(a).toEqual(b);
+    expect(a).toEqual(agruparPorResponsavel(entrada));
     expect(a.map((g) => g.responsavel)).toEqual(['Ana', 'Carla']);
     expect(a[1]?.itens.map((i) => i.acao)).toEqual(['1', '3']);
+  });
+
+  it('empate real no localeCompare (hífen opcional é ignorado) segue a ordem de aparição', () => {
+    const comHifen = 'Ma\u00ADria';
+    expect('Maria'.localeCompare(comHifen, 'pt-BR')).toBe(0);
+    const ab = agruparPorResponsavel([tarefa(comHifen), tarefa('Maria')]);
+    expect(ab).toHaveLength(2);
+    expect(ab.map((g) => g.responsavel)).toEqual([comHifen, 'Maria']);
+    const ba = agruparPorResponsavel([tarefa('Maria'), tarefa(comHifen)]);
+    expect(ba.map((g) => g.responsavel)).toEqual(['Maria', comHifen]);
+  });
+
+  it('caixa não separa: "ÁLVARO" e "álvaro" são um grupo com a primeira grafia', () => {
+    const grupos = agruparPorResponsavel([tarefa('ÁLVARO'), tarefa('álvaro')]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0]?.responsavel).toBe('ÁLVARO');
+  });
+
+  it('invisíveis (largura zero, BOM) não separam nem aparecem no nome', () => {
+    const grupos = agruparPorResponsavel([
+      tarefa('Ana\u200BSouza'),
+      tarefa('ana souza'.replace(' ', '')),
+      tarefa('\uFEFFAnaSouza\u2060'),
+    ]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0]?.responsavel).toBe('AnaSouza');
+    const sem = agruparPorResponsavel([tarefa('\u200B'), tarefa('A\u200B definir')]);
+    expect(sem).toHaveLength(1);
+    expect(sem[0]?.semResponsavel).toBe(true);
+  });
+
+  it('quebra de linha no nome não cria grupo novo', () => {
+    const grupos = agruparPorResponsavel([tarefa('Ana\nSouza'), tarefa('ana souza')]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0]?.responsavel).toBe('Ana Souza');
   });
 
   it('lista vazia → nenhum grupo', () => {
@@ -118,6 +152,29 @@ describe('textoDasTarefas', () => {
       const { texto } = textoDasTarefas('Ata', data, [tarefa('Ana')]);
       expect(texto).toBe('Ata\n\nTarefas por responsável\n\nAna\n- Enviar relatório');
     }
+  });
+
+  it('quebras de linha em ação, prazo e título viram um espaço: um item, uma linha', () => {
+    const { texto } = textoDasTarefas('Ata\nda\n\nDiretoria', '2026-10-21', [
+      tarefa('Ana', 'a\n\nb', 'próxima\n\nreunião'),
+    ]);
+    expect(texto).toBe(
+      [
+        'Ata da Diretoria',
+        'Reunião de 21/10/2026',
+        '',
+        'Tarefas por responsável',
+        '',
+        'Ana',
+        '- a b (prazo: próxima reunião)',
+      ].join('\n'),
+    );
+    expect(textoDasTarefas('', undefined, [tarefa('Ana', 'a\n\nb')]).texto).toContain('- a b');
+  });
+
+  it('prazo só de quebras de linha é omitido', () => {
+    const { texto } = textoDasTarefas('Ata', undefined, [tarefa('Ana', 'Fazer', '\n\n')]);
+    expect(texto).not.toContain('prazo');
   });
 
   it('título vazio omite a linha do título', () => {
