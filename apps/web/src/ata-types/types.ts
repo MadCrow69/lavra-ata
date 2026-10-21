@@ -1,4 +1,4 @@
-import type { EntradaDoDocumento } from '../domain/draft';
+import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
 
 export type TipoCampo = 'texto' | 'data' | 'hora' | 'escolha' | 'textoLongo';
 
@@ -16,6 +16,14 @@ export interface CampoDef {
   rotuloPor?: (dados: Record<string, string>) => string;
   /** Obrigatoriedade que depende de outros campos; quando existe, vale no lugar de `obrigatorio`. */
   obrigatorioSe?: (dados: Record<string, string>) => boolean;
+  /** Erro de formato de um valor NÃO vazio; `null` = válido. */
+  validar?: (valor: string, dados: Record<string, string>) => string | null;
+  /** `inputMode` no celular. */
+  teclado?: 'numeric' | 'decimal';
+  /** Só campo de participante: o valor segue (mascarado) para a IA. Padrão: não segue (spec 5.2). */
+  enviarParaIA?: boolean;
+  /** Só campo de participante: peso da coluna nas tabelas do documento (padrão `PESOS_COLUNA.extra`). */
+  peso?: number;
 }
 
 export interface SecaoDef {
@@ -26,6 +34,24 @@ export interface SecaoDef {
   instrucao: string;
 }
 
+/** Uma pessoa na linha de assinatura. */
+export interface Assinatura {
+  nome: string;
+  papel: string;
+}
+
+/** Assinaturas sob um título opcional (ex.: "Mesa"); `null` = sem título. */
+export interface GrupoAssinaturas {
+  titulo: string | null;
+  pessoas: Assinatura[];
+}
+
+/** Resumo exibido sob a lista de participantes: uma linha de texto e alertas (só avisam). */
+export interface ResumoParticipantes {
+  texto: string | null;
+  alertas: string[];
+}
+
 export interface AtaTypeDefinition {
   id: string;
   rotulo: string;
@@ -33,8 +59,12 @@ export interface AtaTypeDefinition {
   campos: CampoDef[];
   /** Campos extras do participante, além de nome, papel e presença. */
   camposParticipante: CampoDef[];
-  /** Rótulo do papel do participante, ex.: "Cargo / empresa". */
-  rotuloPapel: string;
+  /** Rótulo do papel do participante, ex.: "Cargo / empresa"; `null` = sem coluna de papel. */
+  rotuloPapel: string | null;
+  /** Campo extra que recebe o complemento de "Nome — X" (colar e adicionar); sem ele, o papel. */
+  campoComplemento?: string;
+  /** Títulos dos blocos de participantes e de pauta no formulário e no documento. */
+  rotulos: { participantes: string; pauta: string };
   /** Seções geradas, na ordem do documento. */
   secoes: SecaoDef[];
   temEncaminhamentos: boolean;
@@ -55,7 +85,12 @@ export interface AtaTypeDefinition {
   cabecalho: (d: EntradaDoDocumento) => string[];
   preambulo: (d: EntradaDoDocumento) => string;
   fecho: (d: EntradaDoDocumento) => string;
-  assinaturas: (d: EntradaDoDocumento) => { nome: string; papel: string }[];
+  assinaturas: (d: EntradaDoDocumento) => GrupoAssinaturas[];
+  /** Frases impressas depois das assinaturas, antes do aviso de minuta. */
+  avisosFinais?: (d: EntradaDoDocumento) => string[];
+  resumoDosParticipantes?: (
+    d: Pick<AtaDraft, 'dados' | 'participantes'>,
+  ) => ResumoParticipantes | null;
 }
 
 export type BlocoFormulario = 'dados' | 'participantes' | 'transcricao';

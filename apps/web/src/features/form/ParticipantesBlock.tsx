@@ -108,16 +108,18 @@ const Linha = memo(function Linha({ participante: p, posicao, tipo, dispatch }: 
           </p>
         ) : null}
       </td>
-      <td data-rotulo={tipo.rotuloPapel}>
-        <input
-          type="text"
-          aria-label={`${tipo.rotuloPapel} do participante ${String(posicao)}`}
-          value={p.papel}
-          onChange={(e) => {
-            atualizar({ papel: e.target.value });
-          }}
-        />
-      </td>
+      {tipo.rotuloPapel === null ? null : (
+        <td data-rotulo={tipo.rotuloPapel}>
+          <input
+            type="text"
+            aria-label={`${tipo.rotuloPapel} do participante ${String(posicao)}`}
+            value={p.papel}
+            onChange={(e) => {
+              atualizar({ papel: e.target.value });
+            }}
+          />
+        </td>
+      )}
       {tipo.camposParticipante.map((campo) => (
         <td key={campo.id} data-rotulo={campo.rotulo}>
           <CampoExtra
@@ -317,18 +319,20 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             />
           )}
         </Field>
-        <Field rotulo={`${tipo.rotuloPapel} (opcional)`}>
-          {(controle) => (
-            <input
-              {...controle}
-              type="text"
-              value={novoPapel}
-              onChange={(e) => {
-                setNovoPapel(e.target.value);
-              }}
-            />
-          )}
-        </Field>
+        {tipo.rotuloPapel === null ? null : (
+          <Field rotulo={`${tipo.rotuloPapel} (opcional)`}>
+            {(controle) => (
+              <input
+                {...controle}
+                type="text"
+                value={novoPapel}
+                onChange={(e) => {
+                  setNovoPapel(e.target.value);
+                }}
+              />
+            )}
+          </Field>
+        )}
         <div className={styles.novoParticipanteBotao}>
           <Button type="submit" variante="primario">
             Adicionar participante
@@ -438,7 +442,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                   <thead>
                     <tr>
                       <th scope="col">Nome</th>
-                      <th scope="col">{tipo.rotuloPapel}</th>
+                      {tipo.rotuloPapel === null ? null : <th scope="col">{tipo.rotuloPapel}</th>}
                       {tipo.camposParticipante.map((campo) => (
                         <th key={campo.id} scope="col">
                           {campo.rotulo}

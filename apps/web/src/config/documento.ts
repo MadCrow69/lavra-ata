@@ -28,6 +28,12 @@ export const CELULA_VAZIA = '—';
 /** Larguras (%) das colunas da tabela de encaminhamentos: Ação · Responsável · Prazo · Status. */
 export const LARGURAS_ENCAMINHAMENTOS = [50, 20, 15, 15] as const;
 
+/**
+ * Peso de cada coluna da tabela de participantes (proporção entre elas). `extra` é o padrão de um
+ * campo de participante sem `peso` próprio.
+ */
+export const PESOS_COLUNA = { nome: 3, papel: 2, extra: 1.5, presenca: 2 } as const;
+
 /** Responsável do encaminhamento quando a transcrição não deixa claro quem fará. */
 export const RESPONSAVEL_A_DEFINIR = 'A definir';
 

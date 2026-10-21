@@ -1,4 +1,5 @@
 import { formatarData, formatarDataPorExtenso, formatarHora } from '../domain/dates';
+import type { CampoDef } from './types';
 
 /** Marcador de lacuna que a pessoa vê destacado na folha e deve preencher à mão. */
 export function preencher(oQueFalta: string): string {
@@ -48,4 +49,17 @@ export function dataPorExtensoOuNulo(iso: string | undefined): string | null {
 
 export function horaOuNulo(hhmm: string | undefined): string | null {
   return formatarOuNulo(formatarHora, hhmm);
+}
+
+/**
+ * Rótulo da opção escolhida (ex.: `remota` → "Remota"); `null` se o valor é vazio, desconhecido ou
+ * o campo não tem opções. Fonte única: o registro a reexporta (vive aqui para a corporativa
+ * poder usá-la sem importar o registro, que importa a corporativa).
+ */
+export function rotuloDaOpcao(
+  campo: CampoDef | undefined,
+  valor: string | undefined,
+): string | null {
+  if (valor === undefined || valor === '') return null;
+  return campo?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null;
 }

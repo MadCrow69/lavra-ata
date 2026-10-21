@@ -1,5 +1,5 @@
 import { PAPEL_DA_IA, REGRAS_COMUNS, REGRAS_TOM } from '../ata-types/regras-comuns';
-import { ehVisivel, rotuloDoCampo } from '../ata-types/registry';
+import { ehVisivel, rotuloDaOpcao, rotuloDoCampo } from '../ata-types/registry';
 import { dataOuNulo, horaOuNulo, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef, SecaoDef } from '../ata-types/types';
 import { TITULO_ENCAMINHAMENTOS } from '../config/documento';
@@ -71,10 +71,16 @@ function valorDoCampo(campo: CampoDef, dados: Record<string, string>): string {
     case 'hora':
       return horaOuNulo(bruto) ?? NAO_INFORMADO;
     case 'escolha':
-      return campo.opcoes?.find((o) => o.valor === bruto)?.rotulo ?? NAO_INFORMADO;
+      return rotuloDaOpcao(campo, bruto) ?? NAO_INFORMADO;
     default:
       return bruto;
   }
+}
+
+/** "nome — cargo / empresa — presença"; sem coluna de papel, "nome — presença". */
+function colunasDoPrompt(tipo: AtaTypeDefinition): string {
+  const papel = tipo.rotuloPapel === null ? [] : [tipo.rotuloPapel.toLowerCase()];
+  return ['nome', ...papel, 'presença'].join(' — ');
 }
 
 function dadosDaReuniao(tipo: AtaTypeDefinition, d: AtaDraft): string {
@@ -94,14 +100,15 @@ function dadosDaReuniao(tipo: AtaTypeDefinition, d: AtaDraft): string {
   const participantes = d.participantes
     .filter((p) => p.nome.trim() !== '')
     .map((p) => {
-      const partes = [p.nome.trim(), p.papel.trim(), ROTULO_PRESENCA[p.presenca].toLowerCase()];
+      const papel = tipo.rotuloPapel === null ? '' : p.papel.trim();
+      const partes = [p.nome.trim(), papel, ROTULO_PRESENCA[p.presenca].toLowerCase()];
       return `- ${partes.filter((x) => x !== '').join(' — ')}`;
     });
 
   return [
     `Dados da reunião:\n${linhas.join('\n')}`,
     `Pauta:\n${itensPauta}`,
-    `Participantes (nome — ${tipo.rotuloPapel.toLowerCase()} — presença):\n${participantes.length === 0 ? 'nenhum informado' : participantes.join('\n')}`,
+    `Participantes (${colunasDoPrompt(tipo)}):\n${participantes.length === 0 ? 'nenhum informado' : participantes.join('\n')}`,
   ].join('\n\n');
 }
 

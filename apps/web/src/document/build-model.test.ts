@@ -11,6 +11,7 @@ import {
 } from '../domain/draft';
 import { criarRascunho } from '../domain/draft-reducer';
 import { modeloDeVolume } from '../test/documento-volume';
+import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import {
   construirDocumento,
   contarPreencher,
@@ -456,5 +457,41 @@ describe('textosDoDocumento', () => {
     // Uma lacuna no resumo; cabeçalhos de tabela, títulos de seção, aviso e rodapé não têm.
     expect(contarPreencher(modelo)).toBe(1);
     expect(contarPreencher(modeloDeVolume({ participantes: 200, encaminhamentos: 200 }))).toBe(1);
+  });
+});
+
+describe('construirDocumento com um tipo sem coluna de papel', () => {
+  it('tabela só com as colunas do tipo, títulos do tipo e assinaturas dos grupos num bloco', () => {
+    const d = {
+      ...criarRascunho(TIPO_DE_TESTE.id),
+      dados: { data: '2026-10-14', presidente: 'Ana Souza' },
+      pauta: ['Item um'],
+      participantes: [
+        participante(1, { extras: { unidade: 'Apto 1', vinculo: 'procurador' } }),
+        participante(2, { extras: { unidade: 'Apto 2' } }),
+      ],
+    };
+    const modelo = construirDocumento({ ...d, resultado: resultado() }, TIPO_DE_TESTE);
+    const tabela = modelo.blocos.find((b) => b.tipo === 'tabela');
+    expect(tabela).toMatchObject({
+      colunas: ['Nome', 'Unidade', 'Vínculo', 'Fração ideal', 'Presença'],
+      colunaPresenca: 4,
+    });
+    expect(tabela?.tipo === 'tabela' ? tabela.linhas[0] : []).toEqual([
+      'Pessoa 1',
+      'Apto 1',
+      'Procurador(a)',
+      '—',
+      'Presente',
+    ]);
+    const subtitulos = modelo.blocos.flatMap((b) => (b.tipo === 'subtitulo' ? [b.texto] : []));
+    expect(subtitulos).toEqual(['Membros', 'Ordem do dia']);
+    const assinaturas = modelo.blocos.filter((b) => b.tipo === 'assinaturas');
+    expect(assinaturas).toHaveLength(1);
+    expect(assinaturas[0]?.tipo === 'assinaturas' ? assinaturas[0].pessoas : []).toEqual([
+      { nome: 'Ana Souza', papel: 'Presidente' },
+      { nome: 'Pessoa 1', papel: 'Procurador(a)' },
+      { nome: 'Pessoa 2', papel: '' },
+    ]);
   });
 });

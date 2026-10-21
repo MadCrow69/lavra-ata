@@ -1,4 +1,5 @@
-import { prazoOuNulo, textoLimpo } from '../ata-types/texto-modelo';
+import { colunasDeParticipantes } from '../ata-types/registry';
+import { prazoOuNulo, rotuloDaOpcao, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import {
   AVISO_MINUTA,
@@ -30,8 +31,6 @@ const LACUNA = /\[PREENCHER(?::[^\]]*)?\]/g;
 /** Chave da seção que ocupa o lugar das seções geradas antes da geração. */
 const CHAVE_SECOES_PENDENTES = 'pendente';
 
-const TITULO_PARTICIPANTES = 'Participantes';
-const TITULO_PAUTA = 'Pauta';
 const TITULO_SECOES_PENDENTES = 'Seções da ata';
 const COLUNAS_ENCAMINHAMENTOS = ['Ação', 'Responsável', 'Prazo', 'Status'];
 
@@ -101,10 +100,6 @@ function paragrafo(texto: string): DocBloco {
   return { tipo: 'paragrafo', partes: dividirPreencher(texto) };
 }
 
-function opcaoDo(campo: CampoDef, valor: string): string | null {
-  return campo.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null;
-}
-
 /** Texto de presença; a justificativa só vale (e só é impressa) para quem está justificado. */
 function celulaPresenca(p: Participante): string {
   const rotulo = ROTULO_PRESENCA[p.presenca];
@@ -117,21 +112,22 @@ function celulaPresenca(p: Participante): string {
 function celulaExtra(campo: CampoDef, p: Participante): string {
   const valor = textoLimpo(p.extras[campo.id]);
   if (valor === '') return CELULA_VAZIA;
-  return (campo.tipo === 'escolha' ? opcaoDo(campo, valor) : null) ?? valor;
+  return (campo.tipo === 'escolha' ? rotuloDaOpcao(campo, valor) : null) ?? valor;
 }
 
 function tabelaDeParticipantes(d: EntradaDoDocumento, tipo: AtaTypeDefinition): DocBloco {
-  const extras = tipo.camposParticipante;
+  const colunas = colunasDeParticipantes(tipo, d.dados);
+  const celula = (p: Participante, id: string, campo: CampoDef | null): string => {
+    if (id === 'nome') return textoLimpo(p.nome) || CELULA_VAZIA;
+    if (id === 'papel') return textoLimpo(p.papel) || CELULA_VAZIA;
+    if (id === 'presenca') return celulaPresenca(p);
+    return campo ? celulaExtra(campo, p) : CELULA_VAZIA;
+  };
   return {
     tipo: 'tabela',
-    colunas: ['Nome', tipo.rotuloPapel, ...extras.map((c) => c.rotulo), 'Presença'],
-    linhas: d.participantes.map((p) => [
-      textoLimpo(p.nome) || CELULA_VAZIA,
-      textoLimpo(p.papel) || CELULA_VAZIA,
-      ...extras.map((c) => celulaExtra(c, p)),
-      celulaPresenca(p),
-    ]),
-    colunaPresenca: 2 + extras.length,
+    colunas: colunas.map((c) => c.rotulo),
+    linhas: d.participantes.map((p) => colunas.map((c) => celula(p, c.id, c.campo))),
+    colunaPresenca: colunas.findIndex((c) => c.id === 'presenca'),
     presencas: d.participantes.map((p) => p.presenca),
   };
 }
@@ -201,13 +197,16 @@ export function construirDocumento(
   if (resultado) blocos.push(paragrafo(tipo.preambulo(d)));
 
   if (d.participantes.length > 0) {
-    blocos.push({ tipo: 'subtitulo', texto: TITULO_PARTICIPANTES }, tabelaDeParticipantes(d, tipo));
+    blocos.push(
+      { tipo: 'subtitulo', texto: tipo.rotulos.participantes },
+      tabelaDeParticipantes(d, tipo),
+    );
   }
 
   const pauta = d.pauta.map(textoLimpo).filter((item) => item !== '');
   if (pauta.length > 0) {
     blocos.push(
-      { tipo: 'subtitulo', texto: TITULO_PAUTA },
+      { tipo: 'subtitulo', texto: tipo.rotulos.pauta },
       { tipo: 'lista', itens: pauta.map(dividirPreencher) },
     );
   }
@@ -238,7 +237,8 @@ export function construirDocumento(
       );
     }
     blocos.push(paragrafo(tipo.fecho(d)));
-    const pessoas = tipo.assinaturas(d);
+    // Todos os grupos num único bloco, como antes; a apresentação por grupo vem no Task 2.
+    const pessoas = tipo.assinaturas(d).flatMap((g) => g.pessoas);
     if (pessoas.length > 0) blocos.push({ tipo: 'assinaturas', pessoas });
     blocos.push({ tipo: 'aviso', texto: AVISO_MINUTA });
   }

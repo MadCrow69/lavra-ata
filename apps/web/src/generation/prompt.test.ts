@@ -6,6 +6,7 @@ import type { AtaDraft, Participante } from '../domain/draft';
 import { STATUS_ENCAMINHAMENTO, TIPOS_BLOCO } from '../domain/draft';
 import { criarRascunho } from '../domain/draft-reducer';
 import { validarSchema } from '../ai/json-schema';
+import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import type { JsonSchema } from '../ai/types';
 import { schemaDaAta, schemaDaSecao } from './output-schema';
 import { REGRA_DELIMITADORES, blocosParaTexto, montarPrompt, montarPromptSecao } from './prompt';
@@ -245,5 +246,20 @@ describe('schemas', () => {
     expect(() =>
       schemaDaSecao({ ...corporativa, temEncaminhamentos: false }, 'encaminhamentos'),
     ).toThrow();
+  });
+});
+
+describe('montarPrompt com um tipo sem coluna de papel', () => {
+  it('lista participantes só com nome e presença, sem o papel digitado', () => {
+    const d = {
+      ...rascunho(),
+      tipoId: TIPO_DE_TESTE.id,
+      dados: { data: '2026-10-14', natureza: 'ordinaria', modalidade: 'hibrida' },
+      participantes: [participante('p1', { papel: 'Cargo que não deve seguir' })],
+    };
+    const { usuario } = montarPrompt(TIPO_DE_TESTE, d, 'texto');
+    expect(usuario).toContain('Participantes (nome — presença):\n- Ana Souza — presente');
+    expect(usuario).not.toContain('Cargo que não deve seguir');
+    expect(usuario).toContain('Modalidade: Híbrida');
   });
 });

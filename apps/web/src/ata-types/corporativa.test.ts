@@ -54,6 +54,11 @@ describe('registro de tipos', () => {
     expect(corporativa.id).toBe(TIPO_PADRAO_ID);
   });
 
+  it('rótulos de bloco e papel próprios da corporativa', () => {
+    expect(corporativa.rotulos).toEqual({ participantes: 'Participantes', pauta: 'Pauta' });
+    expect(corporativa.rotuloPapel).toBe('Cargo / empresa');
+  });
+
   it('obterTipo devolve o tipo pedido e cai no padrão se o id for desconhecido', () => {
     expect(obterTipo('corporativa')).toBe(corporativa);
     expect(obterTipo('inexistente')).toBe(corporativa);
@@ -346,8 +351,13 @@ describe('fecho e assinaturas', () => {
 
   it('assinaturas: condução e redação, só quando informadas', () => {
     expect(corporativa.assinaturas(completo())).toEqual([
-      { nome: 'Ana Souza', papel: 'Condução' },
-      { nome: 'Bruno Lima', papel: 'Redação' },
+      {
+        titulo: null,
+        pessoas: [
+          { nome: 'Ana Souza', papel: 'Condução' },
+          { nome: 'Bruno Lima', papel: 'Redação' },
+        ],
+      },
     ]);
     expect(corporativa.assinaturas(criarRascunho())).toEqual([]);
   });

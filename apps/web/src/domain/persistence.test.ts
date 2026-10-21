@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RASCUNHO } from '../config/storage-keys';
 import type { AtaDraft } from './draft';
 import { criarRascunho, draftReducer } from './draft-reducer';
+import { camposFaltando, obterTipo } from '../ata-types/registry';
 import { carregarRascunho, salvarRascunho } from './persistence';
 
 function rascunhoCompleto(): AtaDraft {
@@ -233,5 +234,70 @@ describe('persistência do rascunho', () => {
     expect(bruto).not.toMatch(/sk-/);
     expect(bruto).not.toMatch(/AIza/);
     expect(bruto).not.toMatch(/apiKey|chave/i);
+  });
+});
+
+describe('compatibilidade com o formato do Plano 04', () => {
+  /** JSON gravado à mão, como o Plano 04 o gravava: corporativa completa, `extras: {}`, resultado. */
+  const PLANO_04 = {
+    versao: 1,
+    tipoId: 'corporativa',
+    tom: 'formal',
+    dados: {
+      organizacao: 'Empresa Exemplo Ltda.',
+      assunto: 'Planejamento trimestral',
+      data: '2026-10-14',
+      inicio: '14:30',
+      fim: '16:00',
+      modalidade: 'remota',
+      local: 'Videoconferência',
+      conducao: 'Ana Souza',
+      redacao: 'Bruno Lima',
+    },
+    pauta: ['Metas do trimestre'],
+    participantes: [
+      {
+        id: 'p-1',
+        nome: 'Ana Souza',
+        papel: 'Diretora',
+        presenca: 'presente',
+        justificativa: '',
+        extras: {},
+      },
+      {
+        id: 'p-2',
+        nome: 'Bruno Lima',
+        papel: '',
+        presenca: 'justificado',
+        justificativa: 'Viagem',
+        extras: {},
+      },
+    ],
+    transcricao: 'Ana: bom dia a todos.',
+    mapa: MAPA,
+    resultado: {
+      secoes: { resumo: [{ tipo: 'paragrafo', texto: 'Resumo da reunião.', itens: [] }] },
+      encaminhamentos: [
+        { acao: 'Enviar plano', responsavel: 'Ana', prazo: '2026-11-01', status: 'pendente' },
+      ],
+      atribuicao: { resumo: { provedor: 'openai', modelo: 'm', falhas: [] } },
+      avisos: {},
+      editadas: [],
+    },
+  };
+
+  it('rascunho do Plano 04 carrega igual e sem novas faltas', () => {
+    sessionStorage.setItem(RASCUNHO, JSON.stringify(PLANO_04));
+    const r = carregarRascunho();
+    expect(r).toEqual(PLANO_04);
+    if (r === null) return;
+    expect(camposFaltando(r, obterTipo(r.tipoId))).toEqual([]);
+  });
+
+  it('tipoId de tipo não registrado carrega sem lançar e cai na corporativa', () => {
+    sessionStorage.setItem(RASCUNHO, JSON.stringify({ ...PLANO_04, tipoId: 'tipo-futuro' }));
+    const r = carregarRascunho();
+    expect(r?.tipoId).toBe('tipo-futuro');
+    expect(obterTipo('tipo-futuro').id).toBe('corporativa');
   });
 });

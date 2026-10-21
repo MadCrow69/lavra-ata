@@ -1,10 +1,11 @@
 import type { EntradaDoDocumento } from '../domain/draft';
-import type { AtaTypeDefinition, CampoDef, SecaoDef } from './types';
+import type { AtaTypeDefinition, CampoDef, GrupoAssinaturas, SecaoDef } from './types';
 import {
   dataOuNulo,
   dataPorExtensoOuNulo,
   horaOuNulo,
   preencher,
+  rotuloDaOpcao,
   textoLimpo,
 } from './texto-modelo';
 
@@ -149,13 +150,6 @@ function descreverLocalizacao(dados: Dados): string {
   }
 }
 
-/** Rótulo da opção escolhida (ex.: `remota` → "Remota"); `null` se não há escolha válida. */
-function rotuloDaOpcao(campoId: string, valor: string | undefined): string | null {
-  return (
-    CAMPOS.find((c) => c.id === campoId)?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null
-  );
-}
-
 function cabecalho(d: EntradaDoDocumento): string[] {
   const dados = d.dados;
   const linhas: string[] = [];
@@ -171,7 +165,10 @@ function cabecalho(d: EntradaDoDocumento): string[] {
   if (inicio !== null) linhas.push(`Horário: ${fim === null ? inicio : `${inicio} às ${fim}`}`);
   else if (fim !== null) linhas.push(`Término: ${fim}`);
 
-  const modalidade = rotuloDaOpcao('modalidade', textoLimpo(dados.modalidade));
+  const modalidade = rotuloDaOpcao(
+    CAMPOS.find((c) => c.id === 'modalidade'),
+    textoLimpo(dados.modalidade),
+  );
   if (modalidade !== null) linhas.push(`Modalidade: ${modalidade}`);
 
   const local = textoLimpo(dados.local);
@@ -208,12 +205,13 @@ function fecho(d: EntradaDoDocumento): string {
   return `${encerramento} E, para constar, foi lavrada a presente ata.`;
 }
 
-function assinaturas(d: EntradaDoDocumento): { nome: string; papel: string }[] {
+function assinaturas(d: EntradaDoDocumento): GrupoAssinaturas[] {
   const candidatas = [
     { nome: textoLimpo(d.dados.conducao), papel: 'Condução' },
     { nome: textoLimpo(d.dados.redacao), papel: 'Redação' },
   ];
-  return candidatas.filter((a) => a.nome !== '');
+  const pessoas = candidatas.filter((a) => a.nome !== '');
+  return pessoas.length === 0 ? [] : [{ titulo: null, pessoas }];
 }
 
 export const corporativa: AtaTypeDefinition = {
@@ -223,6 +221,7 @@ export const corporativa: AtaTypeDefinition = {
   campos: CAMPOS,
   camposParticipante: [],
   rotuloPapel: 'Cargo / empresa',
+  rotulos: { participantes: 'Participantes', pauta: 'Pauta' },
   secoes: SECOES,
   temEncaminhamentos: true,
   camposNoPrompt: ['data', 'modalidade'],
