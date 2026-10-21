@@ -25,7 +25,7 @@ import {
   COR_FUNDO_PREENCHER,
   COR_TEXTO_DOCUMENTO,
   ESPACOS_DOCX,
-  ESPACOS_PDF,
+  ESPACOS_DOCUMENTO,
   FONTES_DOCX,
   LINHAS_TABELA,
   PAGINA_DOCUMENTO,
@@ -47,7 +47,7 @@ import { A4_DXA, larguraUtilDxa, largurasDxa, ptParaDxa } from './medidas-docx';
  */
 
 const T = TIPOGRAFIA_DOCUMENTO;
-const E = ESPACOS_PDF;
+const E = ESPACOS_DOCUMENTO;
 const D = ESPACOS_DOCX;
 
 /** Referência da numeração de marcadores das listas. */

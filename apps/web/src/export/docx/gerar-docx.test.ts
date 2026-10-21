@@ -2,13 +2,24 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AVISO_MINUTA, RODAPE_INTERNO_IA } from '../../config/documento';
+import { logoNoDocumentoPx } from '../../document/medidas';
 import type { DocBloco, DocumentModel } from '../../document/model';
-import { modeloDeVolume, NOME_DECOMPOSTO, NOME_LATIN_EXT } from '../../test/documento-volume';
+import {
+  LOGO_TESTE,
+  modeloDeVolume,
+  NOME_DECOMPOSTO,
+  NOME_LATIN_EXT,
+} from '../../test/documento-volume';
 import { xmlDoDocx } from '../../test/docx-xml';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
 import { gerarDocx } from './gerar-docx';
 
 const NOME_ESPECIAL = '<script>&';
+
+/** EMUs por pixel (a 96 px/pol.): o Word guarda o tamanho da imagem em EMUs. */
+const EMU_POR_PX = 9525;
+
+const MENSAGEM_LOGO_ILEGIVEL = 'A logo não pôde ser lida para o documento.';
 
 const cp = (...pontos: number[]) => String.fromCodePoint(...pontos);
 
@@ -35,6 +46,15 @@ function xmlValido(xml: string): boolean {
   const { DOMParser } = new JSDOM().window;
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   return doc.getElementsByTagName('parsererror').length === 0;
+}
+
+/** Quantas tabelas de dados (com cabeçalho) o modelo tem, incluindo as dentro de seções. */
+function tabelasDoModelo(blocos: readonly DocBloco[]): number {
+  return blocos.reduce(
+    (n, b) =>
+      n + (b.tipo === 'tabela' ? 1 : 0) + (b.tipo === 'secao' ? tabelasDoModelo(b.blocos) : 0),
+    0,
+  );
 }
 
 const todos = (partes: Map<string, string>) => [...partes.values()].join('\n');
@@ -80,8 +100,9 @@ describe('gerarDocx · ata de volume com logo', () => {
   });
 
   it('mostra acento, latin-ext, cirílico e emoji sem depender de fonte embutida', async () => {
+    const pequeno = modeloDeVolume({ participantes: 1, encaminhamentos: 1 });
     const xml = await documentoDe(
-      comParagrafo(modelo, `Ação de João — ${NOME_LATIN_EXT}, Ж${cp(0x1f600)}`),
+      comParagrafo(pequeno, `Ação de João — ${NOME_LATIN_EXT}, Ж${cp(0x1f600)}`),
     );
     for (const trecho of ['Ação', 'João', 'Łukasz Żółć', `Ж${cp(0x1f600)}`]) {
       expect(xml).toContain(trecho);
@@ -104,25 +125,51 @@ describe('gerarDocx · ata de volume com logo', () => {
     }
   });
 
-  it('tabelas: cabeçalho repetido, linha que não parte e layout fixo', () => {
-    expect(ocorrencias(documento, '<w:tblHeader/>')).toBeGreaterThanOrEqual(2);
+  it('tabelas: layout fixo e linha que não parte', () => {
     expect(ocorrencias(documento, '<w:cantSplit/>')).toBeGreaterThanOrEqual(400);
     expect(documento).toContain('<w:tblLayout w:type="fixed"/>');
   });
 
-  it('a tabela de encaminhamentos tem a grade 4833/1933/1450/1450', () => {
-    const grade = [4833, 1933, 1450, 1450].map((w) => `<w:gridCol w:w="${String(w)}"/>`).join('');
-    expect(documento).toContain(`<w:tblGrid>${grade}</w:tblGrid>`);
+  it('cada tabela de dados tem exatamente um cabeçalho repetido, na primeira linha', () => {
+    const esperadas = tabelasDoModelo(modelo.blocos);
+    expect(esperadas).toBe(2);
+    const tabelas = [...documento.matchAll(/<w:tbl>.*?<\/w:tbl>/gs)].map((m) => m[0]);
+    const deDados = tabelas.filter((t) => t.includes('<w:tblHeader/>'));
+    expect(ocorrencias(documento, '<w:tblHeader/>')).toBe(esperadas);
+    expect(deDados).toHaveLength(esperadas);
+    for (const t of deDados) {
+      const linhas = t.split('<w:tr>').slice(1);
+      expect(linhas[0]).toContain('<w:tblHeader/>');
+      expect(linhas.slice(1).every((l) => !l.includes('<w:tblHeader/>'))).toBe(true);
+    }
   });
 
-  it('rodapé "Página X de Y" com os campos PAGE e NUMPAGES', () => {
+  it('a tabela logo após o título "Encaminhamentos" tem a grade 4833/1933/1450/1450', () => {
+    const titulo = paragrafos(documento).find(
+      (p) => p.includes('<w:pStyle w:val="Heading1"/>') && p.includes('>Encaminhamentos<'),
+    );
+    expect(titulo, 'título de seção "Encaminhamentos"').toBeDefined();
+    const depois = documento.slice(documento.indexOf(titulo ?? '?'));
+    const grade = /<w:tblGrid>(.*?)<\/w:tblGrid>/s.exec(depois)?.[1];
+    const esperado = [4833, 1933, 1450, 1450]
+      .map((w) => `<w:gridCol w:w="${String(w)}"/>`)
+      .join('');
+    expect(grade).toBe(esperado);
+  });
+
+  it('rodapé "Página X de Y" com os campos PAGE e NUMPAGES, nessa ordem', () => {
     const rodapes = [...partes].filter(([c]) => /^word\/footer\d*\.xml$/.test(c));
     expect(rodapes.length).toBeGreaterThan(0);
     const xml = rodapes.map(([, x]) => x).join('\n');
+    const campos = [...xml.matchAll(/<w:instrText[^>]*>\s*([A-Z]+)\s*<\/w:instrText>/g)].map(
+      (m) => m[1],
+    );
+    expect(campos).toEqual(['PAGE', 'NUMPAGES']);
     expect(xml).toContain('Página ');
     expect(xml).toContain(' de ');
-    expect(xml).toContain('PAGE');
-    expect(xml).toContain('NUMPAGES');
+    expect(xml.indexOf('Página ')).toBeLessThan(xml.indexOf('>PAGE<'));
+    expect(xml.indexOf('>PAGE<')).toBeLessThan(xml.indexOf(' de '));
+    expect(xml.indexOf(' de ')).toBeLessThan(xml.indexOf('>NUMPAGES<'));
   });
 
   it('títulos de seção ficam com o que vem depois (keepNext)', () => {
@@ -172,6 +219,14 @@ describe('gerarDocx · ata de volume com logo', () => {
     expect(midia.every((c) => c.endsWith('.png'))).toBe(true);
   });
 
+  it('a logo pequena não é ampliada: a imagem mede os pixels da logo', () => {
+    const px = logoNoDocumentoPx(LOGO_TESTE);
+    expect(px).toEqual({ largura: LOGO_TESTE.largura, altura: LOGO_TESTE.altura });
+    expect(documento).toContain(
+      `<wp:extent cx="${String(px.largura * EMU_POR_PX)}" cy="${String(px.altura * EMU_POR_PX)}"/>`,
+    );
+  });
+
   it('metadados: título da ata e nenhum autor (o documento é da pessoa)', () => {
     const nucleo = partes.get('docProps/core.xml') ?? '';
     expect(nucleo).toContain('<dc:title>');
@@ -192,6 +247,17 @@ describe('gerarDocx · ata de volume com logo', () => {
 describe('gerarDocx · casos de borda', () => {
   const pequeno = (logo = false) => modeloDeVolume({ participantes: 2, encaminhamentos: 2, logo });
 
+  it('logo maior que a caixa é reduzida, mantendo a proporção', async () => {
+    const base = pequeno(true);
+    const grande = { ...LOGO_TESTE, largura: 1200, altura: 300 };
+    const px = logoNoDocumentoPx(grande);
+    expect(px.largura).toBeLessThan(grande.largura);
+    const xml = await documentoDe({ ...base, cabecalho: { ...base.cabecalho, logo: grande } });
+    expect(xml).toContain(
+      `<wp:extent cx="${String(px.largura * EMU_POR_PX)}" cy="${String(px.altura * EMU_POR_PX)}"/>`,
+    );
+  });
+
   it('sem logo não há word/media', async () => {
     const partes = await xmlDoDocx(await gerarDocx(pequeno()));
     expect([...partes.keys()].some((c) => c.startsWith('word/media/'))).toBe(false);
@@ -201,7 +267,7 @@ describe('gerarDocx · casos de borda', () => {
     const base = pequeno(true);
     const logo = { dataUrl: 'data:image/png;base64,@@@', largura: 10, altura: 10 };
     const ruim: DocumentModel = { ...base, cabecalho: { ...base.cabecalho, logo } };
-    await expect(gerarDocx(ruim)).rejects.toThrow('logo');
+    await expect(gerarDocx(ruim)).rejects.toMatchObject({ message: MENSAGEM_LOGO_ILEGIVEL });
   });
 
   it('caractere inválido em XML (controle, substituto solto) é removido', async () => {

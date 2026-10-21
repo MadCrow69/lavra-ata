@@ -9,7 +9,7 @@ import type {
 import {
   COR_FUNDO_PREENCHER,
   COR_TEXTO_DOCUMENTO,
-  ESPACOS_PDF,
+  ESPACOS_DOCUMENTO,
   PAGINA_DOCUMENTO,
   TIPOGRAFIA_DOCUMENTO,
 } from '../../config/documento';
@@ -25,7 +25,7 @@ import { FONTES_PDF, separarPorFonte, type FamiliaPdf } from './cobertura';
  */
 
 const T = TIPOGRAFIA_DOCUMENTO;
-const E = ESPACOS_PDF;
+const E = ESPACOS_DOCUMENTO;
 
 interface Trecho {
   text: string;

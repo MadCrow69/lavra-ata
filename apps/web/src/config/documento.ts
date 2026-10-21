@@ -58,8 +58,11 @@ export const LOGO_CAIXA_PT = { largura: 180, altura: 48 } as const;
 export const PX_POR_POLEGADA = 96;
 export const PT_POR_POLEGADA = 72;
 
-/** Espaçamentos e traços (pt) do PDF. Fonte única: nada de número solto em `definicao.ts`. */
-export const ESPACOS_PDF = {
+/**
+ * Espaçamentos e traços (pt) do PDF e do DOCX. Fonte única: nada de número solto em
+ * `export/pdf/definicao.ts` nem em `export/docx/gerar-docx.ts`.
+ */
+export const ESPACOS_DOCUMENTO = {
   /** Entre a logo e as linhas do cabeçalho. */
   entreLogoECabecalhoPt: 16,
   /** Depois do timbre (logo + linhas), antes do título. */
