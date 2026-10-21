@@ -1,4 +1,4 @@
-import { hasContext } from '../context';
+import { hasContext, WIDE_WINDOW } from '../context';
 import type { Detector } from './types';
 
 const CONTEXT = ['rg', 'identidade', 'registro geral'] as const;
@@ -20,6 +20,6 @@ export const rg: Detector = {
     'gi',
   ),
   accept(_raw, text, start) {
-    return { ok: hasContext(text, start, CONTEXT), valid: true };
+    return { ok: hasContext(text, start, CONTEXT, WIDE_WINDOW), valid: true };
   },
 };

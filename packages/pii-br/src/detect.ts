@@ -7,7 +7,7 @@ import type { DetectOptions, Finding } from './types';
  * enxergam só `-` e ` `.
  */
 const DASHES = /[\u2010-\u2015\u2212]/g;
-const SPACES = /[\u00a0\u202f\u2007]/g;
+const SPACES = /[\u00a0\u2002-\u200a\u202f\u205f]/g;
 
 function toScanText(text: string): string {
   return text.replace(DASHES, '-').replace(SPACES, ' ');

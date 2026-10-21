@@ -1,5 +1,5 @@
 import { isValidPis } from '../check-digits';
-import { continuesAsLargerNumber, hasContext } from '../context';
+import { continuesAsLargerNumber, hasContext, WIDE_WINDOW } from '../context';
 import { normalizeValue } from '../normalize';
 import type { Detector } from './types';
 
@@ -14,7 +14,7 @@ export const pis: Detector = {
   accept(raw, text, start) {
     const formatted = FULLY_FORMATTED.test(raw);
     // Mesma regra do CPF: fora do formato completo e sem contexto, `.50`/`-3` indica número maior.
-    const context = hasContext(text, start, CONTEXT);
+    const context = hasContext(text, start, CONTEXT, WIDE_WINDOW);
     if (!formatted && !context && continuesAsLargerNumber(text, start + raw.length)) {
       return { ok: false, valid: false };
     }

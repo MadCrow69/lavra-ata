@@ -217,3 +217,65 @@ describe('desempenho de detect: texto patológico de 50 mil caracteres', () => {
     }
   });
 });
+
+describe('detect: janela de contexto por detector, palavras de telefone e espaços Unicode', () => {
+  const tipos = (texto: string): string[] => detect(texto).map((f) => f.type);
+
+  it('RG com o rótulo longe do número (janela de 60) é mascarado', () => {
+    const t = 'O RG da Maria Aparecida dos Santos Oliveira é 12.345.678-9';
+    expect(detect(t).map((f) => [f.type, f.value])).toEqual([['RG', '12.345.678-9']]);
+  });
+
+  it('PIS com o rótulo longe do número (janela de 60) é mascarado, mesmo com DV inválido', () => {
+    const t = 'O PIS da Maria Aparecida dos Santos Oliveira é 12345678901';
+    expect(tipos(t)).toEqual(['PIS']);
+  });
+
+  it('RG além da janela de 60 caracteres continua sem máscara', () => {
+    const t = `RG ${'x'.repeat(70)} 12.345.678-9`;
+    expect(tipos(t)).toEqual([]);
+  });
+
+  it('os demais tipos mantêm a janela de 25: CEP longe do rótulo não é mascarado', () => {
+    expect(tipos('O CEP da sede da empresa na avenida central é 01310100')).toEqual([]);
+    expect(tipos('O CEP da sede é 01310100')).toEqual(['CEP']);
+  });
+
+  it.each([
+    'cel 98888 7777',
+    'número 98888 7777',
+    'numero 98888 7777',
+    'num 3333 4444',
+    'celular 3333-4444',
+  ])('palavra de contexto de telefone: %s', (texto) => {
+    expect(tipos(texto)).toEqual(['TELEFONE']);
+  });
+
+  it('sem a palavra de contexto o local sem traço segue sem máscara', () => {
+    expect(tipos('item 98888 7777')).toEqual([]);
+  });
+
+  it.each([0x2002, 0x2003, 0x2009, 0x200a, 0x205f])(
+    'espaço Unicode (código %d) entre os grupos é normalizado 1:1',
+    (codigo) => {
+      const sp = String.fromCharCode(codigo);
+      const t = `CPF 529${sp}982${sp}247${sp}25 e (11)${sp}98888-7777`;
+      const achados = detect(t);
+      expect(achados.map((f) => f.type)).toEqual(['CPF', 'TELEFONE']);
+      expect(achados[0]?.value).toBe(`529${sp}982${sp}247${sp}25`);
+      expect(achados[1]?.value).toBe(`(11)${sp}98888-7777`);
+    },
+  );
+
+  it('cartão com pontos entre os grupos é detectado; sem Luhn, não', () => {
+    const [achado] = detect('cartão 4111.1111.1111.1111 ok');
+    expect(achado?.type).toBe('CARTAO');
+    expect(achado?.value).toBe('4111.1111.1111.1111');
+    expect(tipos('cartão 4111.1111.1111.1112 ok')).toEqual([]);
+  });
+
+  it('ponto final depois do cartão não puxa o número seguinte como anexo', () => {
+    const t = 'cartão 4111 1111 1111 1111.123 itens';
+    expect(detect(t).map((f) => f.value)).toEqual(['4111 1111 1111 1111']);
+  });
+});

@@ -5,6 +5,9 @@ import type { Detector } from './types';
 // Um ou dois espaços (transcrição costuma duplicar), ou um hífen com espaço opcional de
 // cada lado (`4111 - 1111`).
 const S = String.raw`(?: ?- ?| {1,2})`;
+// Entre os grupos do próprio cartão aceita-se também um ponto (`4111.1111.1111.1111`); no grupo
+// anexo, não: o ponto final de uma frase não pode puxar o número seguinte.
+const SC = String.raw`(?: ?- ?| {1,2}|\.)`;
 
 /**
  * Agrupamentos reais de cartão (tamanhos dos grupos) e o número colado (13 a 19 dígitos).
@@ -19,7 +22,7 @@ const CARD_FORMS = [
   [4, 6, 4], // 14 (Diners)
   [4, 4, 4, 1], // 13 (Visa antigo)
 ]
-  .map((sizes) => sizes.map((size) => String.raw`\d{${String(size)}}`).join(S))
+  .map((sizes) => sizes.map((size) => String.raw`\d{${String(size)}}`).join(SC))
   .concat(String.raw`\d{13,19}`) // colado
   .join('|');
 

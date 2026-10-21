@@ -1,5 +1,11 @@
 const DEFAULT_WINDOW = 25;
 
+/**
+ * Janela ampla (RG e PIS): o rótulo costuma vir antes de um nome completo ("O RG da Maria
+ * Aparecida dos Santos Oliveira é 12.345.678-9"). Os demais detectores ficam em 25.
+ */
+export const WIDE_WINDOW = 60;
+
 /** Minúsculas e sem diacríticos ("Cartão" → "cartao"). */
 function fold(value: string): string {
   return value

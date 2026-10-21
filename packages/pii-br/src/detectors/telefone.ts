@@ -12,6 +12,9 @@ const CONTEXT = [
   'contato',
   'ligue',
   'ligar',
+  'cel',
+  'numero', // "número" também: `hasContext` ignora acento
+  'num',
 ] as const;
 
 // Hífen, meia-risca (U+2013) e hífen tipográfico (U+2010), como saem de editores e
