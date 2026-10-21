@@ -34,9 +34,11 @@ const LOCAL_SEP = String.raw`(?:${SP}?[${DASH}]${SP}?|${SP})`;
 const WITH_DDD =
   String.raw`(?:\+?55${SEP})?(?:\(0?[1-9]\d\)${SEP}|0?[1-9]\d${SEP})` +
   String.raw`(?:9${SEP}\d{4}|[2-8]\d{3})${SEP}\d{4}`;
-// Sem DDD: celular `9XXXX-XXXX` (o 9 pode vir destacado: `9 XXXX XXXX`) | fixo `XXXX-XXXX`
+// Entre o 9 e os 4 dígitos seguintes: nada (`9XXXX`) ou espaços/traço (`9 XXXX`, `9-XXXX`).
+const NINE_SEP = String.raw`${SP}{0,2}[${DASH}]?${SP}{0,2}`;
+// Sem DDD: celular `9XXXX-XXXX` (o 9 pode vir destacado: `9 XXXX XXXX`, `9-XXXX-XXXX`) | fixo `XXXX-XXXX`
 // (traço ou espaço).
-const WITHOUT_DDD = String.raw`9${SP}?\d{4}${LOCAL_SEP}\d{4}|[2-8]\d{3}${LOCAL_SEP}\d{4}`;
+const WITHOUT_DDD = String.raw`9${NINE_SEP}\d{4}${LOCAL_SEP}\d{4}|[2-8]\d{3}${LOCAL_SEP}\d{4}`;
 
 // Bordas: nem letra/dígito colado, nem "dígito + . ou traço" antes/depois (evita pegar
 // um pedaço de CPF, CNPJ ou número maior pontuado).
@@ -44,8 +46,8 @@ const PATTERN = String.raw`(?<![0-9A-Za-z]|\d[${DASH}.])(?:${WITH_DDD}|${WITHOUT
 
 /** Sem nenhuma formatação: só celular (`DDD` + `9` + 8 dígitos), com `55` ou `0` opcional. */
 const UNFORMATTED = /^(?:55|0)?[1-9]{2}9\d{8}$/;
-/** Celular local com o 9 destacado (`9 8888 7777`): sempre exige contexto. */
-const DETACHED_NINE = /^9\s\d{4}\D+\d{4}$/;
+/** Celular local com o 9 destacado (`9 8888 7777`, `9-8888-7777`): sempre exige contexto. */
+const DETACHED_NINE = /^9\D+\d{4}\D+\d{4}$/;
 /** Número local (sem DDD): `[5 ou 4 dígitos][separador][4 dígitos]`. */
 const LOCAL = new RegExp(String.raw`^(\d{4,5})(\D+)(\d{4})$`);
 const HAS_DASH = new RegExp(`[${DASH}]`);

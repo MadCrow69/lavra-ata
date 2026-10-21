@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isValidLuhn } from '../src/check-digits';
 import { hasContext } from '../src/context';
 import { cartao } from '../src/detectors/cartao';
 import { cnpj } from '../src/detectors/cnpj';
@@ -303,8 +304,11 @@ describe('CPF e PIS seguidos de ponto ou traço + dígitos', () => {
       expect(run(cpf, `valor ${token}`)).toEqual([]);
     },
   );
-  it('CPF com contexto também não sai de dentro de número maior', () => {
-    expect(run(cpf, 'CPF 52998224725-3')).toEqual([]);
+  it('com contexto o CPF é mascarado mesmo seguido de ponto ou traço + dígitos', () => {
+    expect(run(cpf, 'CPF 52998224725-3')).toEqual([['52998224725', true]]);
+    expect(run(cpf, 'CPF 52998224725-2026')).toEqual([['52998224725', true]]);
+    expect(run(cpf, 'CPF 52998224725.5')).toEqual([['52998224725', true]]);
+    expect(run(cpf, 'CPF 12345678901.50')).toEqual([['12345678901', false]]);
   });
   it('fim de frase continua detectando: ponto ou traço sem dígito depois', () => {
     expect(run(cpf, 'meu CPF é 529.982.247-25.')).toEqual([['529.982.247-25', true]]);
@@ -317,10 +321,36 @@ describe('CPF e PIS seguidos de ponto ou traço + dígitos', () => {
   });
   it.each(['12055445814.50', '12055445814-3'])('PIS: %s é parte de número maior', (token) => {
     expect(run(pis, `valor ${token}`)).toEqual([]);
-    expect(run(pis, `PIS ${token}`)).toEqual([]);
+  });
+  it('PIS com contexto é mascarado mesmo seguido de ponto ou traço + dígitos', () => {
+    expect(run(pis, 'PIS 12055445814.50')).toEqual([['12055445814', true]]);
+    expect(run(pis, 'NIT 12055445815-2026')).toEqual([['12055445815', false]]);
   });
   it('PIS: fim de frase e formatado continuam detectados', () => {
     expect(run(pis, 'registro 12055445814.')).toEqual([['12055445814', true]]);
     expect(run(pis, 'PIS 120.55445.81-4.')).toEqual([['120.55445.81-4', true]]);
+  });
+});
+
+describe('cartão colado com grupo anexo e limites do Luhn do conjunto', () => {
+  it.each(['4111111111111111 123', '4111111111111111 1234', '4111111111111111-123'])(
+    'o grupo anexo entra no trecho: %s',
+    (text) => {
+      expect(run(cartao, `cartão ${text}`)).toEqual([[text, true]]);
+    },
+  );
+  it('colado + validade (2 dígitos) + CVV: só os 16 dígitos', () => {
+    expect(run(cartao, '4111111111111111 12 28 123')).toEqual([['4111111111111111', true]]);
+  });
+  it('colado + palavra + ano não engole o ano', () => {
+    expect(run(cartao, '4111111111111111 em 2026')).toEqual([['4111111111111111', true]]);
+  });
+  it('Luhn do conjunto só vale com 19 dígitos no total (nada de cartão de 17 ou 18)', () => {
+    // Amex inválido (15 dígitos) + 3 dígitos = 18 dígitos que fecham no Luhn do conjunto.
+    const extra = Array.from({ length: 1000 }, (_, i) => String(i).padStart(3, '0')).find((e) =>
+      isValidLuhn(`378282246310006${e}`),
+    );
+    expect(extra).toBeDefined();
+    expect(run(cartao, `x 3782 822463 10006 ${extra ?? ''}`)).toEqual([]);
   });
 });

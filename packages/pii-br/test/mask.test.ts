@@ -242,3 +242,16 @@ describe('mask: texto do usuário com forma de marcador', () => {
     expect(mask('529.982.247-25').map.reserved).toEqual({});
   });
 });
+
+describe('mask: cartão com grupo anexo (CVV)', () => {
+  it('o mesmo cartão com CVVs diferentes recebe marcadores diferentes e a volta é exata', () => {
+    const t = 'cartão 4111 1111 1111 1111 123 e depois 4111 1111 1111 1111 456';
+    const { masked, map } = mask(t);
+    expect(masked).toBe('cartão [CARTAO_1] e depois [CARTAO_2]');
+    expect(unmask(masked, map)).toBe(t);
+  });
+  it('o mesmo cartão com o mesmo CVV reaproveita o marcador', () => {
+    const { masked } = mask('4111-1111-1111-1111-123 e 4111 1111 1111 1111 123');
+    expect(masked).toBe('[CARTAO_1] e [CARTAO_1]');
+  });
+});

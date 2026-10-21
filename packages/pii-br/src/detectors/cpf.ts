@@ -14,16 +14,17 @@ export const cpf: Detector = {
     /(?<![0-9A-Za-z])(?:\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\d{3} \d{3} \d{3} \d{2})(?![0-9A-Za-z])/g,
   accept(raw, text, start) {
     const formatted = FULLY_FORMATTED.test(raw);
-    // Só o CPF totalmente formatado (inconfundível) ignora o resto numérico depois; as
-    // demais formas seguidas de `.50` ou `-3` são parte de um número maior.
-    if (!formatted && continuesAsLargerNumber(text, start + raw.length)) {
+    // Seguido de `.50` ou `-3`, o trecho é parte de um número maior, SALVO se for totalmente
+    // formatado (inconfundível) ou houver palavra de contexto (`CPF 52998224725-2026`).
+    const context = hasContext(text, start, CONTEXT);
+    if (!formatted && !context && continuesAsLargerNumber(text, start + raw.length)) {
       return { ok: false, valid: false };
     }
     const valid = isValidCpf(normalizeValue('CPF', raw));
     const spaced = raw.includes(' ');
     // Totalmente formatado: sempre. Demais formas: contexto ou DV válido; com
     // espaços só contexto.
-    const ok = formatted || hasContext(text, start, CONTEXT) || (!spaced && valid);
+    const ok = formatted || context || (!spaced && valid);
     return { ok, valid };
   },
 };

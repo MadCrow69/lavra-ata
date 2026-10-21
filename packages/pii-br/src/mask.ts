@@ -76,6 +76,8 @@ function collectReserved(base: MaskMap, text: string): Map<PiiType, Set<string>>
  * - se o literal colide com um marcador já alocado no mapa reutilizado, ele é reescrito
  *   como `[CPF#1]` (visível, não casa com o `unmask`) e listado em `collisions`.
  * Colchetes que não são desses tipos (`[Anexo 2]`) passam intactos.
+ * Cartão com grupo anexo (CVV) é UM valor: o mesmo cartão com CVVs diferentes recebe marcadores
+ * diferentes (a chave de deduplicação inclui o anexo), e `unmask` restaura cada um exatamente.
  */
 export function mask(text: string, options: DetectOptions & { map?: MaskMap } = {}): MaskResult {
   const base = options.map ?? createMaskMap();

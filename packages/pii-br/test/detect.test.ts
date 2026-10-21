@@ -160,6 +160,18 @@ describe('detect: vazamentos residuais (Task 7a)', () => {
       expect(detect(text)).toEqual([]);
     },
   );
+  it.each([
+    ['CPF 52998224725-2026', 'CPF', '52998224725'],
+    ['CPF 52998224725.5', 'CPF', '52998224725'],
+    ['cartão 4111111111111111 123', 'CARTAO', '4111111111111111 123'],
+    ['tel 9  8888 7777', 'TELEFONE', '9  8888 7777'],
+    ['tel 9-8888-7777', 'TELEFONE', '9-8888-7777'],
+  ] as const)('contexto prevalece / anexo colado: %s', (text, type, value) => {
+    expect(pairs(text)).toEqual([[type, value]]);
+  });
+  it('cartão colado + validade + CVV continua só nos 16 dígitos', () => {
+    expect(pairs('4111111111111111 12 28 123')).toEqual([['CARTAO', '4111111111111111']]);
+  });
   it('fim de frase continua detectando o CPF', () => {
     expect(pairs('meu CPF é 529.982.247-25.')).toEqual([['CPF', '529.982.247-25']]);
   });

@@ -7,52 +7,43 @@ import type { Detector } from './types';
 const S = String.raw`(?: ?- ?| {1,2})`;
 
 /**
- * Agrupamentos reais de cartão (tamanhos dos grupos). Cada forma aceita, logo depois, UM
- * grupo anexo de 3 a 4 dígitos ligado por um separador (CVV ou grupo extra): ele
- * entra no trecho mascarado, senão vazaria ao lado do marcador. Grupo de 2 dígitos
- * (validade `12 28`) e ano separado por palavra (`... em 2026`) não são anexados.
+ * Agrupamentos reais de cartão (tamanhos dos grupos) e o número colado (13 a 19 dígitos).
+ * Depois da forma, UM grupo anexo opcional de 3 a 4 dígitos, ligado por um separador (CVV ou
+ * grupo extra), entra no trecho mascarado: senão vazaria ao lado do marcador. Grupo de
+ * 2 dígitos (validade `12 28`) e ano separado por palavra (`... em 2026`) não são anexados.
+ * Consequência: um ano colado logo depois do cartão (`4111 1111 1111 1111 2026`) é engolido.
  */
-const GROUPED_FORMS: readonly (readonly number[])[] = [
+const CARD_FORMS = [
   [4, 4, 4, 4], // 16
   [4, 6, 5], // 15 (Amex)
   [4, 6, 4], // 14 (Diners)
-];
-/** 13 dígitos (Visa antigo): sem grupo anexo, o último grupo de 1 dígito não o permite. */
-const VISA_13 = [4, 4, 4, 1] as const;
+  [4, 4, 4, 1], // 13 (Visa antigo)
+]
+  .map((sizes) => sizes.map((size) => String.raw`\d{${String(size)}}`).join(S))
+  .concat(String.raw`\d{13,19}`) // colado
+  .join('|');
 
-const group = (sizes: readonly number[]): string =>
-  sizes.map((size) => String.raw`\d{${String(size)}}`).join(S);
+const BODY = String.raw`(?<card>${CARD_FORMS})(?:${S}(?<extra>\d{3,4}))?`;
+const PARTS = new RegExp(`^${BODY}$`);
 
-const CARD_FORMS = [
-  ...GROUPED_FORMS.map((sizes) => String.raw`${group(sizes)}(?:${S}\d{3,4})?`),
-  group(VISA_13),
-  String.raw`\d{13,19}`, // colado
-].join('|');
+/** Único tamanho total em que o conjunto cartão + anexo pode ser um cartão (4-4-4-4-3). */
+const COMBINED_LENGTH = 19;
 
-const SEPARATOR = new RegExp(S);
-
-/** Dígitos do cartão dentro do trecho: descarta o grupo anexo (CVV) quando houver um. */
-function cardDigits(raw: string): string {
-  const groups = raw.split(SEPARATOR);
-  const sizes = groups.map((part) => part.length);
-  const base = GROUPED_FORMS.find(
-    (form) =>
-      groups.length === form.length + 1 && form.every((size, index) => sizes[index] === size),
-  );
-  return normalizeValue('CARTAO', base ? groups.slice(0, base.length).join('') : raw);
-}
+const luhnOk = (digits: string): boolean => isValidLuhn(digits) && !/^(\d)\1*$/.test(digits);
 
 export const cartao: Detector = {
   type: 'CARTAO',
-  pattern: new RegExp(String.raw`(?<![0-9A-Za-z])(?:${CARD_FORMS})(?![0-9A-Za-z])`, 'g'),
+  pattern: new RegExp(String.raw`(?<![0-9A-Za-z])${BODY}(?![0-9A-Za-z])`, 'g'),
   accept(raw) {
+    const groups = PARTS.exec(raw)?.groups;
+    const card = normalizeValue('CARTAO', groups?.card ?? raw);
     const whole = normalizeValue('CARTAO', raw);
-    const card = cardDigits(raw);
     // Luhn é exigido SEMPRE (contexto não o dispensa). Luhn aceita sequências
-    // degeneradas (ex.: só zeros), então dígitos todos iguais são rejeitados. Um 4-4-4-4-3
-    // (19 dígitos) é cartão de 19 dígitos quando o conjunto fecha no Luhn, ou 16 + CVV quando
-    // só os 16 primeiros fecham.
-    const ok = [card, whole].some((digits) => isValidLuhn(digits) && !/^(\d)\1*$/.test(digits));
+    // degeneradas (ex.: só zeros), então dígitos todos iguais são rejeitados. O conjunto
+    // cartão + anexo só vale como cartão de 19 dígitos (4-4-4-4-3 ou 16 colados + 3); em
+    // qualquer outro tamanho (17, 18, 20) o anexo é CVV e só o cartão é conferido.
+    const ok =
+      luhnOk(card) || (whole !== card && whole.length === COMBINED_LENGTH && luhnOk(whole));
     return { ok, valid: ok };
   },
 };

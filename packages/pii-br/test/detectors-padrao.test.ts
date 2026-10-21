@@ -350,6 +350,19 @@ describe('telefone local com 9 inicial destacado (com contexto)', () => {
       expect(run(telefone, text)).toEqual([[number, true]]);
     },
   );
+  it.each([
+    'tel 9  8888 7777',
+    'tel 9-8888-7777',
+    `zap 9${EN_DASH}8888${EN_DASH}7777`,
+    'zap 9 - 8888 - 7777',
+  ])('9 destacado por dois espaços ou traço: %s', (text) => {
+    const number = text.replace(/^\S+ /, '');
+    expect(run(telefone, text)).toEqual([[number, true]]);
+  });
+  it('9 destacado por dois espaços ou traço, sem contexto, não é telefone', () => {
+    expect(run(telefone, 'pedido 9  8888 7777')).toEqual([]);
+    expect(run(telefone, 'pedido 9-8888-7777')).toEqual([]);
+  });
   it('sem contexto não é telefone', () => {
     expect(run(telefone, 'pedido 9 8888 7777')).toEqual([]);
     expect(run(telefone, 'capítulo 9 2026 2027')).toEqual([]);
