@@ -36,6 +36,19 @@ export interface MaskMap {
   reserved?: Partial<Record<PiiType, string[]>>;
 }
 
+/** Marcador `[TIPO_N]` localizado num texto por `findMarkers`. */
+export interface MarkerMatch {
+  type: PiiType;
+  /** Número do marcador, como texto decimal. */
+  number: string;
+  /** Trecho como aparece no texto (pode ser grafia tolerante, ex.: `[cpf 1]`). */
+  raw: string;
+  /** Posição inicial (inclusiva). */
+  start: number;
+  /** Posição final (exclusiva). */
+  end: number;
+}
+
 /** Resultado da validação da saída do LLM. */
 export interface OutputReport {
   ok: boolean;

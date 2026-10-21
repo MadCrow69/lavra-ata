@@ -1,9 +1,15 @@
 import { detect } from './detect';
 import { DETECTORS } from './detectors/index';
 import { normalizeValue } from './normalize';
-import type { DetectOptions, Finding, MaskMap, PiiType } from './types';
+import type { DetectOptions, Finding, MarkerMatch, MaskMap, PiiType } from './types';
 
-/** Forma canônica do marcador. Global: nunca use a instância compartilhada sem clonar. */
+/**
+ * Forma CANÔNICA e ESTRITA do marcador (`[CPF_1]`: maiúsculas, `_`, sem espaços). É global
+ * (`lastIndex` é estado): CLONE antes de usar (`new RegExp(MARKER_PATTERN.source, 'g')`), nunca
+ * use a instância compartilhada. Não casa as grafias que o modelo costuma produzir (`[cpf 1]`,
+ * `[ CPF-1 ]`, `[CPF\_1]`) nem filtra os 9 tipos: para localizar marcadores num texto, use
+ * `findMarkers`, que usa a mesma forma tolerante do `unmask`.
+ */
 export const MARKER_PATTERN = /\[([A-Z]+)_(\d+)\]/g;
 
 /**
@@ -47,6 +53,23 @@ export function mapMarkerLiterals(
     new RegExp(TOLERANT_SOURCE, 'g'),
     (literal: string, type: string, n: string, offset: number) => fn(literal, type, n, offset),
   );
+}
+
+/**
+ * Localiza os marcadores dos 9 tipos num texto, na forma tolerante (a mesma do `unmask` e do
+ * `validateOutput`), em ordem de aparição. Para a prévia de privacidade da app: mostrar o que
+ * sairá mascarado e onde. `number` é o decimal como texto; `raw` é o trecho como está no texto
+ * (`text.slice(start, end) === raw`). Colchetes de outros tipos (`[Anexo 2]`) e a reescrita de
+ * colisão `[CPF#1]` não são marcadores.
+ */
+export function findMarkers(text: string): MarkerMatch[] {
+  const found: MarkerMatch[] = [];
+  mapMarkerLiterals(text, (raw, type, number, start) => {
+    const name = type.toUpperCase();
+    if (isPiiType(name)) found.push({ type: name, number, raw, start, end: start + raw.length });
+    return raw;
+  });
+  return found;
 }
 
 /**

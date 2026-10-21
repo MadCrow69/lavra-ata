@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMaskMap, mask, MARKER_PATTERN, unmask } from '../src/mask';
+import { createMaskMap, mask, MARKER_PATTERN, unmask, findMarkers } from '../src/mask';
 import type { MaskMap } from '../src/types';
 import { detect } from '../src/detect';
 import { normalizeValue } from '../src/normalize';
@@ -260,5 +260,57 @@ describe('unmask: escape de markdown', () => {
   it(String.raw`restaura [CPF\_1] (modelo que escapa o sublinhado)`, () => {
     const { map } = mask('CPF 529.982.247-25');
     expect(unmask(String.raw`Ref [CPF\_1] ok`, map)).toBe('Ref 529.982.247-25 ok');
+  });
+});
+
+describe('findMarkers', () => {
+  it('lista os marcadores dos 9 tipos com tipo, número, trecho e posições', () => {
+    const texto = 'Ver [CPF_1], [cnpj 2] e [ Email-3 ] e [CEP_10].';
+    expect(findMarkers(texto)).toEqual([
+      { type: 'CPF', number: '1', raw: '[CPF_1]', start: 4, end: 11 },
+      { type: 'CNPJ', number: '2', raw: '[cnpj 2]', start: 13, end: 21 },
+      { type: 'EMAIL', number: '3', raw: '[ Email-3 ]', start: 24, end: 35 },
+      { type: 'CEP', number: '10', raw: '[CEP_10]', start: 38, end: 46 },
+    ]);
+  });
+
+  it('as posições apontam o trecho no texto original', () => {
+    const texto = String.raw`a [TELEFONE_7] b [CPF\_2] c`;
+    for (const m of findMarkers(texto)) expect(texto.slice(m.start, m.end)).toBe(m.raw);
+    expect(findMarkers(texto).map((m) => m.number)).toEqual(['7', '2']);
+  });
+
+  it('ignora colchetes de outros tipos, [TIPO#N] e texto sem marcador', () => {
+    expect(findMarkers('[Anexo 2] [CPF#1] [Item_3] nada')).toEqual([]);
+    expect(findMarkers('')).toEqual([]);
+  });
+
+  it('cobre todos os 9 tipos', () => {
+    const tipos = ['CPF', 'CNPJ', 'EMAIL', 'TELEFONE', 'CEP', 'PLACA', 'PIS', 'RG', 'CARTAO'];
+    const texto = tipos.map((t) => `[${t}_1]`).join(' ');
+    expect(findMarkers(texto).map((m) => m.type)).toEqual(tipos);
+  });
+
+  it('número fica como texto (sem Number) e é repetível', () => {
+    const texto = '[CPF_00012345678901234567890]';
+    expect(findMarkers(texto)[0]?.number).toBe('00012345678901234567890');
+    expect(findMarkers(texto)).toHaveLength(1);
+    expect(findMarkers(texto)).toHaveLength(1);
+  });
+
+  it('concorda com o unmask: tudo que findMarkers acha existe na forma tolerante', () => {
+    const { masked, map } = mask('CPF 529.982.247-25 e ana@exemplo.com.br');
+    const achados = findMarkers(masked);
+    expect(achados.map((m) => m.raw)).toEqual(['[CPF_1]', '[EMAIL_1]']);
+    for (const m of achados)
+      expect(Object.hasOwn(map.markers, `[${m.type}_${m.number}]`)).toBe(true);
+  });
+});
+
+describe('API pública', () => {
+  it('index exporta findMarkers e MARKER_PATTERN', async () => {
+    const api = await import('../src/index');
+    expect(api.findMarkers).toBe(findMarkers);
+    expect(api.MARKER_PATTERN).toBe(MARKER_PATTERN);
   });
 });
