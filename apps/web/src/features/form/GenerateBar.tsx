@@ -1,13 +1,14 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { camposFaltando, obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import { ErroProvedor, resumoDoErro } from '../../ai/errors';
+import { resumoDoErro } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
 import { descreverErroDeGeracao } from '../../generation/erro-geracao';
-import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
+import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
 import { gerarAta } from '../../generation/pipeline';
+import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
@@ -42,13 +43,10 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
   const { mostrar } = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: 'parado' });
   const [confirmando, setConfirmando] = useState(false);
-  const { operacao, iniciar, concluir, cancelar } = useOperacaoIA();
-  /** Controle da chamada desta barra: distingue a minha operação da de uma seção e o resultado tardio. */
-  const controleRef = useRef<AbortController | null>(null);
-  /** Controle que a pessoa cancelou aqui; abortado sem isso = interrompido por fora ("Nova ata"). */
-  const canceladoAquiRef = useRef<AbortController | null>(null);
   const gerarRef = useRef<HTMLButtonElement>(null);
-  const cancelarRef = useRef<HTMLButtonElement>(null);
+  // O botão Gerar fica desabilitado durante a geração: o foco vai para Cancelar e volta ao fim.
+  const chamada = useChamadaIA({ tipo: 'ata' }, () => gerarRef.current);
+  const { operacao, ocupada: gerando, cancelarRef } = chamada;
   const resumoId = useId();
   const ocupadaId = useId();
 
@@ -56,29 +54,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
   const faltas = camposFaltando(state, tipo);
   // `useKeys` re-renderiza a cada mudança no KeyStore; a cadeia (até 3 itens) é lida a cada render.
   const cadeia = keys.cadeia();
-  const gerando = operacao?.tipo === 'ata';
   const ocupadaPorSecao = operacao !== null && !gerando;
-
-  // Desmontar no meio da geração cancela a chamada (e o resultado tardio é ignorado).
-  useEffect(
-    () => () => {
-      const controle = controleRef.current;
-      controleRef.current = null;
-      controle?.abort();
-    },
-    [],
-  );
-
-  // O botão Gerar fica desabilitado durante a geração: o foco vai para Cancelar e volta ao fim.
-  const estavaGerandoRef = useRef(false);
-  useEffect(() => {
-    if (gerando) cancelarRef.current?.focus();
-    else if (estavaGerandoRef.current && !gerarRef.current?.disabled) {
-      const ativo = document.activeElement;
-      if (ativo === null || ativo === document.body) gerarRef.current?.focus();
-    }
-    estavaGerandoRef.current = gerando;
-  }, [gerando]);
 
   /** Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta. */
   const podeGerar = faltas.length === 0 && operacao === null;
@@ -89,36 +65,28 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
       onConfigurarChaves();
       return;
     }
-    const controle = iniciar({ tipo: 'ata' });
-    if (controle === null) return;
-    controleRef.current = controle;
-    setEstado({ fase: 'parado' });
-    try {
-      const r = await gerarAta(state, tipo, cadeia, controle.signal, opcoesCadeia);
-      // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.
-      if (controleRef.current !== controle || controle.signal.aborted) return;
-      dispatch({ type: 'registrarResultado', resultado: r.resultado, mapa: r.mapa });
-      setEstado({ fase: 'parado' });
-      mostrar({
-        titulo: `Ata gerada por ${ROTULO_CURTO[r.atribuicao.provedor]} · ${r.atribuicao.modelo}`,
-        detalhes: r.falhas.map(
-          (f) => `${ROTULO_CURTO[f.provedor]} falhou: ${resumoDoErro(f.erro)}`,
-        ),
-      });
-      onGerada?.();
-    } catch (e) {
-      if (controleRef.current !== controle) return;
-      // Interrompida por fora: a ata em que ela valia já não existe; nada a avisar aqui.
-      if (controle.signal.aborted && canceladoAquiRef.current !== controle) return;
-      setEstado(
-        e instanceof ErroProvedor && e.tipo === 'cancelado'
-          ? { fase: 'cancelado' }
-          : estadoDeErro(e),
-      );
-    } finally {
-      if (controleRef.current === controle) controleRef.current = null;
-      concluir(controle);
-    }
+    await chamada.executar((signal) => gerarAta(state, tipo, cadeia, signal, opcoesCadeia), {
+      aoIniciar: () => {
+        setEstado({ fase: 'parado' });
+      },
+      sucesso: (r) => {
+        dispatch({ type: 'registrarResultado', resultado: r.resultado, mapa: r.mapa });
+        setEstado({ fase: 'parado' });
+        mostrar({
+          titulo: `Ata gerada por ${ROTULO_CURTO[r.atribuicao.provedor]} · ${r.atribuicao.modelo}`,
+          detalhes: r.falhas.map(
+            (f) => `${ROTULO_CURTO[f.provedor]} falhou: ${resumoDoErro(f.erro)}`,
+          ),
+        });
+        onGerada?.();
+      },
+      cancelado: () => {
+        setEstado({ fase: 'cancelado' });
+      },
+      erro: (e) => {
+        setEstado(estadoDeErro(e));
+      },
+    });
   };
 
   const aoClicarGerar = () => {
@@ -152,14 +120,7 @@ export function GenerateBar({ onConfigurarChaves, opcoesCadeia, onGerada }: Gene
           <span aria-hidden="true">✨</span> Gerar ata
         </Button>
         {gerando ? (
-          <Button
-            ref={cancelarRef}
-            onClick={() => {
-              if (!controleRef.current) return;
-              canceladoAquiRef.current = controleRef.current;
-              cancelar(controleRef.current);
-            }}
-          >
+          <Button ref={cancelarRef} onClick={chamada.cancelar}>
             Cancelar
           </Button>
         ) : null}

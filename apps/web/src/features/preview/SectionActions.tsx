@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import { ErroProvedor } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import { LIMITE_INSTRUCAO } from '../../config/limits';
 import { ROTULO_CURTO } from '../../config/models';
@@ -9,8 +8,9 @@ import { useDraft } from '../../domain/DraftContext';
 import type { Bloco, Encaminhamento } from '../../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 import { descreverErroDeGeracao, type ErroDeGeracao } from '../../generation/erro-geracao';
-import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
+import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
 import { regerarSecao } from '../../generation/pipeline';
+import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
@@ -71,7 +71,6 @@ export function SectionActions({
   const { state, dispatch } = useDraft();
   const keys = useKeys();
   const { mostrar } = useToast();
-  const { operacao, iniciar, concluir, cancelar } = useOperacaoIA();
 
   const [confirmando, setConfirmando] = useState(false);
   const [ajustando, setAjustando] = useState(false);
@@ -81,12 +80,14 @@ export function SectionActions({
 
   const regerarRef = useRef<HTMLButtonElement>(null);
   const ajustarRef = useRef<HTMLButtonElement>(null);
-  const cancelarRef = useRef<HTMLButtonElement>(null);
   const instrucaoRef = useRef<HTMLTextAreaElement>(null);
-  const controleRef = useRef<AbortController | null>(null);
-  /** Controle que a pessoa cancelou aqui; abortado sem isso = interrompido por fora ("Nova ata"). */
-  const canceladoAquiRef = useRef<AbortController | null>(null);
   const origemRef = useRef<Origem>('regerar');
+  // O botão que iniciou a chamada fica parado: o foco vai para Cancelar e volta a ele no fim.
+  const chamada = useChamadaIA(
+    { tipo: 'secao', chave },
+    () => (origemRef.current === 'ajustar' ? ajustarRef : regerarRef).current,
+  );
+  const { operacao, ocupada: estaOcupada, cancelarRef } = chamada;
   const ultimaInstrucaoRef = useRef<string | null>(null);
   const baseId = useId();
   const motivoId = `${baseId}-motivo`;
@@ -94,7 +95,6 @@ export function SectionActions({
 
   const tipo = obterTipo(state.tipoId);
   const cadeia = keys.cadeia();
-  const estaOcupada = operacao?.tipo === 'secao' && operacao.chave === chave;
   const semChave = cadeia.length === 0;
   const motivo = semChave
     ? MOTIVO_SEM_CHAVE
@@ -106,30 +106,6 @@ export function SectionActions({
   // Editar à mão fica livre, salvo quando um resultado de IA vai substituir o que a pessoa fizer.
   const edicaoParada = editando || operacao?.tipo === 'ata' || estaOcupada;
 
-  // Sair da tela no meio da chamada a cancela (não sobra resultado tardio sobre uma folha que sumiu).
-  useEffect(
-    () => () => {
-      const controle = controleRef.current;
-      controleRef.current = null;
-      controle?.abort();
-    },
-    [],
-  );
-
-  // O botão que iniciou a chamada fica parado: o foco vai para Cancelar e volta ao fim.
-  const estavaOcupadaRef = useRef(false);
-  useEffect(() => {
-    if (estaOcupada) {
-      cancelarRef.current?.focus();
-    } else if (estavaOcupadaRef.current) {
-      const ativo = document.activeElement;
-      if (ativo === null || ativo === document.body) {
-        (origemRef.current === 'ajustar' ? ajustarRef : regerarRef).current?.focus();
-      }
-    }
-    estavaOcupadaRef.current = estaOcupada;
-  }, [estaOcupada]);
-
   // Ao abrir o painel de ajuste, o foco vai para o campo da instrução.
   useEffect(() => {
     if (ajustando) instrucaoRef.current?.focus();
@@ -138,70 +114,60 @@ export function SectionActions({
   /** Porta única das chamadas (Regerar, Ajustar e "Tentar de novo"). */
   const executar = async (pedido: string | null, origem: Origem) => {
     if (semChave || operacao !== null) return;
-    const controle = iniciar({ tipo: 'secao', chave });
-    if (controle === null) return;
-    controleRef.current = controle;
-    origemRef.current = origem;
-    ultimaInstrucaoRef.current = pedido;
-    setErro(null);
-    setCancelada(false);
-    try {
-      const r = await regerarSecao(
-        state,
-        tipo,
-        chave,
-        pedido,
-        cadeia,
-        controle.signal,
-        opcoesCadeia,
-      );
-      // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.
-      if (controleRef.current !== controle || controle.signal.aborted) return;
-      const itens: (Bloco | Encaminhamento)[] = r.blocos;
-      const ehEnc = chave === CHAVE_ENCAMINHAMENTOS;
-      const encaminhamentos = itens.filter(ehEncaminhamento);
-      const blocos = itens.filter(ehBloco);
-      if ((ehEnc ? encaminhamentos : blocos).length === 0) {
-        setErro({
-          titulo: 'A IA devolveu a seção vazia.',
-          detalhes: ['Tente de novo, ou ajuste com uma instrução mais específica.'],
-        });
-        return;
-      }
-      if (ehEnc) {
-        dispatch({
-          type: 'substituirEncaminhamentos',
-          itens: encaminhamentos,
-          avisos: r.avisos,
-          atribuicao: r.atribuicao,
-          mapa: r.mapa,
-        });
-      } else {
-        dispatch({
-          type: 'substituirSecao',
-          chave,
-          blocos,
-          avisos: r.avisos,
-          atribuicao: r.atribuicao,
-          mapa: r.mapa,
-        });
-      }
-      setAjustando(false);
-      setInstrucao('');
-      mostrar({
-        titulo: `Seção “${titulo}” regerada por ${ROTULO_CURTO[r.atribuicao.provedor]} · ${r.atribuicao.modelo}`,
-        detalhes: r.atribuicao.fallbackDe.map((p) => `${ROTULO_CURTO[p]} falhou antes.`),
-      });
-    } catch (e) {
-      if (controleRef.current !== controle) return;
-      // Interrompida por fora: a ata em que ela valia já não existe; nada a avisar aqui.
-      if (controle.signal.aborted && canceladoAquiRef.current !== controle) return;
-      if (e instanceof ErroProvedor && e.tipo === 'cancelado') setCancelada(true);
-      else setErro(descreverErroDeGeracao(e, 'seção'));
-    } finally {
-      if (controleRef.current === controle) controleRef.current = null;
-      concluir(controle);
-    }
+    await chamada.executar(
+      (signal) => regerarSecao(state, tipo, chave, pedido, cadeia, signal, opcoesCadeia),
+      {
+        aoIniciar: () => {
+          origemRef.current = origem;
+          ultimaInstrucaoRef.current = pedido;
+          setErro(null);
+          setCancelada(false);
+        },
+        sucesso: (r) => {
+          const itens: (Bloco | Encaminhamento)[] = r.blocos;
+          const ehEnc = chave === CHAVE_ENCAMINHAMENTOS;
+          const encaminhamentos = itens.filter(ehEncaminhamento);
+          const blocos = itens.filter(ehBloco);
+          if ((ehEnc ? encaminhamentos : blocos).length === 0) {
+            setErro({
+              titulo: 'A IA devolveu a seção vazia.',
+              detalhes: ['Tente de novo, ou ajuste com uma instrução mais específica.'],
+            });
+            return;
+          }
+          if (ehEnc) {
+            dispatch({
+              type: 'substituirEncaminhamentos',
+              itens: encaminhamentos,
+              avisos: r.avisos,
+              atribuicao: r.atribuicao,
+              mapa: r.mapa,
+            });
+          } else {
+            dispatch({
+              type: 'substituirSecao',
+              chave,
+              blocos,
+              avisos: r.avisos,
+              atribuicao: r.atribuicao,
+              mapa: r.mapa,
+            });
+          }
+          setAjustando(false);
+          setInstrucao('');
+          mostrar({
+            titulo: `Seção “${titulo}” regerada por ${ROTULO_CURTO[r.atribuicao.provedor]} · ${r.atribuicao.modelo}`,
+            detalhes: r.atribuicao.fallbackDe.map((p) => `${ROTULO_CURTO[p]} falhou antes.`),
+          });
+        },
+        cancelado: () => {
+          setCancelada(true);
+        },
+        erro: (e) => {
+          setErro(descreverErroDeGeracao(e, 'seção'));
+        },
+      },
+    );
   };
 
   const aoClicarRegerar = () => {
@@ -341,11 +307,7 @@ export function SectionActions({
             <Button
               ref={cancelarRef}
               aria-label={`Cancelar regeração da seção ${titulo}`}
-              onClick={() => {
-                if (!controleRef.current) return;
-                canceladoAquiRef.current = controleRef.current;
-                cancelar(controleRef.current);
-              }}
+              onClick={chamada.cancelar}
             >
               Cancelar
             </Button>
