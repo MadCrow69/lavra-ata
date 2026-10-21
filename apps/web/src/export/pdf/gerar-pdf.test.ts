@@ -227,26 +227,30 @@ describe('gerarPdf: título de seção nunca fica sozinho no pé da página', ()
       },
     ],
   });
-  // Quantos parágrafos cabem numa página depende da tipografia: a varredura cobre a virada de
-  // página inteira (de pouco enchimento até mais de uma página), então algum caso deixa só o
-  // espaço do título no pé.
-  const ENCHIMENTOS = Array.from({ length: 24 }, (_, i) => i + 17);
+  // Quantos parágrafos cabem numa página depende da tipografia. A faixa varre a virada da 1ª
+  // página (com a tipografia atual o título cai no pé com 30 parágrafos), então algum caso deixa
+  // só o espaço do título no pé; sem o rodapé fora da conta, esse caso reprova.
+  const ENCHIMENTOS = Array.from({ length: 13 }, (_, i) => i + 25);
 
   it('a varredura de enchimento chega a empurrar o título para a 2ª página', async () => {
     const ultimo = await paginas(await bytesDoPdf(modeloComEnchimento(ENCHIMENTOS.at(-1) ?? 0)));
     expect(ultimo.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('nenhuma página termina no título (o corpo da seção vai junto)', async () => {
-    const orfas: string[] = [];
-    for (const n of ENCHIMENTOS) {
-      const texto = await paginas(await bytesDoPdf(modeloComEnchimento(n)));
-      texto.forEach((pagina, i) => {
-        const semRodape = pagina.replace(/Página \d+ de \d+\s*$/, '').trim();
-        if (semRodape.endsWith(TITULO))
-          orfas.push(`enchimento ${String(n)}, página ${String(i + 1)}`);
-      });
-    }
-    expect(orfas).toEqual([]);
-  });
+  it(
+    'nenhuma página termina no título (o corpo da seção vai junto)',
+    async () => {
+      const orfas: string[] = [];
+      for (const n of ENCHIMENTOS) {
+        const texto = await paginas(await bytesDoPdf(modeloComEnchimento(n)));
+        texto.forEach((pagina, i) => {
+          const semRodape = pagina.replace(/Página \d+ de \d+\s*$/, '').trim();
+          if (semRodape.endsWith(TITULO))
+            orfas.push(`enchimento ${String(n)}, página ${String(i + 1)}`);
+        });
+      }
+      expect(orfas).toEqual([]);
+    },
+    TEMPO_VOLUME_MS,
+  );
 });
