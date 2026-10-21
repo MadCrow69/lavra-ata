@@ -90,6 +90,13 @@ export interface AtaDraft {
   resultado: ResultadoAta | null;
 }
 
+/**
+ * O que o documento lê do rascunho (cabeçalho, preâmbulo, fecho, assinaturas e a folha). Fica de
+ * fora o que não vira texto da ata (transcrição, tom, mapa), para a prévia não recompor a cada
+ * tecla digitada na transcrição.
+ */
+export type EntradaDoDocumento = Pick<AtaDraft, 'dados' | 'pauta' | 'participantes' | 'resultado'>;
+
 export type DraftAction =
   | { type: 'definirTipo'; tipoId: string }
   | { type: 'definirTom'; tom: Tom }

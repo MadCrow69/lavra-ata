@@ -111,7 +111,7 @@ describe('A4Preview antes de gerar', () => {
     ).toBeVisible();
     expect(
       within(within(tabela).getByRole('row', { name: /Pessoa 3/ })).getByText(
-        ROTULO_PRESENCA.justificado,
+        new RegExp(ROTULO_PRESENCA.justificado),
       ),
     ).toBeVisible();
     // O ícone é decorativo: o texto é quem informa.

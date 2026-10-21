@@ -295,6 +295,43 @@ describe('preambulo', () => {
   });
 });
 
+describe('cabecalho', () => {
+  it('lista organização, data, horário, modalidade e plataforma', () => {
+    expect(
+      corporativa.cabecalho(
+        completo({
+          dados: { ...completo().dados, modalidade: 'remota', local: 'Videoconferência' },
+        }),
+      ),
+    ).toEqual([
+      'Empresa Exemplo Ltda.',
+      'Data: 14/10/2026',
+      'Horário: 14h30 às 16h',
+      'Modalidade: Remota',
+      'Plataforma: Videoconferência',
+    ]);
+  });
+
+  it('usa "Local" fora da reunião remota e só o início quando não há término', () => {
+    const base = completo();
+    const linhas = corporativa.cabecalho({
+      ...base,
+      dados: { ...base.dados, modalidade: 'presencial', local: 'Sala 2', fim: '' },
+    });
+    expect(linhas).toContain('Local: Sala 2');
+    expect(linhas).toContain('Horário: 14h30');
+  });
+
+  it('omite o que não foi informado, sem lacunas nem erro', () => {
+    expect(corporativa.cabecalho(criarRascunho())).toEqual([]);
+    const parcial = corporativa.cabecalho({
+      ...criarRascunho(),
+      dados: { data: '2026-02-30', inicio: '25:00', modalidade: 'inexistente' },
+    });
+    expect(parcial).toEqual([]);
+  });
+});
+
 describe('fecho e assinaturas', () => {
   it('fecho cita o horário de encerramento quando informado', () => {
     expect(corporativa.fecho(completo())).toContain('16h');

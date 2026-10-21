@@ -224,10 +224,6 @@
   vertical-align: -0.1em;
 }
 
-.presencaRotulo {
-  font-weight: 700;
-}
-
 /* ---------- Assinaturas e aviso ---------- */
 
 .assinaturas {
@@ -267,10 +263,4 @@
   font-family: var(--fonte-interface);
   font-size: 0.8125em;
   line-height: 1.45;
-}
-
-@media print {
-  .logoReserva {
-    display: none;
-  }
 }

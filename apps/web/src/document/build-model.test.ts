@@ -135,6 +135,7 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
       ['Pessoa 2', 'Cargo 2', ROTULO_PRESENCA.ausente],
     ]);
     expect(tabela?.colunaPresenca).toBe(2);
+    expect(tabela?.presencas).toEqual(['presente', 'ausente']);
   });
 
   it('mostra a pauta como lista', () => {
@@ -184,6 +185,11 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
     const d = rascunho({ participantes: [participante(1, { nome: ' ', papel: '' })] });
     const [tabela] = tabelas(construirDocumento(d, corporativa).blocos);
     expect(tabela?.linhas).toEqual([['—', '—', ROTULO_PRESENCA.presente]]);
+  });
+
+  it('pede o cabeçalho ao tipo, sem depender dos campos do corporativo', () => {
+    const outro: AtaTypeDefinition = { ...corporativa, cabecalho: () => ['Linha do outro tipo'] };
+    expect(construirDocumento(rascunho(), outro).cabecalho.linhas).toEqual(['Linha do outro tipo']);
   });
 
   it('transforma 200 participantes em 200 linhas', () => {

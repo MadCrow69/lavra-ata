@@ -1,4 +1,5 @@
 import type { AtaTypeDefinition } from '../ata-types/types';
+import { RESPONSAVEL_A_DEFINIR } from '../config/documento';
 import { comoLista as lista, ehRegistro } from '../ai/providers/comum';
 import {
   STATUS_ENCAMINHAMENTO,
@@ -13,9 +14,6 @@ import {
  * vazio → "A definir", status fora da lista → "pendente", encaminhamento sem ação descartado,
  * bloco vazio descartado, seção ausente → `[]`.
  */
-
-/** Responsável quando a transcrição não deixa claro quem fará. */
-export const RESPONSAVEL_A_DEFINIR = 'A definir';
 
 const STATUS_PADRAO: StatusEncaminhamento = 'pendente';
 

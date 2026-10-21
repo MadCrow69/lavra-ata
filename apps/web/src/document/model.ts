@@ -1,3 +1,5 @@
+import type { Presenca } from '../domain/draft';
+
 /**
  * Modelo de documento: dado puro (sem React, sem HTML) que a folha A4 em tela e, no Plano 04, os
  * renderizadores de PDF e DOCX consomem. Toda decisão de conteúdo (ordem, textos, formatação de
@@ -29,8 +31,10 @@ export type DocBloco =
       linhas: string[][];
       /** Largura de cada coluna, em %. */
       larguras?: number[];
-      /** Índice da coluna de presença (o renderizador pode acompanhar o texto de um ícone). */
+      /** Índice da coluna de presença; o renderizador pode acompanhar o texto de um ícone. */
       colunaPresenca?: number;
+      /** Presença de cada linha (mesma ordem de `linhas`), para o ícone sem ler o texto da célula. */
+      presencas?: Presenca[];
     }
   | { tipo: 'assinaturas'; pessoas: { nome: string; papel: string }[] }
   | { tipo: 'aviso'; texto: string };

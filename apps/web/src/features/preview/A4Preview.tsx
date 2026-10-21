@@ -3,7 +3,7 @@ import { obterTipo } from '../../ata-types/registry';
 import { construirDocumento, contarPreencher, dividirPreencher } from '../../document/build-model';
 import type { DocBloco, Inline } from '../../document/model';
 import { useDraft } from '../../domain/DraftContext';
-import { PRESENCAS, ROTULO_PRESENCA, type Presenca } from '../../domain/draft';
+import type { Presenca } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS } from '../../domain/draft-reducer';
 import { chavesUnicas } from './chaves';
 import styles from './preview.module.css';
@@ -80,16 +80,12 @@ function IconePresenca({ presenca }: { presenca: Presenca }) {
   );
 }
 
-/** Célula de presença: ícone + rótulo (nunca só cor) + o que vier depois (a justificativa). */
-function CelulaPresenca({ texto }: { texto: string }) {
-  const presenca = PRESENCAS.find((p) => texto.startsWith(ROTULO_PRESENCA[p]));
-  if (!presenca) return <Texto texto={texto} />;
-  const rotulo = ROTULO_PRESENCA[presenca];
+/** Célula de presença: ícone (vindo do modelo) + texto da célula; nunca só cor. */
+function CelulaPresenca({ texto, presenca }: { texto: string; presenca: Presenca | undefined }) {
   return (
     <span>
-      <IconePresenca presenca={presenca} />
-      <strong className={styles.presencaRotulo}>{rotulo}</strong>
-      <Texto texto={texto.slice(rotulo.length)} />
+      {presenca ? <IconePresenca presenca={presenca} /> : null}
+      <Texto texto={texto} />
     </span>
   );
 }
@@ -99,19 +95,25 @@ function mesmaLista(a: string[], b: string[]): boolean {
 }
 
 interface LinhaProps {
+  /** Chave de cada coluna (`chavesUnicas` dos títulos). */
   colunas: string[];
   celulas: string[];
   colunaPresenca: number | undefined;
+  presenca: Presenca | undefined;
 }
 
 /** Memoizada: com centenas de linhas, recompor o modelo não redesenha as que não mudaram. */
 const Linha = memo(
-  function Linha({ colunas, celulas, colunaPresenca }: LinhaProps) {
+  function Linha({ colunas, celulas, colunaPresenca, presenca }: LinhaProps) {
     return (
       <tr>
         {celulas.map((celula, i) => (
           <td key={colunas[i]}>
-            {i === colunaPresenca ? <CelulaPresenca texto={celula} /> : <Texto texto={celula} />}
+            {i === colunaPresenca ? (
+              <CelulaPresenca texto={celula} presenca={presenca} />
+            ) : (
+              <Texto texto={celula} />
+            )}
           </td>
         ))}
       </tr>
@@ -119,6 +121,7 @@ const Linha = memo(
   },
   (a, b) =>
     a.colunaPresenca === b.colunaPresenca &&
+    a.presenca === b.presenca &&
     mesmaLista(a.colunas, b.colunas) &&
     mesmaLista(a.celulas, b.celulas),
 );
@@ -131,6 +134,7 @@ function Tabela({
   rotulo: string;
 }) {
   const chavesLinhas = chavesUnicas(bloco.linhas.map((celulas) => celulas.join('\u001f')));
+  const chavesColunas = chavesUnicas(bloco.colunas);
   const chavesLarguras = chavesUnicas((bloco.larguras ?? []).map(String));
   return (
     <div
@@ -152,8 +156,8 @@ function Tabela({
         ) : null}
         <thead>
           <tr>
-            {bloco.colunas.map((coluna) => (
-              <th key={coluna} scope="col">
+            {bloco.colunas.map((coluna, i) => (
+              <th key={chavesColunas[i]} scope="col">
                 {coluna}
               </th>
             ))}
@@ -163,9 +167,10 @@ function Tabela({
           {bloco.linhas.map((celulas, i) => (
             <Linha
               key={chavesLinhas[i]}
-              colunas={bloco.colunas}
+              colunas={chavesColunas}
               celulas={celulas}
               colunaPresenca={bloco.colunaPresenca}
+              presenca={bloco.presencas?.[i]}
             />
           ))}
         </tbody>
@@ -302,13 +307,19 @@ function Blocos({ blocos, rotulo }: { blocos: DocBloco[]; rotulo: string }) {
 export function A4Preview() {
   const { state } = useDraft();
   const tipo = obterTipo(state.tipoId);
-  const modelo = useMemo(() => construirDocumento(state, tipo), [state, tipo]);
+  const { dados, pauta, participantes, resultado } = state;
+  // Só o que o documento lê: digitar na transcrição não recompõe a folha.
+  const modelo = useMemo(
+    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo),
+    [dados, pauta, participantes, resultado, tipo],
+  );
   const lacunas = useMemo(() => contarPreencher(modelo), [modelo]);
   const chavesLinhas = chavesUnicas(modelo.cabecalho.linhas);
   const folhaRef = useRef<HTMLElement>(null);
   /** Posição da última lacuna levada ao foco (o clique no botão tira o foco dela). */
   const ultimaLacunaRef = useRef(-1);
-  const avisosGerais = state.resultado?.avisos[CHAVE_AVISOS_GERAIS] ?? [];
+  const avisosGerais = resultado?.avisos[CHAVE_AVISOS_GERAIS] ?? [];
+  const chavesAvisos = chavesUnicas(avisosGerais);
 
   /** Cada clique vai à lacuna seguinte à anterior (a primeira no começo e depois do fim). */
   function irParaLacuna() {
@@ -327,8 +338,8 @@ export function A4Preview() {
     <div className={styles.area}>
       {avisosGerais.length > 0 ? (
         <ul className={styles.avisosGerais}>
-          {avisosGerais.map((aviso) => (
-            <li key={aviso}>
+          {avisosGerais.map((aviso, i) => (
+            <li key={chavesAvisos[i]}>
               <span aria-hidden="true">⚠ </span>
               {aviso}
             </li>

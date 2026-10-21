@@ -1,23 +1,22 @@
-import { rotuloDoCampo } from '../ata-types/registry';
-import { dataOuNulo, horaOuNulo, textoLimpo } from '../ata-types/texto-modelo';
+import { dataOuNulo, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import {
   AVISO_MINUTA,
   CELULA_VAZIA,
   LARGURAS_ENCAMINHAMENTOS,
+  RESPONSAVEL_A_DEFINIR,
   RODAPE_PAGINADO,
   TEXTO_SECOES_PENDENTES,
 } from '../config/documento';
 import {
   ROTULO_PRESENCA,
   ROTULO_STATUS,
-  type AtaDraft,
+  type EntradaDoDocumento,
   type Bloco,
   type Encaminhamento,
   type Participante,
 } from '../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
-import { RESPONSAVEL_A_DEFINIR } from '../generation/normalize';
 import type { DocBloco, DocumentModel, Inline } from './model';
 
 /** Lacuna que a pessoa completa à mão: `[PREENCHER: o que falta]`. Sempre em maiúsculas. */
@@ -91,41 +90,8 @@ function paragrafo(texto: string): DocBloco {
   return { tipo: 'paragrafo', partes: dividirPreencher(texto) };
 }
 
-function opcaoDo(campo: CampoDef | undefined, valor: string): string | null {
-  return campo?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null;
-}
-
-/**
- * Cabeçalho com o que já foi digitado; o que falta simplesmente não aparece (as lacunas
- * `[PREENCHER]` ficam no preâmbulo, depois de gerar). Os ids dos campos são os do tipo corporativo.
- */
-function linhasDoCabecalho(d: AtaDraft, tipo: AtaTypeDefinition): string[] {
-  const dados = d.dados;
-  const linhas: string[] = [];
-
-  const organizacao = textoLimpo(dados.organizacao);
-  if (organizacao !== '') linhas.push(organizacao);
-
-  const data = dataOuNulo(dados.data);
-  if (data !== null) linhas.push(`Data: ${data}`);
-
-  const inicio = horaOuNulo(dados.inicio);
-  const fim = horaOuNulo(dados.fim);
-  if (inicio !== null) linhas.push(`Horário: ${fim === null ? inicio : `${inicio} às ${fim}`}`);
-  else if (fim !== null) linhas.push(`Término: ${fim}`);
-
-  const modalidade = opcaoDo(
-    tipo.campos.find((c) => c.id === 'modalidade'),
-    textoLimpo(dados.modalidade),
-  );
-  if (modalidade !== null) linhas.push(`Modalidade: ${modalidade}`);
-
-  const local = textoLimpo(dados.local);
-  if (local !== '') {
-    const campoLocal = tipo.campos.find((c) => c.id === 'local');
-    linhas.push(`${campoLocal ? rotuloDoCampo(campoLocal, dados) : 'Local'}: ${local}`);
-  }
-  return linhas;
+function opcaoDo(campo: CampoDef, valor: string): string | null {
+  return campo.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null;
 }
 
 /** Texto de presença; a justificativa só vale (e só é impressa) para quem está justificado. */
@@ -143,7 +109,7 @@ function celulaExtra(campo: CampoDef, p: Participante): string {
   return (campo.tipo === 'escolha' ? opcaoDo(campo, valor) : null) ?? valor;
 }
 
-function tabelaDeParticipantes(d: AtaDraft, tipo: AtaTypeDefinition): DocBloco {
+function tabelaDeParticipantes(d: EntradaDoDocumento, tipo: AtaTypeDefinition): DocBloco {
   const extras = tipo.camposParticipante;
   return {
     tipo: 'tabela',
@@ -155,6 +121,7 @@ function tabelaDeParticipantes(d: AtaDraft, tipo: AtaTypeDefinition): DocBloco {
       celulaPresenca(p),
     ]),
     colunaPresenca: 2 + extras.length,
+    presencas: d.participantes.map((p) => p.presenca),
   };
 }
 
@@ -199,7 +166,7 @@ function secaoGerada(chave: string, titulo: string, blocos: DocBloco[]): DocBloc
  * mais um placeholder no lugar das seções. Depois, preâmbulo, seções na ordem do tipo (as vazias
  * não aparecem), encaminhamentos, fecho, assinaturas e o aviso de minuta.
  */
-export function construirDocumento(d: AtaDraft, tipo: AtaTypeDefinition): DocumentModel {
+export function construirDocumento(d: EntradaDoDocumento, tipo: AtaTypeDefinition): DocumentModel {
   const resultado = d.resultado;
   const blocos: DocBloco[] = [];
 
@@ -250,7 +217,7 @@ export function construirDocumento(d: AtaDraft, tipo: AtaTypeDefinition): Docume
 
   return {
     titulo: tipo.titulo(d.dados),
-    cabecalho: { logo: null, linhas: linhasDoCabecalho(d, tipo) },
+    cabecalho: { logo: null, linhas: tipo.cabecalho(d) },
     blocos,
     rodape: RODAPE_PAGINADO,
   };

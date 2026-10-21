@@ -1,6 +1,12 @@
-import type { AtaDraft } from '../domain/draft';
+import type { EntradaDoDocumento } from '../domain/draft';
 import type { AtaTypeDefinition, CampoDef, SecaoDef } from './types';
-import { dataPorExtensoOuNulo, horaOuNulo, preencher, textoLimpo } from './texto-modelo';
+import {
+  dataOuNulo,
+  dataPorExtensoOuNulo,
+  horaOuNulo,
+  preencher,
+  textoLimpo,
+} from './texto-modelo';
 
 type Dados = Record<string, string>;
 
@@ -143,7 +149,39 @@ function descreverLocalizacao(dados: Dados): string {
   }
 }
 
-function preambulo(d: AtaDraft): string {
+/** Rótulo da opção escolhida (ex.: `remota` → "Remota"); `null` se não há escolha válida. */
+function rotuloDaOpcao(campoId: string, valor: string | undefined): string | null {
+  return (
+    CAMPOS.find((c) => c.id === campoId)?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null
+  );
+}
+
+function cabecalho(d: EntradaDoDocumento): string[] {
+  const dados = d.dados;
+  const linhas: string[] = [];
+
+  const organizacao = textoLimpo(dados.organizacao);
+  if (organizacao !== '') linhas.push(organizacao);
+
+  const data = dataOuNulo(dados.data);
+  if (data !== null) linhas.push(`Data: ${data}`);
+
+  const inicio = horaOuNulo(dados.inicio);
+  const fim = horaOuNulo(dados.fim);
+  if (inicio !== null) linhas.push(`Horário: ${fim === null ? inicio : `${inicio} às ${fim}`}`);
+  else if (fim !== null) linhas.push(`Término: ${fim}`);
+
+  const modalidade = rotuloDaOpcao('modalidade', textoLimpo(dados.modalidade));
+  if (modalidade !== null) linhas.push(`Modalidade: ${modalidade}`);
+
+  const local = textoLimpo(dados.local);
+  const campoLocal = CAMPOS.find((c) => c.id === 'local');
+  if (local !== '' && campoLocal)
+    linhas.push(`${campoLocal.rotuloPor?.(dados) ?? campoLocal.rotulo}: ${local}`);
+  return linhas;
+}
+
+function preambulo(d: EntradaDoDocumento): string {
   const dados = d.dados;
   const data = dataPorExtensoOuNulo(dados.data) ?? preencher('data da reunião');
   const hora = horaOuNulo(dados.inicio) ?? preencher('horário de início');
@@ -161,7 +199,7 @@ function preambulo(d: AtaDraft): string {
   return partes.join(' ');
 }
 
-function fecho(d: AtaDraft): string {
+function fecho(d: EntradaDoDocumento): string {
   const fim = horaOuNulo(d.dados.fim);
   const encerramento =
     fim === null
@@ -170,7 +208,7 @@ function fecho(d: AtaDraft): string {
   return `${encerramento} E, para constar, foi lavrada a presente ata.`;
 }
 
-function assinaturas(d: AtaDraft): { nome: string; papel: string }[] {
+function assinaturas(d: EntradaDoDocumento): { nome: string; papel: string }[] {
   const candidatas = [
     { nome: textoLimpo(d.dados.conducao), papel: 'Condução' },
     { nome: textoLimpo(d.dados.redacao), papel: 'Redação' },
@@ -193,6 +231,7 @@ export const corporativa: AtaTypeDefinition = {
     const assunto = textoLimpo(dados.assunto);
     return assunto === '' ? 'Ata de reunião' : `Ata de reunião — ${assunto}`;
   },
+  cabecalho,
   preambulo,
   fecho,
   assinaturas,

@@ -1,4 +1,4 @@
-import type { AtaDraft } from '../domain/draft';
+import type { EntradaDoDocumento } from '../domain/draft';
 
 export type TipoCampo = 'texto' | 'data' | 'hora' | 'escolha' | 'textoLongo';
 
@@ -48,9 +48,14 @@ export interface AtaTypeDefinition {
   regrasPrompt: string[];
   titulo: (dados: Record<string, string>) => string;
   /** Texto fixo de abertura; dado ausente vira `[PREENCHER: …]`. */
-  preambulo: (d: AtaDraft) => string;
-  fecho: (d: AtaDraft) => string;
-  assinaturas: (d: AtaDraft) => { nome: string; papel: string }[];
+  /**
+   * Linhas do cabeçalho da ata (organização, data, horário, modalidade, local…), só com o que já
+   * foi informado: o que falta não aparece (as lacunas `[PREENCHER]` ficam no preâmbulo).
+   */
+  cabecalho: (d: EntradaDoDocumento) => string[];
+  preambulo: (d: EntradaDoDocumento) => string;
+  fecho: (d: EntradaDoDocumento) => string;
+  assinaturas: (d: EntradaDoDocumento) => { nome: string; papel: string }[];
 }
 
 export type BlocoFormulario = 'dados' | 'participantes' | 'transcricao';
