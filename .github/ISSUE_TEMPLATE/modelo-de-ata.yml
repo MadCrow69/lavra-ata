@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Correções jurídicas precisam citar o artigo ou item da norma e uma fonte oficial. O Lavra gera um rascunho e não substitui a revisão de um profissional habilitado.
+        Correções jurídicas precisam citar o artigo ou item da norma e uma fonte oficial. O Lavra gerará um rascunho e não substituirá a revisão de um profissional habilitado.
   - type: dropdown
     id: tipo
     attributes:
