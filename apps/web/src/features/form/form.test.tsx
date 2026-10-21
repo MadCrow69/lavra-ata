@@ -37,6 +37,25 @@ function renderizar(ui: React.ReactNode, inicial?: AtaDraft) {
   return render(<DraftProvider {...(inicial ? { inicial } : {})}>{ui}</DraftProvider>);
 }
 
+/**
+ * Com centenas de linhas, `getByRole` e `userEvent` ficam lentos no jsdom (varrem a árvore toda):
+ * os testes de volume usam consultas por texto/rótulo e `fireEvent`, que medem o app, não o utilitário.
+ */
+function colarPelaTela(texto: string): void {
+  fireEvent.click(screen.getByText('Colar lista'));
+  fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), { target: { value: texto } });
+  fireEvent.click(screen.getByText('Adicionar à lista'));
+}
+
+function avisoAtual(): HTMLElement {
+  const aviso = document.querySelector<HTMLElement>('[role="status"]');
+  if (!aviso) throw new Error('Nenhum aviso (role="status") na tela.');
+  return aviso;
+}
+
+/** Teto de tempo dos testes que montam 200 a 500 linhas: o jsdom é lento e a suíte roda em paralelo. */
+const TEMPO_VOLUME_MS = 30_000;
+
 function linhas(n: number): string {
   return Array.from(
     { length: n },
@@ -183,25 +202,29 @@ describe('ParticipantesBlock', () => {
     expect(screen.getByText('falta: Participante presente')).toBeVisible();
   });
 
-  it('colar 200 linhas cria 200 participantes em menos de 500 ms', async () => {
-    const user = userEvent.setup();
-    renderizar(<ParticipantesBlock tipo={corporativa} />);
+  it(
+    'colar 200 linhas cria 200 participantes em menos de 2 s no jsdom',
+    () => {
+      renderizar(<ParticipantesBlock tipo={corporativa} />);
 
-    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
-    const area = screen.getByLabelText(/Nomes, um por linha/);
-    const adicionar = screen.getByRole('button', { name: 'Adicionar à lista' });
-    const texto = linhas(200);
+      fireEvent.click(screen.getByText('Colar lista'));
+      const area = screen.getByLabelText(/Nomes, um por linha/);
+      const adicionar = screen.getByText('Adicionar à lista');
+      const texto = linhas(200);
 
-    // Só a ação de colar entra na medida: buscar elementos na tela não é custo do app.
-    const inicio = performance.now();
-    fireEvent.change(area, { target: { value: texto } });
-    fireEvent.click(adicionar);
-    const duracao = performance.now() - inicio;
+      // Só a ação de colar entra na medida: buscar elementos na tela não é custo do app.
+      // O tempo em navegador real é verificado no E2E; aqui o teto é só contra regressão grosseira.
+      const inicio = performance.now();
+      fireEvent.change(area, { target: { value: texto } });
+      fireEvent.click(adicionar);
+      const duracao = performance.now() - inicio;
 
-    expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
-    expect(screen.getAllByLabelText(/^Nome do participante /)).toHaveLength(200);
-    expect(duracao).toBeLessThan(500);
-  });
+      expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
+      expect(screen.getAllByLabelText(/^Nome do participante /)).toHaveLength(200);
+      expect(duracao).toBeLessThan(2000);
+    },
+    TEMPO_VOLUME_MS,
+  );
 
   it('"Nome — Cargo" preenche o cargo e a área é limpa depois de adicionar', async () => {
     const user = userEvent.setup();
@@ -220,53 +243,44 @@ describe('ParticipantesBlock', () => {
     expect(screen.queryByLabelText(/Nomes, um por linha/)).not.toBeInTheDocument();
   });
 
-  it('avisa quantos nomes foram ignorados pelo limite', async () => {
-    const user = userEvent.setup();
-    renderizar(
-      <ParticipantesBlock tipo={corporativa} />,
-      comParticipantes(LIMITE_PARTICIPANTES - 2),
-    );
+  it(
+    'avisa quantos nomes foram ignorados pelo limite',
+    () => {
+      renderizar(
+        <ParticipantesBlock tipo={corporativa} />,
+        comParticipantes(LIMITE_PARTICIPANTES - 2),
+      );
+      colarPelaTela(linhas(5));
 
-    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
-    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
-      target: { value: linhas(5) },
-    });
-    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      expect(avisoAtual()).toHaveTextContent('3 nomes ignorados: o limite é 500 participantes.');
+      expect(screen.getByText('500 participantes · 500 presentes')).toBeVisible();
+    },
+    TEMPO_VOLUME_MS,
+  );
 
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '3 nomes ignorados: o limite é 500 participantes.',
-    );
-    expect(screen.getByText('500 participantes · 500 presentes')).toBeVisible();
-  });
+  it(
+    'no singular: "1 nome ignorado"',
+    () => {
+      renderizar(
+        <ParticipantesBlock tipo={corporativa} />,
+        comParticipantes(LIMITE_PARTICIPANTES - 1),
+      );
+      colarPelaTela(linhas(2));
+      expect(avisoAtual()).toHaveTextContent('1 nome ignorado: o limite é 500 participantes.');
+    },
+    TEMPO_VOLUME_MS,
+  );
 
-  it('no singular: "1 nome ignorado"', async () => {
-    const user = userEvent.setup();
-    renderizar(
-      <ParticipantesBlock tipo={corporativa} />,
-      comParticipantes(LIMITE_PARTICIPANTES - 1),
-    );
-    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
-    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
-      target: { value: linhas(2) },
-    });
-    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '1 nome ignorado: o limite é 500 participantes.',
-    );
-  });
-
-  it('lista cheia: nada é adicionado e a pessoa é avisada', async () => {
-    const user = userEvent.setup();
-    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(LIMITE_PARTICIPANTES));
-    await user.click(screen.getByRole('button', { name: 'Colar lista' }));
-    fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
-      target: { value: linhas(2) },
-    });
-    await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '2 nomes ignorados: o limite é 500 participantes.',
-    );
-  });
+  it(
+    'lista cheia: nada é adicionado e a pessoa é avisada',
+    () => {
+      renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(LIMITE_PARTICIPANTES));
+      colarPelaTela(linhas(2));
+      expect(avisoAtual()).toHaveTextContent('2 nomes ignorados: o limite é 500 participantes.');
+      expect(screen.getByText('500 participantes · 500 presentes')).toBeVisible();
+    },
+    TEMPO_VOLUME_MS,
+  );
 
   it('adicionar um participante: nome + Enter cria a linha, limpa o campo e devolve o foco', async () => {
     const user = userEvent.setup();
@@ -304,16 +318,23 @@ describe('ParticipantesBlock', () => {
     expect(screen.queryByText('Informe o nome do participante.')).not.toBeInTheDocument();
   });
 
-  it('lista cheia: adicionar um nome avisa o limite e não apaga o que foi digitado', async () => {
-    const user = userEvent.setup();
-    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(LIMITE_PARTICIPANTES));
-    const nome = screen.getByLabelText(/^Nome do novo participante/);
-    await user.type(nome, 'Ana{Enter}');
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Nenhum nome foi adicionado. 1 nome ignorado: o limite é 500 participantes.',
-    );
-    expect(nome).toHaveValue('Ana');
-  });
+  it(
+    'lista cheia: adicionar um nome avisa o limite e não apaga o que foi digitado',
+    () => {
+      renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(LIMITE_PARTICIPANTES));
+      const nome = screen.getByLabelText(/^Nome do novo participante/);
+      fireEvent.change(nome, { target: { value: 'Ana' } });
+      const formulario = nome.closest('form');
+      if (!formulario) throw new Error('Formulário de novo participante ausente.');
+      fireEvent.submit(formulario);
+
+      expect(avisoAtual()).toHaveTextContent(
+        'Nenhum nome foi adicionado. 1 nome ignorado: o limite é 500 participantes.',
+      );
+      expect(nome).toHaveValue('Ana');
+    },
+    TEMPO_VOLUME_MS,
+  );
 
   it('o estado vazio ensina a digitar um nome ou colar a lista', () => {
     renderizar(<ParticipantesBlock tipo={corporativa} />);
@@ -433,18 +454,22 @@ describe('ParticipantesBlock', () => {
     expect(screen.queryByDisplayValue('Pessoa 2')).not.toBeInTheDocument();
   });
 
-  it('com 200 linhas, editar o nome de uma linha funciona e o cabeçalho continua único', async () => {
-    const user = userEvent.setup();
-    renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(200));
-    const tabela = screen.getByRole('table');
-    expect(within(tabela).getAllByRole('columnheader').length).toBeGreaterThanOrEqual(4);
+  it(
+    'com 200 linhas, editar o nome de uma linha funciona e o cabeçalho continua único',
+    async () => {
+      const user = userEvent.setup();
+      renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(200));
+      const tabela = screen.getByRole('table');
+      expect(within(tabela).getAllByRole('columnheader').length).toBeGreaterThanOrEqual(4);
 
-    const nome = screen.getByLabelText('Nome do participante 150');
-    await user.clear(nome);
-    await user.type(nome, 'Renomeado');
-    expect(nome).toHaveValue('Renomeado');
-    expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
-  });
+      const nome = screen.getByLabelText('Nome do participante 150');
+      await user.clear(nome);
+      await user.type(nome, 'Renomeado');
+      expect(nome).toHaveValue('Renomeado');
+      expect(screen.getByText('200 participantes · 200 presentes')).toBeVisible();
+    },
+    TEMPO_VOLUME_MS,
+  );
 
   it('mostra ✓ com ao menos um presente e "falta" quando todos estão ausentes', () => {
     const { unmount } = renderizar(<ParticipantesBlock tipo={corporativa} />, comParticipantes(2));
