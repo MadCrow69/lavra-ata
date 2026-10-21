@@ -38,8 +38,9 @@ export default defineConfig({
     assetsInlineLimit: 0,
     // O Vite avisa de chunk acima de 500 kB. O ÚNICO acima disso é o do gerador de PDF (pdfmake +
     // fontes em base64, ~1,25 MB), carregado por `import()` só na primeira exportação, fora da carga
-    // inicial (o bundle principal tem ~375 kB). O teto sobe só até cobri-lo; se o bundle principal
-    // passar de 500 kB, reduza este valor para o aviso voltar a valer.
+    // inicial (o bundle principal tem ~375 kB). O teto sobe só até cobri-lo. A carga inicial é
+    // guardada à parte por `scripts/check-bundle.mjs` (orçamento de 500 kB e nenhum marcador do PDF,
+    // do DOCX ou das fontes nela), que roda no fim do `build`.
     chunkSizeWarningLimit: 1300,
   },
 });

@@ -47,7 +47,7 @@ const TAG = /<(?<tag>[a-z][^\s/>]*)(?<attrs>(?:"[^"]*"|'[^']*'|[^'">])*)>/gi;
  * @param {string} html
  * @returns {{ tag: string, attributes: Map<string, string>, index: number }[]}
  */
-function listTags(html) {
+export function listTags(html) {
   return [...html.matchAll(TAG)].map((match) => ({
     tag: (match.groups?.tag ?? '').toLowerCase(),
     attributes: parseAttributes(match.groups?.attrs ?? ''),

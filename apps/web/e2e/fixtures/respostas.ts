@@ -6,8 +6,26 @@
 /** Marcador que o app põe no lugar do CPF antes de enviar; a resposta o cita e o app restaura. */
 export const MARCADOR_CPF = '[CPF_1]';
 
-/** Conteúdo da ata, já no schema de `src/generation/output-schema.ts` (todas as seções + encaminhamentos). */
-export function ataGeradaJson(): string {
+const STATUS_EM_ROTACAO = ['pendente', 'em_andamento', 'concluido'] as const;
+
+/** Responsáveis distintos nos encaminhamentos de volume (a lista do "Copiar tarefas" tem vários grupos). */
+const RESPONSAVEIS_DE_VOLUME = 40;
+
+/** `quantos` encaminhamentos com prazo, status e responsável em rodízio (volume de 200 itens). */
+function encaminhamentosDeVolume(quantos: number) {
+  return Array.from({ length: quantos }, (_, i) => ({
+    acao: `Acompanhar o item ${String(i + 1).padStart(3, '0')} do cronograma de migração do cadastro`,
+    responsavel: `Responsável ${String((i % RESPONSAVEIS_DE_VOLUME) + 1).padStart(2, '0')}`,
+    prazo: `2026-11-${String((i % 28) + 1).padStart(2, '0')}`,
+    status: STATUS_EM_ROTACAO[i % STATUS_EM_ROTACAO.length],
+  }));
+}
+
+/**
+ * Conteúdo da ata, já no schema de `src/generation/output-schema.ts` (todas as seções +
+ * encaminhamentos). Sem `encaminhamentos`, os 2 de sempre; com, esse tanto (teste de volume).
+ */
+export function ataGeradaJson({ encaminhamentos }: { encaminhamentos?: number } = {}): string {
   const paragrafo = (texto: string) => ({ tipo: 'paragrafo', texto, itens: [] as string[] });
   const lista = (itens: string[]) => ({ tipo: 'lista', texto: '', itens });
   return JSON.stringify({
@@ -30,20 +48,23 @@ export function ataGeradaJson(): string {
       riscos: [paragrafo('Prazo curto para a homologação do fornecedor.')],
       proxima_reuniao: [paragrafo('Nova reunião em 28/10/2026, às 14h, por videoconferência.')],
     },
-    encaminhamentos: [
-      {
-        acao: 'Enviar o contrato de suporte ao jurídico',
-        responsavel: 'Joana Prado',
-        prazo: '2026-10-21',
-        status: 'pendente',
-      },
-      {
-        acao: 'Concluir a migração do cadastro',
-        responsavel: 'Marcos Ferraz',
-        prazo: '2026-11-30',
-        status: 'em_andamento',
-      },
-    ],
+    encaminhamentos:
+      encaminhamentos === undefined
+        ? [
+            {
+              acao: 'Enviar o contrato de suporte ao jurídico',
+              responsavel: 'Joana Prado',
+              prazo: '2026-10-21',
+              status: 'pendente',
+            },
+            {
+              acao: 'Concluir a migração do cadastro',
+              responsavel: 'Marcos Ferraz',
+              prazo: '2026-11-30',
+              status: 'em_andamento',
+            },
+          ]
+        : encaminhamentosDeVolume(encaminhamentos),
   });
 }
 
