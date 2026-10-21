@@ -1,0 +1,73 @@
+.fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--espaco-4);
+  background: var(--cor-fundo-modal);
+}
+
+.painel {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 72rem);
+  max-height: 100%;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  box-shadow: 0 8px 32px var(--cor-sombra);
+}
+
+.painel:focus {
+  outline: none;
+}
+
+.cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.titulo {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 1.25rem;
+}
+
+.fechar {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+  cursor: pointer;
+}
+
+.fechar:hover {
+  border-color: var(--cor-primaria);
+  color: var(--cor-primaria);
+}
+
+.corpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--espaco-4);
+}
+
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espaco-2);
+  padding: var(--espaco-3) var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}

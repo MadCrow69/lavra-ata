@@ -12,3 +12,9 @@ export const DEBOUNCE_DETECCAO_MS = 300;
 
 /** Acima desta quantidade, a lista de participantes ganha rolagem com cabeçalho fixo e busca. */
 export const PARTICIPANTES_ATE_ROLAGEM = 20;
+
+/** Tamanho máximo, em bytes, do arquivo de transcrição enviado (5 MB). */
+export const LIMITE_ARQUIVO_BYTES = 5 * 1024 * 1024;
+
+/** A partir deste percentual de `LIMITE_TRANSCRICAO` o contador passa a avisar. */
+export const PERCENTUAL_ALERTA_TRANSCRICAO = 90;

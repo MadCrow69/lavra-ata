@@ -36,6 +36,7 @@
 
   --cor-foco: #1d4e5f;
   --cor-sombra: rgb(31 42 55 / 12%);
+  --cor-fundo-modal: rgb(0 0 0 / 55%);
 
   --fonte-titulo: 'Source Serif 4 Variable', georgia, 'Times New Roman', serif;
   --fonte-interface:
