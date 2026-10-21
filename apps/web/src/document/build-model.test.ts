@@ -11,7 +11,7 @@ import {
 } from '../domain/draft';
 import { criarRascunho } from '../domain/draft-reducer';
 import { construirDocumento, contarPreencher, dividirPreencher } from './build-model';
-import type { DocBloco } from './model';
+import type { DocBloco, LogoDoc } from './model';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
   return {
@@ -226,6 +226,25 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
       ROTULO_PRESENCA.presente,
     ]);
     expect(tabela?.colunaPresenca).toBe(4);
+  });
+});
+
+describe('construirDocumento com logo', () => {
+  const logo: LogoDoc = { dataUrl: 'data:image/png;base64,AAAA', largura: 300, altura: 100 };
+
+  it('põe a logo em cabecalho.logo', () => {
+    expect(construirDocumento(rascunho(), corporativa, logo).cabecalho.logo).toEqual(logo);
+  });
+
+  it('sem o terceiro argumento, ou com null, a logo é null', () => {
+    expect(construirDocumento(rascunho(), corporativa).cabecalho.logo).toBeNull();
+    expect(construirDocumento(rascunho(), corporativa, null).cabecalho.logo).toBeNull();
+  });
+
+  it('a logo não muda o resto do documento', () => {
+    const com = construirDocumento(rascunho(), corporativa, logo);
+    const sem = construirDocumento(rascunho(), corporativa);
+    expect({ ...com, cabecalho: { ...com.cabecalho, logo: null } }).toEqual(sem);
   });
 });
 

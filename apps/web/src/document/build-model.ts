@@ -21,7 +21,7 @@ import {
 } from '../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { ROTULO_CURTO } from '../config/models';
-import type { DocBloco, DocumentModel, Inline } from './model';
+import type { DocBloco, DocumentModel, Inline, LogoDoc } from './model';
 
 /** Lacuna que a pessoa completa à mão: `[PREENCHER: o que falta]`. Sempre em maiúsculas. */
 const LACUNA = /\[PREENCHER(?::[^\]]*)?\]/g;
@@ -179,9 +179,14 @@ function rodapeInterno(blocos: DocBloco[], resultado: ResultadoAta | null): stri
 /**
  * Monta o documento da ata. Antes de gerar (sem `resultado`) traz só o que o formulário já tem,
  * mais um placeholder no lugar das seções. Depois, preâmbulo, seções na ordem do tipo (as vazias
- * não aparecem), encaminhamentos, fecho, assinaturas e o aviso de minuta.
+ * não aparecem), encaminhamentos, fecho, assinaturas e o aviso de minuta. A `logo` (já rasterizada)
+ * vai só para o cabeçalho: nunca faz parte do rascunho nem do que a IA recebe.
  */
-export function construirDocumento(d: EntradaDoDocumento, tipo: AtaTypeDefinition): DocumentModel {
+export function construirDocumento(
+  d: EntradaDoDocumento,
+  tipo: AtaTypeDefinition,
+  logo: LogoDoc | null = null,
+): DocumentModel {
   const resultado = d.resultado;
   const blocos: DocBloco[] = [];
 
@@ -232,7 +237,7 @@ export function construirDocumento(d: EntradaDoDocumento, tipo: AtaTypeDefinitio
 
   return {
     titulo: tipo.titulo(d.dados),
-    cabecalho: { logo: null, linhas: tipo.cabecalho(d) },
+    cabecalho: { logo, linhas: tipo.cabecalho(d) },
     blocos,
     rodape: RODAPE_PAGINADO,
     rodapeInterno: rodapeInterno(blocos, resultado),

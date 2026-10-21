@@ -41,8 +41,8 @@ export type DocBloco =
 
 export interface DocumentModel {
   titulo: string;
-  /** `logo` é a imagem da pessoa (Plano 04); `null` = espaço reservado. */
-  cabecalho: { logo: string | null; linhas: string[] };
+  /** `logo` é a imagem da pessoa; `null` = espaço reservado. */
+  cabecalho: { logo: LogoDoc | null; linhas: string[] };
   blocos: DocBloco[];
   /** Rodapé paginado dos documentos (PDF e DOCX); a folha em tela é contínua e não o exibe. */
   rodape: string;

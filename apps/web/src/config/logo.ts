@@ -35,3 +35,13 @@ export const LOGO_SVG_BYTES_CABECALHO = 4096;
 
 export const LOGO_ACCEPT =
   '.png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml';
+
+/**
+ * Maior PNG rasterizado que vai para o documento e para o armazenamento do navegador (600 KB).
+ * Passou disso, a rasterização reduz a escala até caber: o `sessionStorage` tem cota pequena e a
+ * logo nunca pode ocupar o espaço do rascunho.
+ */
+export const LOGO_BYTES_MAX_PNG = 600 * 1024;
+
+/** Fator aplicado às dimensões de saída a cada tentativa de caber em `LOGO_BYTES_MAX_PNG`. */
+export const LOGO_FATOR_REDUCAO_PNG = 0.8;

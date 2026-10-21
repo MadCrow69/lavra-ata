@@ -1,10 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { KeysProvider } from '../../ai/KeysContext';
-import { criarKeyStore } from '../../ai/keys';
 import { AVISO_MINUTA, TEXTO_SECOES_PENDENTES } from '../../config/documento';
-import { DraftProvider } from '../../domain/DraftContext';
 import {
   ROTULO_PRESENCA,
   ROTULO_STATUS,
@@ -13,8 +10,7 @@ import {
   type ResultadoAta,
 } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
-import { OperacaoIAProvider } from '../../generation/OperacaoIA';
-import { ToastProvider } from '../../ui/Toast';
+import { renderizarComProvedores } from '../../test/provedores';
 import { A4Preview } from './A4Preview';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
@@ -77,17 +73,7 @@ function rascunho(parcial: Partial<AtaDraft> = {}): AtaDraft {
 }
 
 function renderizar(inicial: AtaDraft) {
-  return render(
-    <KeysProvider store={criarKeyStore(null)}>
-      <DraftProvider inicial={inicial}>
-        <OperacaoIAProvider>
-          <ToastProvider>
-            <A4Preview />
-          </ToastProvider>
-        </OperacaoIAProvider>
-      </DraftProvider>
-    </KeysProvider>,
-  );
+  return renderizarComProvedores(<A4Preview />, { inicial });
 }
 
 describe('A4Preview antes de gerar', () => {
@@ -103,7 +89,7 @@ describe('A4Preview antes de gerar', () => {
     expect(screen.getByRole('table', { name: 'Participantes' })).toBeInTheDocument();
     expect(screen.getByText('Reembolsos', { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByText(TEXTO_SECOES_PENDENTES)).toBeInTheDocument();
-    expect(screen.getByText('Sua logo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Adicionar logo' })).toBeInTheDocument();
   });
 
   it('mostra a presença com texto, além do ícone', () => {

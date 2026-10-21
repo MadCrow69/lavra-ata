@@ -4,6 +4,7 @@ import { useDraft } from '../../domain/DraftContext';
 import { TONS, type Tom } from '../../domain/draft';
 import { Field } from '../../ui/Field';
 import { FormBlock } from './FormBlock';
+import { LogoField } from './LogoField';
 import styles from './form.module.css';
 
 const ROTULO_TOM: Record<Tom, string> = {
@@ -12,14 +13,14 @@ const ROTULO_TOM: Record<Tom, string> = {
   detalhado: 'Detalhado (cerca do dobro, sem inventar fatos)',
 };
 
-/** Bloco 1: tipo de ata e tom da redação. Sempre completo, pois ambos têm valor padrão. */
+/** Bloco 1: tipo de ata, tom da redação e logo (opcional). Sempre completo: tudo tem valor padrão. */
 export function TipoBlock() {
   const { state, dispatch } = useDraft();
   const grupoId = useId();
   const atual = obterTipo(state.tipoId);
 
   return (
-    <FormBlock numero={1} titulo="Tipo de ata" faltando={[]}>
+    <FormBlock numero={1} titulo="Tipo de ata e logo" faltando={[]}>
       <fieldset className={styles.grupo}>
         <legend className={styles.grupoLegenda}>Tipo de ata</legend>
         {Object.values(ATA_TYPES).map((tipo) => (
@@ -60,6 +61,7 @@ export function TipoBlock() {
           )}
         </Field>
       </div>
+      <LogoField />
     </FormBlock>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { camposFaltando, transcricaoExcedeLimite } from '../../ata-types/registry';
 import type { AtaTypeDefinition } from '../../ata-types/types';
 import {
@@ -7,6 +7,7 @@ import {
   PERCENTUAL_ALERTA_TRANSCRICAO,
 } from '../../config/limits';
 import { useDraft } from '../../domain/DraftContext';
+import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { PrivacyPreview } from '../privacy/PrivacyPreview';
@@ -46,7 +47,6 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const texto = state.transcricao;
   const [erro, setErro] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
-  const arquivoRef = useRef<HTMLInputElement>(null);
 
   const nivel = nivelDoContador(texto);
   const excedido = nivel === 'excedido';
@@ -65,11 +65,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     setStatus(null);
   };
 
-  const aoEscolherArquivo = async (e: ChangeEvent<HTMLInputElement>) => {
-    const arquivo = e.target.files?.[0];
-    // Permite escolher o mesmo arquivo de novo depois de corrigi-lo.
-    e.target.value = '';
-    if (!arquivo) return;
+  const aoEscolherArquivo = async (arquivo: File) => {
     setErro(null);
     setStatus(null);
 
@@ -134,27 +130,18 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   return (
     <FormBlock numero={4} titulo="Transcrição" bloco="transcricao" faltando={faltando}>
       <div className={styles.acoes}>
-        <Button
-          onClick={() => {
-            arquivoRef.current?.click();
+        <BotaoArquivo
+          accept={ACEITA}
+          rotuloArquivo="Arquivo de transcrição"
+          onArquivo={(arquivo) => {
+            void aoEscolherArquivo(arquivo);
           }}
         >
           Enviar .txt ou .vtt
-        </Button>
+        </BotaoArquivo>
         <Button variante="perigo" disabled={texto === ''} onClick={limpar}>
           Limpar
         </Button>
-        <input
-          ref={arquivoRef}
-          type="file"
-          accept={ACEITA}
-          hidden
-          tabIndex={-1}
-          aria-label="Arquivo de transcrição"
-          onChange={(e) => {
-            void aoEscolherArquivo(e);
-          }}
-        />
       </div>
 
       {erro ? (

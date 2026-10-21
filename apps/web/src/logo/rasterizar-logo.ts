@@ -1,6 +1,14 @@
-import { LOGO_SAIDA_MAX_PX, LOGO_TAMANHO_MAX_BYTES, LOGO_TEMPO_MAX_MS } from '../config/logo';
+import {
+  LOGO_BYTES_MAX_PNG,
+  LOGO_FATOR_REDUCAO_PNG,
+  LOGO_LADO_MIN_PX,
+  LOGO_SAIDA_MAX_PX,
+  LOGO_TAMANHO_MAX_BYTES,
+  LOGO_TEMPO_MAX_MS,
+} from '../config/logo';
 import { encaixar, type Dimensoes } from '../document/medidas';
 import type { LogoDoc } from '../document/model';
+import { bytesDoDataUrlPng, PREFIXO_DATA_URL_PNG } from './png-data-url';
 import { ErroDeLogo, validarBytesLogo, type FormatoLogo } from './validar-logo';
 
 /**
@@ -13,6 +21,7 @@ import { ErroDeLogo, validarBytesLogo, type FormatoLogo } from './validar-logo';
  * canvas e `toDataURL` lança `SecurityError`, tratado como imagem ilegível.
  *
  * Tamanho de saída: bitmap nunca é ampliado; SVG (vetorial) preenche a caixa mantendo a proporção.
+ * O PNG gerado nunca passa de `LOGO_BYTES_MAX_PNG`: acima disso a escala diminui até caber.
  */
 
 export interface AmbienteRaster {
@@ -59,8 +68,6 @@ const MIME_POR_FORMATO: Record<FormatoLogo, string> = {
   svg: 'image/svg+xml',
 };
 
-const PREFIXO_PNG = 'data:image/png;base64,';
-
 function comTempoMaximo<T>(executar: (sinal: AbortSignal) => Promise<T>): Promise<T> {
   return new Promise<T>((resolver, rejeitar) => {
     const controle = new AbortController();
@@ -85,6 +92,30 @@ function comTempoMaximo<T>(executar: (sinal: AbortSignal) => Promise<T>): Promis
 function tamanhoDoBitmap(decodificado: Dimensoes): Dimensoes {
   if (!(decodificado.largura > 0 && decodificado.altura > 0)) throw new ErroDeLogo('ilegivel');
   return decodificado;
+}
+
+/**
+ * Desenha em `inicial` e, se o PNG passar de `LOGO_BYTES_MAX_PNG`, repete em escala menor até
+ * caber. Lança `ilegivel` se o canvas não devolver PNG ou se nem o menor tamanho aceito couber.
+ */
+function pngQueCabe(
+  ambiente: AmbienteRaster,
+  fonte: CanvasImageSource,
+  inicial: Dimensoes,
+): { dataUrl: string; tamanho: Dimensoes } {
+  let tamanho = inicial;
+  for (;;) {
+    const dataUrl = ambiente.paraPng(fonte, tamanho);
+    if (!dataUrl.startsWith(PREFIXO_DATA_URL_PNG)) throw new ErroDeLogo('ilegivel');
+    if (bytesDoDataUrlPng(dataUrl) <= LOGO_BYTES_MAX_PNG) return { dataUrl, tamanho };
+    tamanho = {
+      largura: Math.max(1, Math.floor(tamanho.largura * LOGO_FATOR_REDUCAO_PNG)),
+      altura: Math.max(1, Math.floor(tamanho.altura * LOGO_FATOR_REDUCAO_PNG)),
+    };
+    if (Math.min(tamanho.largura, tamanho.altura) < LOGO_LADO_MIN_PX) {
+      throw new ErroDeLogo('ilegivel');
+    }
+  }
 }
 
 /**
@@ -115,9 +146,8 @@ export async function prepararLogo(
         ? // Vetorial: o declarado só dá a proporção; preenche a caixa (24×24 vira 400×400).
           encaixar(declaradas, LOGO_SAIDA_MAX_PX, { ampliar: true })
         : encaixar(tamanhoDoBitmap(dimensoes), LOGO_SAIDA_MAX_PX);
-    const dataUrl = ambiente.paraPng(fonte, saida);
-    if (!dataUrl.startsWith(PREFIXO_PNG)) throw new ErroDeLogo('ilegivel');
-    return { dataUrl, largura: saida.largura, altura: saida.altura };
+    const { dataUrl, tamanho } = pngQueCabe(ambiente, fonte, saida);
+    return { dataUrl, largura: tamanho.largura, altura: tamanho.altura };
   } catch (erro) {
     throw erro instanceof ErroDeLogo ? erro : new ErroDeLogo('ilegivel');
   } finally {

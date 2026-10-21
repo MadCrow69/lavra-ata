@@ -1,5 +1,6 @@
 import { MODELOS } from '../config/models';
 import { CHAVES } from '../config/storage-keys';
+import { storageOuNulo } from '../domain/storage-ou-nulo';
 import { PROVEDORES, type ProviderConfig, type ProviderId } from './types';
 
 export interface ChaveProvedor {
@@ -105,22 +106,13 @@ function lerPersistido(bruto: string | null): Persistido | null {
   return { chaves: validas, ordem: normalizarOrdem(Array.isArray(ordem) ? ordem : []) };
 }
 
-/** `localStorage` do navegador, ou `null` se o acesso for bloqueado (modo privado, política). */
-function storagePadrao(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Guarda as chaves de API na memória da página. Só vão para `storage` (por padrão
  * `localStorage`) quando a pessoa marca "Lembrar neste navegador". `null` = nunca persiste.
  * Nunca registra a chave em log nem lança por falha de armazenamento.
  */
 export function criarKeyStore(storage?: Storage | null): KeyStore {
-  const alvo = storage === undefined ? storagePadrao() : storage;
+  const alvo = storage === undefined ? storageOuNulo('local') : storage;
   const chaves = new Map<ProviderId, ChaveProvedor>();
   let ordem: ProviderId[] = [...PROVEDORES];
   let lembrar = false;

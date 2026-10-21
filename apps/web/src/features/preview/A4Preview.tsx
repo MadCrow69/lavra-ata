@@ -1,4 +1,5 @@
 import { Fragment, memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { LOGO_ACCEPT } from '../../config/logo';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
 import { construirDocumento, contarPreencher, dividirPreencher } from '../../document/build-model';
@@ -7,6 +8,9 @@ import { useDraft } from '../../domain/DraftContext';
 import type { Atribuicao, Presenca } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 import { textoDeGeracao } from '../../generation/atribuicao';
+import { useLogo } from '../../logo/LogoContext';
+import { BotaoArquivo } from '../../ui/BotaoArquivo';
+import { useToast } from '../../ui/Toast';
 import { chavesUnicas } from './chaves';
 import { EncaminhamentosEditor } from './EncaminhamentosEditor';
 import styles from './preview.module.css';
@@ -432,10 +436,21 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
   const tipo = obterTipo(state.tipoId);
   const { dados, pauta, participantes, resultado } = state;
   // Só o que o documento lê: digitar na transcrição não recompõe a folha.
+  const { logo, processando, erro, aviso, enviar } = useLogo();
+  const { mostrar } = useToast();
   const modelo = useMemo(
-    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo),
-    [dados, pauta, participantes, resultado, tipo],
+    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo, logo),
+    [dados, pauta, participantes, resultado, tipo, logo],
   );
+  // O envio feito aqui mostra o erro num aviso (toast): no celular o bloco de formulário, que também
+  // mostra o erro, está em outra aba. Só avisa pelo que ESTE botão enviou.
+  const enviouAquiRef = useRef(false);
+  useEffect(() => {
+    if (processando || !enviouAquiRef.current) return;
+    enviouAquiRef.current = false;
+    const mensagem = erro ?? aviso;
+    if (mensagem !== null) mostrar({ titulo: mensagem });
+  }, [processando, erro, aviso, mostrar]);
   const lacunas = useMemo(() => contarPreencher(modelo), [modelo]);
   // Seções sem conteúdo aparecem na tela como marcador (o modelo do documento as omite).
   const blocosDaTela = useMemo(
@@ -490,11 +505,30 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
       >
         {/* Timbre da folha: `div` e não `header`, para não virar um segundo marco "banner". */}
         <div className={styles.cabecalho}>
-          <div className={styles.logo}>
+          <div
+            className={juntar(
+              styles.logo,
+              modelo.cabecalho.logo === null ? styles.logoVazia : undefined,
+            )}
+          >
             {modelo.cabecalho.logo === null ? (
-              <span className={styles.logoReserva}>Sua logo</span>
+              <BotaoArquivo
+                accept={LOGO_ACCEPT}
+                rotuloArquivo="Arquivo da logo (na folha)"
+                disabled={processando}
+                onArquivo={(arquivo) => {
+                  enviouAquiRef.current = true;
+                  void enviar(arquivo);
+                }}
+              >
+                Adicionar logo
+              </BotaoArquivo>
             ) : (
-              <img src={modelo.cabecalho.logo} alt="" className={styles.logoImagem} />
+              <img
+                src={modelo.cabecalho.logo.dataUrl}
+                alt="Logo da organização"
+                className={styles.logoImagem}
+              />
             )}
           </div>
           <div className={styles.linhas}>

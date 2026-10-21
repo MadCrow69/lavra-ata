@@ -1,15 +1,15 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
 import type { AtaTypeDefinition } from '../../ata-types/types';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
-import { DraftProvider } from '../../domain/DraftContext';
 import type { AtaDraft, Participante } from '../../domain/draft';
 import { criarRascunho } from '../../domain/draft-reducer';
 import { DadosBlock } from './DadosBlock';
 import { ParticipantesBlock } from './ParticipantesBlock';
 import { TipoBlock } from './TipoBlock';
+import { renderizarComProvedores } from '../../test/provedores';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
@@ -35,7 +35,7 @@ function comParticipantes(n: number, parcial: (i: number) => Partial<Participant
 }
 
 function renderizar(ui: React.ReactNode, inicial?: AtaDraft) {
-  return render(<DraftProvider {...(inicial ? { inicial } : {})}>{ui}</DraftProvider>);
+  return renderizarComProvedores(ui, inicial ? { inicial } : {});
 }
 
 /**

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LOGO_TAMANHO_MAX_BYTES, LOGO_TEMPO_MAX_MS } from '../config/logo';
+import { LOGO_BYTES_MAX_PNG, LOGO_TAMANHO_MAX_BYTES, LOGO_TEMPO_MAX_MS } from '../config/logo';
 import type { Dimensoes } from '../document/medidas';
 import { bytesGif, bytesPng, bytesTexto } from '../test/bytes-logo';
 import { AMBIENTE_NAVEGADOR, prepararLogo, type AmbienteRaster } from './rasterizar-logo';
@@ -338,6 +338,52 @@ describe('prepararLogo — pipeline com o paraPng real (canvas mockado)', () => 
     expect(
       await motivoDe(
         prepararLogo(arquivo(bytesPng(100, 50)), comNatural({ largura: 100, altura: 50 })),
+      ),
+    ).toBe('ilegivel');
+  });
+
+  it('PNG acima do limite de bytes: reduz a escala até caber e devolve as dimensões que couberam', async () => {
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage,
+    } as unknown as CanvasRenderingContext2D);
+    // Canvas falso: o PNG pesa 2 bytes por pixel, então 1200×400 (960 KB) passa do limite.
+    const medidas: Dimensoes[] = [];
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockImplementation(function (
+      this: HTMLCanvasElement,
+    ) {
+      medidas.push({ largura: this.width, altura: this.height });
+      const bytes = this.width * this.height * 2;
+      return PREFIXO_PNG + 'A'.repeat(Math.ceil((bytes * 4) / 3));
+    });
+
+    const logo = await prepararLogo(
+      arquivo(bytesPng(3000, 1000)),
+      comNatural({ largura: 3000, altura: 1000 }),
+    );
+
+    expect(medidas.length).toBeGreaterThan(1);
+    expect(medidas[0]).toEqual({ largura: 1200, altura: 400 });
+    const [ultima] = medidas.slice(-1);
+    expect(logo).toMatchObject(ultima ?? {});
+    expect(logo.largura * logo.altura * 2).toBeLessThanOrEqual(LOGO_BYTES_MAX_PNG);
+    expect(logo.largura / logo.altura).toBeCloseTo(3, 1);
+    // Cada tentativa é menor que a anterior.
+    medidas.slice(1).forEach((m, i) => {
+      expect(m.largura).toBeLessThan(medidas[i]?.largura ?? 0);
+    });
+  });
+
+  it('PNG que não cabe nem no menor tamanho aceito: ilegivel, sem laço infinito', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
+      PREFIXO_PNG + 'A'.repeat(LOGO_BYTES_MAX_PNG * 2),
+    );
+    expect(
+      await motivoDe(
+        prepararLogo(arquivo(bytesPng(300, 100)), comNatural({ largura: 300, altura: 100 })),
       ),
     ).toBe('ilegivel');
   });
