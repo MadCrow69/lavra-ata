@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { cartao } from '../src/detectors/cartao';
+import { cnpj } from '../src/detectors/cnpj';
+import { cpf } from '../src/detectors/cpf';
+import { pis } from '../src/detectors/pis';
 import { cep } from '../src/detectors/cep';
 import { email } from '../src/detectors/email';
 import { DETECTORS } from '../src/detectors/index';
@@ -7,6 +11,11 @@ import { rg } from '../src/detectors/rg';
 import { telefone } from '../src/detectors/telefone';
 import { normalizeValue } from '../src/normalize';
 import { run } from './helpers';
+
+// Montados por código: o arquivo não carrega caracteres invisíveis nem ambíguos.
+const EN_DASH = String.fromCharCode(0x2013);
+const HYPHEN = String.fromCharCode(0x2010);
+const NBSP = String.fromCharCode(0xa0);
 
 describe('DETECTORS', () => {
   it('segue a ordem de precedência', () => {
@@ -210,5 +219,125 @@ describe('detector de RG', () => {
   it('o contexto precisa vir ANTES do número e ser palavra inteira', () => {
     expect(run(rg, '12.345.678-9 é o RG')).toEqual([]);
     expect(run(rg, 'org 12.345.678-9')).toEqual([]);
+  });
+});
+
+describe('telefone: separadores largos e traços tipográficos', () => {
+  it.each([
+    '(11) 98888 - 7777',
+    '11 98888 - 7777',
+    `(11) 98888${EN_DASH}7777`,
+    `(11) 98888${HYPHEN}7777`,
+    '11 - 98888-7777',
+    '(11)  98888-7777',
+    '+55 (11)  9 8888 - 7777',
+    `(11)${NBSP}98888-7777`,
+  ])('casa o número inteiro: %s', (t) => {
+    expect(run(telefone, `fale no ${t}.`)).toEqual([[t, true]]);
+  });
+  it('intervalo de anos com separadores largos continua fora', () => {
+    expect(run(telefone, 'turma 12 2024 - 2025')).toEqual([]);
+  });
+  it('horário, data e valor continuam fora com os separadores novos', () => {
+    expect(run(telefone, 'das 14h30 - 16h30, 14 / 10 / 2026, R$ 1.234 - 5.678,90')).toEqual([]);
+  });
+  it('pedido 98765-4321 é falso positivo ASSUMIDO (privacidade primeiro)', () => {
+    expect(run(telefone, 'pedido 98765-4321')).toEqual([['98765-4321', true]]);
+  });
+});
+
+describe('telefone local com espaço (com contexto)', () => {
+  it('celular local com espaço exige contexto', () => {
+    expect(run(telefone, 'meu zap é 98888 7777')).toEqual([['98888 7777', true]]);
+    expect(run(telefone, 'o código 98888 7777')).toEqual([]);
+  });
+  it('fixo local com espaço exige contexto', () => {
+    expect(run(telefone, 'fone 3333 4444')).toEqual([['3333 4444', true]]);
+    expect(run(telefone, 'ano 2026 2027')).toEqual([]);
+  });
+  it('fixo local com traço tipográfico e contexto', () => {
+    expect(run(telefone, `tel: 3333${EN_DASH}4444`)).toEqual([[`3333${EN_DASH}4444`, true]]);
+  });
+});
+
+describe('e-mail: Unicode e limites', () => {
+  it('local com acento é capturado inteiro', () => {
+    expect(run(email, 'João.Silva@x.com')).toEqual([['João.Silva@x.com', true]]);
+    expect(run(email, 'escreva a josé@exemplo.com.')).toEqual([['josé@exemplo.com', true]]);
+  });
+  it('domínio internacionalizado', () => {
+    expect(run(email, 'x@ação.com.br')).toEqual([['x@ação.com.br', true]]);
+  });
+  it('local acima de 64 caracteres não é e-mail válido: não casa', () => {
+    const local = 'a'.repeat(70);
+    expect(run(email, `${local}@x.com`)).toEqual([]);
+  });
+});
+
+describe('placa: mês + ano não é placa', () => {
+  it.each(['JAN2024', 'DEZ-2024', 'set 2023', 'OUT2025'])('%s', (t) => {
+    expect(run(placa, `o carro em ${t}`)).toEqual([]);
+  });
+  it('placa de verdade com letras parecidas continua', () => {
+    expect(run(placa, 'a placa JAB-2024')).toEqual([['JAB-2024', true]]);
+  });
+});
+
+describe('RG: UF colada, traço com espaços e grupos por espaço', () => {
+  it.each([
+    ['RG MG12345678', 'MG12345678'],
+    ['rg:MG12345678', 'MG12345678'],
+    ['rg: SP 12.345.678-9', 'SP 12.345.678-9'],
+    ['rg: 12.345.678 - 9', '12.345.678 - 9'],
+    ['RG 12 345 678', '12 345 678'],
+    ['RG 12 345 678 - X', '12 345 678 - X'],
+    ['identidade 12.345.678-9.1', '12.345.678-9.1'],
+  ])('%s', (texto, esperado) => {
+    expect(run(rg, `${texto}.`)).toEqual([[esperado, true]]);
+  });
+  it('"de" não é UF: o número continua sendo capturado sozinho', () => {
+    expect(run(rg, 'identidade de 12345')).toEqual([['12345', true]]);
+  });
+  it('não engole número seguinte separado por espaço', () => {
+    expect(run(rg, 'RG 12.345.678-9 12 de março')).toEqual([['12.345.678-9', true]]);
+  });
+  it('normaliza UF colada para a mesma chave do número', () => {
+    expect(normalizeValue('RG', 'MG12345678')).toBe(normalizeValue('RG', '12.345.678'));
+  });
+});
+
+describe('desempenho: texto patológico de 50 mil caracteres', () => {
+  const N = 50_000;
+  const casos: Record<string, string> = {
+    hifens: '-'.repeat(N),
+    pontos: '.'.repeat(N),
+    digitos: '1'.repeat(N),
+    'a.': 'a.'.repeat(N / 2),
+    espacos: ' '.repeat(N),
+    'digito-espaco': '1 '.repeat(N / 2),
+    'bloco-espaco': '2222 '.repeat(N / 5),
+    'bloco-hifen': '22-'.repeat(N / 3),
+    arrobas: 'a@'.repeat(N / 2),
+    'arroba-ponto': 'a@a.'.repeat(N / 4),
+    'ddd-parenteses': '(11) '.repeat(N / 5),
+    'letra-digito': 'A1'.repeat(N / 2),
+    'x-ponto': '1.'.repeat(N / 2),
+  };
+  const detectores = { email, telefone, cep, placa, rg, cpf, cnpj, pis, cartao };
+  const tempos: string[] = [];
+  for (const [nome, detector] of Object.entries(detectores)) {
+    it(`${nome}: cada entrada patológica varre em < 1000 ms`, () => {
+      for (const [caso, texto] of Object.entries(casos)) {
+        const t0 = performance.now();
+        run(detector, texto);
+        const ms = performance.now() - t0;
+        tempos.push(`${nome}/${caso}=${ms.toFixed(1)}ms`);
+        expect(ms, `${nome} em ${caso}`).toBeLessThan(1000);
+      }
+    });
+  }
+  it('registra os tempos', () => {
+    console.info(tempos.join(String.fromCharCode(10)));
+    expect(tempos.length).toBeGreaterThan(0);
   });
 });
