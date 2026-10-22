@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useSyncExternalStore,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -47,6 +48,27 @@ function travarRolagem(): () => void {
 /** Modais abertos, do mais antigo ao mais novo. Só o do topo reage a foco, Tab e Esc. */
 const pilha: object[] = [];
 
+/** Quem quer saber se há diálogo aberto (ex.: os avisos, que esperam o diálogo fechar). */
+const ouvintes = new Set<() => void>();
+
+function avisarOuvintes(): void {
+  for (const ouvinte of ouvintes) ouvinte();
+}
+
+function assinar(ouvinte: () => void): () => void {
+  ouvintes.add(ouvinte);
+  return () => {
+    ouvintes.delete(ouvinte);
+  };
+}
+
+const haDialogoAberto = () => pilha.length > 0;
+
+/** Há algum `Modal` aberto agora? Atualiza quando o primeiro abre e quando o último fecha. */
+export function useDialogoAberto(): boolean {
+  return useSyncExternalStore(assinar, haDialogoAberto, () => false);
+}
+
 function focaveisDe(raiz: HTMLElement): HTMLElement[] {
   return Array.from(raiz.querySelectorAll<HTMLElement>(FOCAVEIS)).filter(
     (el) => !el.hasAttribute('hidden') && el.closest('[hidden]') === null,
@@ -87,6 +109,7 @@ export function Modal({
     const origem = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const id = idRef.current;
     pilha.push(id);
+    avisarOuvintes();
     const soltarRolagem = travarRolagem();
     (focoInicialRef.current?.current ?? painelRef.current)?.focus();
 
@@ -101,6 +124,7 @@ export function Modal({
     return () => {
       document.removeEventListener('focusin', guardaFoco);
       pilha.splice(pilha.indexOf(id), 1);
+      avisarOuvintes();
       soltarRolagem();
       if (origem?.isConnected) origem.focus();
     };

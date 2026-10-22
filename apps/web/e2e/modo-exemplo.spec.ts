@@ -203,7 +203,7 @@ async function corDoToken(page: Page, token: string): Promise<string> {
 test.describe('visitante sem chave, no celular', () => {
   test.use({ viewport: { width: 360, height: 740 } });
 
-  test('"Ver exemplo" é a ação principal, o cabeçalho é compacto, o toast não cobre o diálogo e o texto longo rola pelo teclado', async ({
+  test('"Ver exemplo" é a ação principal, o cabeçalho é compacto e o texto longo rola pelo teclado', async ({
     app: page,
     rede,
   }) => {
@@ -234,15 +234,9 @@ test.describe('visitante sem chave, no celular', () => {
     expect(await fundo(verExemploBotao)).not.toBe(primaria);
     expect(await fundo(chaves)).toBe(primaria);
 
-    // O toast do exemplo segue na tela; com um diálogo aberto ele sobe para o topo.
-    const toast = page.getByText(/^Exemplo carregado:/);
-    await expect(toast).toBeVisible();
-    expect((await toast.boundingBox())?.y ?? 0).toBeGreaterThan(740 / 2);
     await acoes.getByRole('button', { name: 'Privacidade: como verificar', exact: true }).click();
     const dialogo = page.getByRole('dialog', { name: 'Privacidade: como verificar' });
     await expect(dialogo).toBeVisible();
-    await expect(toast).toBeVisible();
-    expect((await toast.boundingBox())?.y ?? Infinity).toBeLessThan(740 / 2);
 
     // O corpo longo entra no Tab e rola pelas setas até "O que não é protegido" (só texto).
     const corpo = dialogo.getByRole('region', { name: 'Texto de Privacidade: como verificar' });
@@ -259,6 +253,52 @@ test.describe('visitante sem chave, no celular', () => {
     expect(rede.chamadas).toEqual([]);
   });
 });
+
+/** Duas caixas se sobrepõem (área em comum maior que zero)? */
+function seCruzam(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+for (const largura of [360, 1000]) {
+  test.describe(`aviso e diálogo a ${String(largura)} px`, () => {
+    test.use({ viewport: { width: largura, height: 740 } });
+
+    test('o aviso do exemplo espera fora do diálogo de privacidade e volta quando ele fecha', async ({
+      app: page,
+      rede,
+    }) => {
+      await verExemplo(page, ROTULOS_TIPO.corporativa);
+      const toast = page.getByText(/^Exemplo carregado:/);
+      await expect(toast).toBeInViewport();
+
+      // Logo depois do exemplo (dentro dos 6 s do aviso), abre o diálogo alto.
+      await page
+        .getByRole('navigation', { name: 'Ações do cabeçalho' })
+        .getByRole('button', { name: 'Privacidade: como verificar', exact: true })
+        .click();
+      const dialogo = page.getByRole('dialog', { name: 'Privacidade: como verificar' });
+      await expect(dialogo).toBeVisible();
+      await expect(toast).not.toBeInViewport();
+      const caixaDialogo = await dialogo.boundingBox();
+      expect(caixaDialogo).not.toBeNull();
+      for (const item of await page.locator('[data-toast]').all()) {
+        const caixa = await item.boundingBox();
+        if (caixa && caixaDialogo) expect(seCruzam(caixa, caixaDialogo)).toBe(false);
+      }
+
+      // O Fechar do diálogo recebe o clique (o Playwright reprova se outro elemento o cobrir).
+      await dialogo.getByRole('button', { name: 'Fechar', exact: true }).click();
+      await expect(dialogo).toBeHidden();
+      await expect(toast).toBeInViewport();
+
+      await afirmarLimpo(page, rede);
+      expect(rede.chamadas).toEqual([]);
+    });
+  });
+}
 
 /** Seleciona a aba, confere o painel dela e o banner do exemplo ainda visível. */
 async function abaFuncionaComBanner(page: Page, nome: 'Editar' | 'Documento') {

@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
 import { ORIGEM_PROVEDOR } from '../../config/models';
 import {
   CAMINHOS_CODIGO,
@@ -54,6 +54,8 @@ export function ComoVerificarModal({
   commit = SITE.commit,
 }: ComoVerificarModalProps) {
   const emDesenvolvimento = commit === COMMIT_DESENVOLVIMENTO;
+  // Lido do DOM uma vez a cada abertura (a tag não muda com a página aberta), fora do texto.
+  const semMetaDeCsp = useMemo(() => aberto && !temMetaDeCsp(), [aberto]);
 
   return (
     <Modal
@@ -105,7 +107,7 @@ export function ComoVerificarModal({
             <code>&lt;meta http-equiv=&quot;Content-Security-Policy&quot;&gt;</code> lista os
             destinos permitidos em <code>connect-src</code>. O próprio navegador bloqueia qualquer
             outro.
-            {aberto && !temMetaDeCsp() ? ` ${AVISO_SEM_META_CSP}` : ''}
+            {semMetaDeCsp ? ` ${AVISO_SEM_META_CSP}` : ''}
           </p>
           <p>
             <LinkExterno href={urlDoCodigo(CAMINHOS_CODIGO.csp, commit)}>

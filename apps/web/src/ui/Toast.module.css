@@ -11,15 +11,6 @@
   pointer-events: none;
 }
 
-/*
- * Com um diálogo aberto, as notificações sobem para o topo: embaixo cobririam o rodapé do diálogo
- * (as ações). Abaixar o z-index esconderia "o que mudou" atrás do fundo do diálogo.
- */
-:global(body:has([role='dialog'][aria-modal='true'])) .regiao {
-  top: var(--espaco-4);
-  bottom: auto;
-}
-
 .toast {
   display: flex;
   align-items: flex-start;
