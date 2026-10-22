@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MODELO_ID_MAX } from '../config/models';
 import { PREFERENCIAS } from '../config/storage-keys';
 import { storageFalso } from '../test/storage-falso';
 import {
@@ -228,6 +229,67 @@ describe('criarPreferenciasStore', () => {
     expect(s.lembrar()).toBe(false);
     expect(s.atual()).toEqual({ tom: 'conciso' });
     expect(gravado(sessao.itens)).toEqual({ versao: 1, tom: 'conciso' });
+  });
+
+  describe('modelos lembrados', () => {
+    it('modelo em branco apaga o que estava lembrado para o provedor (e só ele)', () => {
+      const sessao = storageFalso();
+      const s = criarPreferenciasStore(sessao.storage, storageFalso().storage);
+      s.definir({ modelos: { openai: 'gpt-x', gemini: 'gem-y' } });
+      s.definir({ modelos: { openai: '   ' } });
+      expect(s.atual().modelos).toEqual({ gemini: 'gem-y' });
+      s.definir({ modelos: { gemini: '' } });
+      expect(s.atual()).toEqual({});
+      expect(gravado(sessao.itens)).toEqual({ versao: 1 });
+    });
+
+    it('apagar o que não estava lembrado não faz nada', () => {
+      const s = criarPreferenciasStore(storageFalso().storage, storageFalso().storage);
+      const antes = s.revisao();
+      s.definir({ modelos: { openai: '' } });
+      expect(s.revisao()).toBe(antes);
+    });
+
+    it.each([
+      ['chave da OpenAI', 'sk-proj-teste-ficticia-9f3a7c21'],
+      ['chave da Anthropic', 'sk-ant-api03-teste-ficticia'],
+      ['chave do Gemini', 'AIzaTesteFicticia8b4d6e10'],
+      ['com espaço no meio', 'meu modelo'],
+      ['com símbolo fora da lista', 'modelo<script>'],
+      ['maior que o limite', 'm'.repeat(MODELO_ID_MAX + 1)],
+    ])('id inválido (%s) não é guardado em storage nenhum', (_nome, id) => {
+      const sessao = storageFalso();
+      const local = storageFalso();
+      const s = criarPreferenciasStore(sessao.storage, local.storage);
+      s.definirLembrar(true);
+      s.definir({ modelos: { openai: id } });
+      expect(s.atual()).toEqual({});
+      for (const { itens } of [sessao, local]) {
+        expect(itens.get(PREFERENCIAS) ?? '').not.toContain(id);
+      }
+    });
+
+    it('id válido no limite de tamanho é guardado', () => {
+      const s = criarPreferenciasStore(storageFalso().storage, storageFalso().storage);
+      const id = 'm'.repeat(MODELO_ID_MAX);
+      s.definir({ modelos: { openai: id } });
+      expect(s.atual().modelos).toEqual({ openai: id });
+    });
+  });
+
+  it('definir sem nenhum campo válido não regrava nem avisa os assinantes', () => {
+    const sessao = storageFalso();
+    const s = criarPreferenciasStore(sessao.storage, storageFalso().storage);
+    const ouvinte = vi.fn();
+    s.assinar(ouvinte);
+    const antes = s.revisao();
+    expect(s.definir({})).toEqual({ persistiu: true });
+    expect(s.definir({ tom: 'gritando', destaque: 'rosa' } as unknown as Preferencias)).toEqual({
+      persistiu: true,
+    });
+    expect(ouvinte).not.toHaveBeenCalled();
+    expect(s.revisao()).toBe(antes);
+    expect(sessao.itens.has(PREFERENCIAS)).toBe(false);
   });
 
   it('atual() devolve cópia: mexer no resultado não altera o store', () => {

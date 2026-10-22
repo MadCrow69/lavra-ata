@@ -9,7 +9,7 @@ import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
 import { OperacaoIAProvider, useOperacaoIA } from '../../generation/OperacaoIA';
 import { LogoProvider, useLogo } from '../../logo/LogoContext';
 import type { LogoStore } from '../../logo/logo-store';
-import { usePreferencias } from '../../preferencias/PreferenciasContext';
+import { usePreferenciasStore } from '../../preferencias/PreferenciasContext';
 import type { LogoDoc } from '../../document/model';
 import { AppShell } from '../../shell/AppShell';
 import type { AbaId } from '../../shell/MobileTabs';
@@ -278,7 +278,7 @@ export function Workbench({ opcoesCadeia, logo }: WorkbenchProps) {
   // Lido uma vez, na abertura: o que esta aba guardou antes de recarregar.
   const [recuperado] = useState(() => carregarRascunho());
   // Sem rascunho na sessão, a ata nova parte do tipo e do tom lembrados (se houver).
-  const preferencias = usePreferencias();
+  const preferencias = usePreferenciasStore();
   const [inicial] = useState(
     () =>
       recuperado ??

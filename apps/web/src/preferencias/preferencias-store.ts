@@ -2,6 +2,7 @@ import { normalizarOrdem } from '../ai/keys';
 import { PROVEDORES, type ProviderId } from '../ai/types';
 import { ATA_TYPES } from '../ata-types/registry';
 import { ehIdDestaque, type IdDestaque } from '../config/destaque';
+import { erroDoIdDeModelo } from '../config/models';
 import { PREFERENCIAS } from '../config/storage-keys';
 import { criarArmazemLembravel } from '../domain/armazem-lembravel';
 import { TONS, type Tom } from '../domain/draft';
@@ -30,7 +31,11 @@ export const CAMPOS_PREFERENCIAS: readonly (keyof Preferencias)[] = [
 export interface PreferenciasStore {
   atual: () => Preferencias;
   lembrar: () => boolean;
-  /** Mescla na memória; grava na sessão sempre e no local se `lembrar`. Nunca lança. */
+  /**
+   * Mescla na memória; grava na sessão sempre e no local se `lembrar`. Nunca lança. Campo inválido
+   * é ignorado; sem nenhum campo válido nada acontece (nem regrava, nem avisa os assinantes). Um
+   * modelo em branco (`modelos: { openai: '' }`) apaga o que estava lembrado para o provedor.
+   */
   definir: (parcial: Preferencias) => { persistiu: boolean };
   /** Marcar copia o atual para o local (recusado → lembrar false, persistiu false). Desmarcar apaga do local. */
   definirLembrar: (v: boolean) => { persistiu: boolean };
@@ -65,7 +70,9 @@ const VALIDADORES: { [K in keyof Preferencias]-?: (v: unknown) => Preferencias[K
     const limpos: Partial<Record<ProviderId, string>> = {};
     for (const p of PROVEDORES) {
       const m = v[p];
-      if (typeof m === 'string' && m.trim() !== '') limpos[p] = m.trim();
+      if (typeof m === 'string' && m.trim() !== '' && erroDoIdDeModelo(m) === null) {
+        limpos[p] = m.trim();
+      }
     }
     return Object.keys(limpos).length > 0 ? limpos : undefined;
   },
@@ -83,6 +90,16 @@ function limpar(bruto: unknown): Preferencias {
     if (valor !== undefined) saida[campo] = valor;
   }
   return saida;
+}
+
+/** Provedores cujo modelo veio em branco no `definir`: pedido para esquecer o modelo lembrado. */
+function modelosEmBranco(parcial: unknown): ProviderId[] {
+  if (!ehObjeto(parcial) || !ehObjeto(parcial.modelos)) return [];
+  const { modelos } = parcial;
+  return PROVEDORES.filter((p) => {
+    const m = modelos[p];
+    return typeof m === 'string' && m.trim() === '';
+  });
 }
 
 function copiar(p: Preferencias): Preferencias {
@@ -127,11 +144,15 @@ export function criarPreferenciasStore(
     lembrar: () => lembrar,
     definir(parcial) {
       const novo = limpar(parcial);
-      atual = limpar({
-        ...atual,
-        ...novo,
-        ...(novo.modelos ? { modelos: { ...atual.modelos, ...novo.modelos } } : {}),
-      });
+      const esquecidos = modelosEmBranco(parcial).filter((p) => atual.modelos?.[p] !== undefined);
+      if (Object.keys(novo).length === 0 && esquecidos.length === 0) return { persistiu: true };
+      // `limpar` descarta `modelos` vazio, então apagar o último modelo remove o campo.
+      const modelos = Object.fromEntries(
+        Object.entries({ ...atual.modelos, ...novo.modelos }).filter(
+          ([p]) => !(esquecidos as string[]).includes(p),
+        ),
+      );
+      atual = limpar({ ...atual, ...novo, modelos });
       const naSessao = armazem.gravarSessao(atual);
       let persistiu = naSessao;
       if (lembrar) {

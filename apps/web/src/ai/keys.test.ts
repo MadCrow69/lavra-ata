@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MODELOS } from '../config/models';
 import { CHAVES } from '../config/storage-keys';
 import { criarKeyStore, type ChaveProvedor } from './keys';
+import type { ProviderId } from './types';
 
 /** Storage em memória que registra o que foi escrito. */
 function storageFalso(inicial: Record<string, string> = {}) {
@@ -379,6 +380,18 @@ describe('criarKeyStore', () => {
       store.reordenar(['openai', 'gemini', 'anthropic']);
       store.apagarTudo();
       expect(store.ordem()).toEqual(['anthropic', 'openai', 'gemini']);
+    });
+
+    it('a ordem inicial pode ser uma função: apagar tudo lê a preferência de agora', () => {
+      let preferida: ProviderId[] | undefined = ['anthropic'];
+      const store = criarKeyStore(null, () => preferida);
+      expect(store.ordem()).toEqual(['anthropic', 'openai', 'gemini']);
+      preferida = ['gemini', 'openai'];
+      store.apagarTudo();
+      expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
+      preferida = undefined;
+      store.apagarTudo();
+      expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
     });
   });
 });

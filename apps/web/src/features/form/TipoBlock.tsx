@@ -4,7 +4,7 @@ import type { AtaTypeDefinition } from '../../ata-types/types';
 import { useDraft } from '../../domain/DraftContext';
 import { TONS, type Tom } from '../../domain/draft';
 import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
-import { usePreferencias } from '../../preferencias/PreferenciasContext';
+import { usePreferenciasStore } from '../../preferencias/PreferenciasContext';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { Modal } from '../../ui/Modal';
@@ -28,7 +28,7 @@ export function TipoBlock() {
   const motivoId = useId();
   const { operacao } = useOperacaoIA();
   const { mostrar } = useToast();
-  const preferencias = usePreferencias();
+  const preferencias = usePreferenciasStore();
   const atual = obterTipo(state.tipoId);
   const iaOcupada = operacao !== null;
   /** Tipo escolhido que espera a confirmação de descartar a ata gerada. */

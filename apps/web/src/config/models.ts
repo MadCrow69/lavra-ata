@@ -75,3 +75,33 @@ export const ESPERA_RETRY_MS = 2_000;
 export function esforcoDoModelo(provedor: ProviderId, modelo: string): string | undefined {
   return MODELOS[provedor].opcoes.find((o) => o.id === modelo)?.esforco;
 }
+
+/** Tamanho máximo aceito para um id de modelo digitado. */
+export const MODELO_ID_MAX = 100;
+
+const FORMATO_ID_MODELO = /^[A-Za-z0-9._:/-]+$/;
+/** Prefixos das chaves de API dos provedores: nenhum id de modelo começa assim. */
+const PARECE_CHAVE_DE_API = /^(sk-|AIza)/i;
+
+export const MSG_ID_PARECE_CHAVE =
+  'Isto parece uma chave de API, não um id de modelo. Cole a chave no campo “Chave de API” e escreva aqui só o nome do modelo.';
+
+/**
+ * Por que um id de modelo digitado não pode ser usado (mensagem com causa + ação), ou `null` se
+ * está bom. Em branco é válido (vale o padrão do provedor). Existe, sobretudo, para que uma chave
+ * colada no campo errado nunca vire "preferência" gravada no navegador.
+ */
+export function erroDoIdDeModelo(id: string): string | null {
+  const limpo = id.trim();
+  if (limpo === '') return null;
+  if (PARECE_CHAVE_DE_API.test(limpo)) {
+    return MSG_ID_PARECE_CHAVE;
+  }
+  if (limpo.length > MODELO_ID_MAX) {
+    return `O id do modelo passa de ${String(MODELO_ID_MAX)} caracteres. Confira o id na página do provedor.`;
+  }
+  if (!FORMATO_ID_MODELO.test(limpo)) {
+    return 'O id do modelo só aceita letras, números e os símbolos . _ : / -. Remova os outros caracteres.';
+  }
+  return null;
+}

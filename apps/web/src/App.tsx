@@ -12,11 +12,10 @@ import { ToastProvider } from './ui/Toast';
  */
 function AppSeguro() {
   const [preferencias] = useState(() => criarPreferenciasStore());
-  const { ordem } = preferencias.atual();
   return (
     <LimiteDeErro>
       <PreferenciasProvider store={preferencias}>
-        <KeysProvider {...(ordem ? { ordemInicial: ordem } : {})}>
+        <KeysProvider ordemInicial={() => preferencias.atual().ordem}>
           <ToastProvider>
             <Workbench />
           </ToastProvider>

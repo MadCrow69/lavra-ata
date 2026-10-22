@@ -22,7 +22,6 @@ import {
  */
 
 const CHAVE_PREFERENCIAS = 'lavra:preferencias:v1';
-const VINHO = '#7b1e3a';
 const LEMBRAR = 'Lembrar preferências neste navegador';
 
 /** `#rrggbb` → o `rgb(r, g, b)` que o navegador devolve em `getComputedStyle`. */
@@ -41,6 +40,18 @@ async function destaqueDaFolha(page: Page): Promise<string> {
   return folha(page).evaluate((el) =>
     (el as HTMLElement).style.getPropertyValue('--cor-folha-destaque').trim(),
   );
+}
+
+/**
+ * Cor da amostra da opção, como o navegador a calcula: a paleta do próprio app, lida da tela, sem
+ * repetir hexadecimal aqui.
+ */
+async function rgbDaOpcao(page: Page, rotulo: string): Promise<string> {
+  return page
+    .locator('label')
+    .filter({ has: page.getByRole('radio', { name: rotulo }) })
+    .locator('[aria-hidden="true"]')
+    .evaluate((el) => getComputedStyle(el).backgroundColor);
 }
 
 const localDoNavegador = async (page: Page) => (await conteudoDosStorages(page)).local;
@@ -64,15 +75,17 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     expect(new Set(await coresCalculadas(subtitulos))).toEqual(new Set([rgbDe(padrao)]));
     const corDoTexto = await coresCalculadas(folha(page).locator('p').first());
 
+    const vinho = await rgbDaOpcao(page, 'Vinho');
+    expect(vinho).not.toBe(rgbDe(padrao));
     await page.getByRole('radio', { name: 'Vinho' }).check();
     await expect(
       page.getByText('Cor de destaque: Vinho. A folha, o PDF e o DOCX usam a nova cor.'),
     ).toBeVisible();
 
-    expect(await destaqueDaFolha(page)).toBe(VINHO);
-    expect(await coresCalculadas(titulo)).toEqual([rgbDe(VINHO)]);
+    expect(rgbDe(await destaqueDaFolha(page))).toBe(vinho);
+    expect(await coresCalculadas(titulo)).toEqual([vinho]);
     // Todos os títulos de seção (participantes, pauta, seções da ata, encaminhamentos…).
-    expect(new Set(await coresCalculadas(subtitulos))).toEqual(new Set([rgbDe(VINHO)]));
+    expect(new Set(await coresCalculadas(subtitulos))).toEqual(new Set([vinho]));
     // O texto corrido da ata não muda de cor.
     expect(await coresCalculadas(folha(page).locator('p').first())).toEqual(corDoTexto);
 
@@ -83,6 +96,7 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     app: page,
     rede,
   }) => {
+    const vinho = await rgbDaOpcao(page, 'Vinho');
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
     await preencherReuniao(page);
     await page.getByRole('radio', { name: /CIPA/ }).check();
@@ -124,7 +138,7 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     await expect(page.getByRole('radio', { name: /CIPA/ })).toBeChecked();
     await expect(page.getByLabel('Tom da redação')).toHaveValue('conciso');
     await expect(page.getByRole('checkbox', { name: LEMBRAR })).toBeChecked();
-    expect(await destaqueDaFolha(page)).toBe(VINHO);
+    expect(rgbDe(await destaqueDaFolha(page))).toBe(vinho);
     // A ata nova começa limpa: os dados da reunião anterior não voltaram.
     await expect(campo(page, 'Transcrição da reunião')).toHaveValue('');
 
@@ -135,6 +149,7 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     app: page,
     rede,
   }) => {
+    const roxo = await rgbDaOpcao(page, 'Roxo');
     await page.getByRole('radio', { name: 'Roxo' }).check();
     await page.getByRole('checkbox', { name: LEMBRAR }).check();
     expect(await localDoNavegador(page)).toHaveLength(1);
@@ -148,7 +163,7 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     expect(await localDoNavegador(page)).toEqual([]);
     await expect(page.getByRole('checkbox', { name: LEMBRAR })).not.toBeChecked();
     await expect(page.getByRole('checkbox', { name: LEMBRAR })).toBeFocused();
-    expect(await destaqueDaFolha(page)).toBe('#4b2e83');
+    expect(rgbDe(await destaqueDaFolha(page))).toBe(roxo);
 
     await afirmarLimpo(page, rede);
   });

@@ -3,7 +3,7 @@ import { useKeys } from '../../ai/KeysContext';
 import { ADAPTADORES } from '../../ai/providers';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
 import { ROTULO_PROVEDOR } from '../../config/models';
-import { usePreferencias } from '../../preferencias/PreferenciasContext';
+import { usePreferenciasStore } from '../../preferencias/PreferenciasContext';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { CartaoProvedor, type Direcao } from './CartaoProvedor';
@@ -21,7 +21,7 @@ export interface KeysModalProps {
 /** Modal "Chaves de IA": chave, modelo e ordem de preferência de cada provedor. */
 export function KeysModal({ aberto, onFechar, adaptadores = ADAPTADORES }: KeysModalProps) {
   const keys = useKeys();
-  const preferencias = usePreferencias();
+  const preferencias = usePreferenciasStore();
   const [confirmando, setConfirmando] = useState(false);
   const [anuncio, setAnuncio] = useState('');
   // Muda ao apagar tudo: remonta os cartões para zerarem o que a pessoa digitou.

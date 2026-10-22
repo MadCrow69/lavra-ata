@@ -52,7 +52,7 @@ describe('preferências lembradas no bloco 1', () => {
     expect(
       await screen.findByText('Cor de destaque: Vinho. A folha, o PDF e o DOCX usam a nova cor.'),
     ).toBeInTheDocument();
-    expect(corDaFolha()).toBe('#7b1e3a');
+    expect(corDaFolha()).toBe(corDoDestaque('vinho'));
     expect(corDaFolha()).toBe(corDoDestaque('vinho'));
     expect(screen.getByRole('radio', { name: 'Vinho' })).toBeChecked();
   });
@@ -100,7 +100,7 @@ describe('preferências lembradas no bloco 1', () => {
     expect(screen.getByRole('radio', { name: 'Vinho' })).toBeChecked();
     expect(screen.getByRole('radio', { name: TIPO_CIPA })).toBeChecked();
     expect(screen.getByLabelText('Tom da redação')).toHaveValue('conciso');
-    expect(corDaFolha()).toBe('#7b1e3a');
+    expect(corDaFolha()).toBe(corDoDestaque('vinho'));
     expect(
       screen.getByRole('checkbox', { name: 'Lembrar preferências neste navegador' }),
     ).toBeChecked();
@@ -156,7 +156,7 @@ describe('preferências lembradas no bloco 1', () => {
     expect(local.itens.has(PREFERENCIAS)).toBe(false);
     expect(caixa).not.toBeChecked();
     expect(caixa).toHaveFocus();
-    expect(corDaFolha()).toBe('#7b1e3a');
+    expect(corDaFolha()).toBe(corDoDestaque('vinho'));
     expect(screen.queryByRole('button', { name: 'Esquecer preferências' })).not.toBeInTheDocument();
   });
 

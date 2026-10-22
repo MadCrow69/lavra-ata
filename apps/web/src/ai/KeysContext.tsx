@@ -1,6 +1,5 @@
 import { createContext, use, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { criarKeyStore, type KeyStore } from './keys';
-import type { ProviderId } from './types';
+import { criarKeyStore, type KeyStore, type OrdemInicial } from './keys';
 
 const KeysContext = createContext<KeyStore | null>(null);
 
@@ -15,7 +14,7 @@ export function KeysProvider({
 }: {
   children: ReactNode;
   store?: KeyStore;
-  ordemInicial?: readonly ProviderId[];
+  ordemInicial?: OrdemInicial;
 }) {
   const [instancia] = useState<KeyStore>(() => store ?? criarKeyStore(undefined, ordemInicial));
   return <KeysContext value={instancia}>{children}</KeysContext>;
