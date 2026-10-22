@@ -44,6 +44,15 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--espaco-2) var(--espaco-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Textos longos quebram dentro do botão em vez de estourar a largura (360 px). */
+.acoes button {
+  max-width: 100%;
+  padding-block: var(--espaco-1);
+  line-height: 1.25;
 }
 
 .botaoPrimario {

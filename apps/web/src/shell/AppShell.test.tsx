@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { KeysProvider } from '../ai/KeysContext';
@@ -67,7 +67,20 @@ describe('AppShell em tela larga', () => {
     renderizar();
 
     expect(screen.queryByText(/Ver exemplo/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Privacidade/)).not.toBeInTheDocument();
+  });
+
+  it('as ações do cabeçalho seguem a ordem: privacidade, chaves de IA, GitHub', () => {
+    simularLargura(true);
+    renderizar();
+
+    const acoes = within(screen.getByRole('navigation', { name: 'Ações do cabeçalho' }));
+    const nomes = [...acoes.getAllByRole('button'), ...acoes.getAllByRole('link')]
+      .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      .map((el) => el.textContent);
+    expect(nomes).toHaveLength(3);
+    expect(nomes[0]).toContain('Privacidade: como verificar');
+    expect(nomes[1]).toContain('Configurar chaves de IA');
+    expect(nomes[2]).toContain('GitHub');
   });
 
   it('rodapé: autoria com link seguro para o LinkedIn e licença', () => {

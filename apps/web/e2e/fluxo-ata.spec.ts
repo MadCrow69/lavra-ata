@@ -41,7 +41,9 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     rede,
   }) => {
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI, 'Google Gemini': CHAVE_GEMINI });
-    await expect(page.getByRole('banner').getByRole('button')).toContainText('IA: OpenAI → Gemini');
+    await expect(page.getByRole('banner').getByRole('button', { name: /^IA: / })).toContainText(
+      'IA: OpenAI → Gemini',
+    );
 
     await preencherReuniao(page);
     const gerar = page.getByRole('button', { name: /Gerar ata/ });
@@ -304,7 +306,10 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
 
     // Recarregar descarta as chaves: o cabeçalho volta ao estado sem chave.
     await page.reload();
-    await expect(page.getByRole('banner').getByRole('button')).not.toContainText('IA:');
+    await expect(
+      page.getByRole('banner').getByRole('button', { name: 'Configurar chaves de IA' }),
+    ).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('button', { name: /^IA: / })).toHaveCount(0);
     expect((await conteudoDosStorages(page)).local).toEqual([]);
   });
 });

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import cspFonte from '../../csp.config.js?raw';
 import {
   CHAVE_MIN_PARA_CONFERIR,
   MODELO_ID_MAX,
   MSG_ID_PARECE_CHAVE,
+  ORIGEM_PROVEDOR,
   erroDoIdDeModelo,
   erroDoIdDeModeloComChave,
 } from './models';
@@ -53,5 +55,15 @@ describe('erroDoIdDeModeloComChave', () => {
     expect(erroDoIdDeModeloComChave('gpt-6-luna', '')).toBeNull();
     expect(erroDoIdDeModeloComChave('gpt-6-luna', chave)).toBeNull();
     expect(erroDoIdDeModeloComChave('meu modelo', chave)).toContain('Remova');
+  });
+});
+
+describe('ORIGEM_PROVEDOR', () => {
+  it('é igual, em paridade, ao PROVIDER_ORIGINS da CSP (csp.config.js)', () => {
+    const bloco = /PROVIDER_ORIGINS\s*=\s*\[([^\]]*)\]/.exec(cspFonte)?.[1] ?? '';
+    const daCsp = Array.from(bloco.matchAll(/'(https:\/\/[^']+)'/g), (m) => m[1] ?? '').sort();
+
+    expect(daCsp.length).toBeGreaterThanOrEqual(3);
+    expect(Object.values(ORIGEM_PROVEDOR).sort()).toEqual(daCsp);
   });
 });

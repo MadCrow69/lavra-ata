@@ -41,7 +41,9 @@ describe('App', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     const cabecalho = screen.getByRole('banner');
-    expect(within(cabecalho).getByRole('button')).toHaveTextContent('IA: Gemini → OpenAI');
+    expect(within(cabecalho).getByRole('button', { name: /^IA: / })).toHaveTextContent(
+      'IA: Gemini → OpenAI',
+    );
     // Sem "Lembrar", a chave não foi gravada no navegador; a sessão guarda só o rascunho e as
     // preferências (a ordem recém-escolhida), sem chave (espera o salvamento com debounce
     // acontecer, para a conferência não passar com a sessão vazia).

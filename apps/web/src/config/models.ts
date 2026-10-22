@@ -65,6 +65,17 @@ export const URL_CHAVE: Record<ProviderId, string> = {
   anthropic: 'https://platform.claude.com/settings/keys',
 };
 
+/**
+ * Origem (esquema + host) de cada API de provedor: base das chamadas dos adaptadores e lista de
+ * hosts mostrada em "Privacidade: como verificar". Espelha `PROVIDER_ORIGINS` de `csp.config.js`
+ * (JS lido pelo Node no check-csp; o app não tem `allowJs`): a paridade é provada em `models.test.ts`.
+ */
+export const ORIGEM_PROVEDOR: Record<ProviderId, string> = {
+  openai: 'https://api.openai.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+  anthropic: 'https://api.anthropic.com',
+};
+
 /** Espera, em ms, antes da única nova tentativa após `limite`/`instavel`. */
 export const ESPERA_RETRY_MS = 2_000;
 

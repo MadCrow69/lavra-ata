@@ -1,9 +1,9 @@
-import { MODELOS, ROTULO_PROVEDOR, esforcoDoModelo } from '../../config/models';
+import { MODELOS, ORIGEM_PROVEDOR, ROTULO_PROVEDOR, esforcoDoModelo } from '../../config/models';
 import { erroProvedor } from '../errors';
 import type { ProviderAdapter } from '../types';
 import { chamarProvedor, comoLista, ehRegistro, interpretarSaida } from './comum';
 
-const BASE = 'https://api.anthropic.com/v1';
+const BASE = `${ORIGEM_PROVEDOR.anthropic}/v1`;
 
 function cabecalhos(chave: string): Record<string, string> {
   return {

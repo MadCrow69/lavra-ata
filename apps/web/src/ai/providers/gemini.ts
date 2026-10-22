@@ -1,9 +1,9 @@
-import { MODELOS, ROTULO_PROVEDOR } from '../../config/models';
+import { MODELOS, ORIGEM_PROVEDOR, ROTULO_PROVEDOR } from '../../config/models';
 import { erroProvedor } from '../errors';
 import type { ProviderAdapter } from '../types';
 import { chamarProvedor, comoLista, ehRegistro, interpretarSaida } from './comum';
 
-const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const BASE = `${ORIGEM_PROVEDOR.gemini}/v1beta`;
 
 /** Motivos de término em que o Gemini deliberadamente não entrega a resposta. */
 const FINALIZACAO_RECUSA = new Set([
