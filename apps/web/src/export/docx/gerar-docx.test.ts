@@ -322,11 +322,16 @@ describe('gerarDocx · cor de destaque', () => {
       await gerarDocx(modeloDeVolume({ participantes: 3, encaminhamentos: 3 })),
     );
     const styles = partes.get('word/styles.xml') ?? '';
-    // A biblioteca traz estilos que o documento não usa (Heading3.., Hyperlink) com cores próprias.
+    // A biblioteca traz estilos que o documento não usa, com cores próprias: só ESSES saem da
+    // conta (lista do que sai, não do que fica). Qualquer outro estilo, inclusive um novo ou o
+    // `Normal`, entra na prova de que a saída padrão segue só na tinta.
+    const naoUsados = ['Heading3', 'Heading4', 'Heading5', 'Heading6', 'Hyperlink'];
     const usados = styles.replace(
-      /<w:style [^>]*w:styleId="(?!Title"|Heading1"|Heading2")[^"]*".*?<\/w:style>/gs,
+      new RegExp(`<w:style [^>]*w:styleId="(?:${naoUsados.join('|')})".*?</w:style>`, 'gs'),
       '',
     );
+    for (const id of naoUsados) expect(estilo(usados, id), id).toBe('');
+    expect(estilo(usados, 'Normal')).not.toBe('');
     const cores = coresEm(partes.get('word/document.xml') ?? '', usados);
     const permitidas = new Set([TINTA, 'AUTO', semHash(LINHAS_TABELA.corPadrao).toUpperCase()]);
     expect(cores.length).toBeGreaterThan(0);
