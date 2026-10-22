@@ -191,6 +191,49 @@ describe('definicaoPdf: rodapés, lacunas, assinaturas e aviso', () => {
   });
 });
 
+/**
+ * F2: o pdfmake abre ponto de quebra depois do hífen seguido de letra, e o texto justificado ganha
+ * espaço extra em cada ponto de quebra ("realizou- se"). A palavra com hífen vai inteira (`noWrap`).
+ */
+describe('definicaoPdf: palavra com hífen não se parte no parágrafo justificado', () => {
+  const TEXTO =
+    'Aos quatorze dias, realizou-se a reunião; reuniram-se os sócios (art. 1.080-A), avisados por e-mail.';
+
+  function pecasDoParagrafo(partes: DocumentModel['blocos'][number]): Obj[] {
+    const no = [...objetos(definicaoPdf({ ...volume, blocos: [partes] }).content)].find(
+      (o) => o.alignment === 'justify',
+    );
+    if (!no || !Array.isArray(no.text)) throw new Error('parágrafo justificado não encontrado');
+    return no.text as Obj[];
+  }
+
+  it('cada palavra com hífen (e o espaço que a segue) é um trecho noWrap; o resto não', () => {
+    const pecas = pecasDoParagrafo({ tipo: 'paragrafo', partes: [{ texto: TEXTO }] });
+    expect(pecas.map(achatar).join('')).toBe(TEXTO);
+    expect(pecas.filter((p) => p.noWrap === true).map(achatar)).toEqual([
+      'realizou-se ',
+      'reuniram-se ',
+      '1.080-A), ',
+      'e-mail.',
+    ]);
+    for (const peca of pecas.filter((p) => p.noWrap !== true)) {
+      expect(achatar(peca)).not.toMatch(/\S-\S/);
+    }
+  });
+
+  it('a lacuna com hífen continua em negrito com fundo, e inteira', () => {
+    const pecas = pecasDoParagrafo({
+      tipo: 'paragrafo',
+      partes: [{ texto: 'Ficou ' }, { texto: '[PREENCHER: e-mail]', destaque: 'preencher' }],
+    });
+    expect(pecas.find((p) => achatar(p) === 'e-mail]')).toMatchObject({
+      noWrap: true,
+      bold: true,
+      background: COR_FUNDO_PREENCHER,
+    });
+  });
+});
+
 describe('definicaoPdf: título de seção não fica sozinho no pé da página', () => {
   const quebra = def.pageBreakBefore;
   const no = (n: Partial<Node>) => n as Node;
