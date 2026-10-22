@@ -2,12 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { criarRascunho } from '../domain/draft-reducer';
 import type { AtaDraft, Participante } from '../domain/draft';
 import { TIPO_DE_TESTE, registrarTipoDeTeste } from '../test/tipo-de-teste';
+import { cipa } from './cipa';
+import { condominio } from './condominio';
 import { corporativa } from './corporativa';
 import {
   ATA_TYPES,
   MENSAGEM_OPCAO_INVALIDA,
   camposFaltando,
   colunasDeParticipantes,
+  dadosAoTrocarDeTipo,
   problemaDoCampo,
   problemasDoRegistro,
   rotuloDaOpcao,
@@ -450,5 +453,54 @@ describe('registrarTipoDeTeste', () => {
     expect(ATA_TYPES[TIPO_DE_TESTE.id]).toBe(TIPO_DE_TESTE);
     limpar();
     expect(ATA_TYPES[TIPO_DE_TESTE.id]).toBeUndefined();
+  });
+});
+
+describe('dadosAoTrocarDeTipo', () => {
+  const remota = {
+    modalidade: 'remota',
+    local: 'videoconferência',
+    organizacao: 'Empresa Exemplo',
+  };
+
+  it('a plataforma da corporativa remota vai para `plataforma` e o local deixa de existir no novo tipo', () => {
+    const depois = dadosAoTrocarDeTipo(remota, corporativa, cipa);
+    expect(depois).toEqual({ ...remota, local: '', plataforma: 'videoconferência' });
+  });
+
+  it('na volta, a plataforma regressa ao `local` da corporativa (ida e volta não perdem o texto)', () => {
+    const ida = dadosAoTrocarDeTipo(remota, corporativa, condominio);
+    expect(dadosAoTrocarDeTipo(ida, condominio, corporativa)).toEqual({
+      ...remota,
+      plataforma: '',
+    });
+  });
+
+  it('o destino já preenchido vence e a origem é esvaziada', () => {
+    const depois = dadosAoTrocarDeTipo(
+      { ...remota, plataforma: 'Outra sala virtual' },
+      corporativa,
+      cipa,
+    );
+    expect(depois.plataforma).toBe('Outra sala virtual');
+    expect(depois.local).toBe('');
+  });
+
+  it('só vale na modalidade remota: presencial e híbrida mantêm o local', () => {
+    for (const modalidade of ['presencial', 'hibrida', '']) {
+      const dados = { modalidade, local: 'Sala 2', plataforma: 'Zoom' };
+      expect(dadosAoTrocarDeTipo(dados, corporativa, cipa)).toBe(dados);
+      expect(dadosAoTrocarDeTipo(dados, cipa, corporativa)).toBe(dados);
+    }
+  });
+
+  it('entre tipos com `plataforma` próprio, e para o mesmo tipo, nada muda', () => {
+    expect(dadosAoTrocarDeTipo(remota, cipa, condominio)).toBe(remota);
+    expect(dadosAoTrocarDeTipo(remota, corporativa, corporativa)).toBe(remota);
+  });
+
+  it('origem vazia ou só com espaços não mexe nos dados', () => {
+    const dados = { modalidade: 'remota', local: '  ' };
+    expect(dadosAoTrocarDeTipo(dados, corporativa, cipa)).toBe(dados);
   });
 });

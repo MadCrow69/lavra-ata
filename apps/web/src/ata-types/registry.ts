@@ -29,6 +29,32 @@ export function obterTipo(id: string): AtaTypeDefinition {
   return ATA_TYPES[id] ?? corporativa;
 }
 
+/**
+ * Dados do rascunho depois de trocar `de` por `para`. Tudo é mantido, salvo a exceção D2: na
+ * modalidade remota, o tipo com `plataformaNoLocal` (corporativa) guarda a plataforma em `local`,
+ * e os demais, em `plataforma`. Sem esta passagem, a plataforma da corporativa viraria o "Local"
+ * da CIPA. Vale nos dois sentidos, para a ida e a volta não perderem o texto; o destino já
+ * preenchido vence, e a origem é esvaziada para o texto não aparecer sob o rótulo errado.
+ */
+export function dadosAoTrocarDeTipo(
+  dados: Record<string, string>,
+  de: AtaTypeDefinition,
+  para: AtaTypeDefinition,
+): Record<string, string> {
+  const sai = de.plataformaNoLocal === true;
+  const entra = para.plataformaNoLocal === true;
+  if (dados.modalidade !== 'remota' || sai === entra) return dados;
+  const origem = sai ? 'local' : 'plataforma';
+  const destino = sai ? 'plataforma' : 'local';
+  const texto = textoLimpo(dados[origem]);
+  if (texto === '') return dados;
+  return {
+    ...dados,
+    [origem]: '',
+    [destino]: textoLimpo(dados[destino]) === '' ? texto : (dados[destino] ?? ''),
+  };
+}
+
 export function ehObrigatorio(campo: CampoDef, dados: Record<string, string>): boolean {
   return campo.obrigatorioSe ? campo.obrigatorioSe(dados) : campo.obrigatorio;
 }

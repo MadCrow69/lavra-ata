@@ -89,6 +89,25 @@ describe('draftReducer', () => {
     });
   });
 
+  describe('definirTipo e a plataforma da reunião remota (exceção D2)', () => {
+    function remotaComPlataforma(): AtaDraft {
+      let d = criarRascunho('corporativa');
+      d = draftReducer(d, { type: 'definirCampo', campo: 'modalidade', valor: 'remota' });
+      return draftReducer(d, { type: 'definirCampo', campo: 'local', valor: 'videoconferência' });
+    }
+
+    it('a plataforma da corporativa não vira o local da CIPA e volta ao `local` ao retornar', () => {
+      const naCipa = draftReducer(remotaComPlataforma(), { type: 'definirTipo', tipoId: 'cipa' });
+      expect(naCipa.dados.local).toBe('');
+      expect(naCipa.dados.plataforma).toBe('videoconferência');
+      expect(naCipa.dados.modalidade).toBe('remota');
+
+      const devolta = draftReducer(naCipa, { type: 'definirTipo', tipoId: 'corporativa' });
+      expect(devolta.dados.local).toBe('videoconferência');
+      expect(devolta.dados.plataforma).toBe('');
+    });
+  });
+
   it('definirCampo grava sem mutar o estado anterior', () => {
     const antes = criarRascunho();
     const depois = draftReducer(antes, {

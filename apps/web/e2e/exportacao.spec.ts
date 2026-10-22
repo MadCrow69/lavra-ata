@@ -1,19 +1,22 @@
-import { readFile } from 'node:fs/promises';
-import type { Download, Locator, Page } from '@playwright/test';
-import { strFromU8, unzipSync } from 'fflate';
-import { extractText } from 'unpdf';
+import type { Locator, Page } from '@playwright/test';
 import {
   CHAVE_OPENAI,
   CPF,
   FOLGA_FALLBACK_MS,
+  afirmarLimpo,
+  baixar,
   colarParticipantes,
+  comeca,
   configurarChaves,
   expect,
   folha,
+  gerarAta,
+  partesDoDocx,
   preencherDados,
   preencherReuniao,
   test,
-  violacoesDeCsp,
+  textoDoPdf,
+  xmlDoDocx,
   type Rede,
 } from './apoio';
 import {
@@ -32,77 +35,6 @@ const MOTIVO_IA_OCUPADA = 'Aguarde a geração em andamento terminar.';
 
 const GERADOR_PDF = /\/assets\/gerar-pdf-[^/]+\.js$/;
 const GERADOR_DOCX = /\/assets\/gerar-docx-[^/]+\.js$/;
-
-const espacos = (texto: string) => texto.replace(/\s+/g, ' ');
-
-interface Baixado {
-  nome: string;
-  bytes: Uint8Array;
-}
-
-async function lerDownload(download: Download): Promise<Baixado> {
-  const caminho = await download.path();
-  return { nome: download.suggestedFilename(), bytes: new Uint8Array(await readFile(caminho)) };
-}
-
-/**
- * Clica no botão de exportação e devolve o arquivo baixado. Se a ata tiver lacunas (ou algo mais
- * a confirmar), aceita o modal "Baixar mesmo assim" e segue.
- */
-async function baixar(page: Page, botao: string): Promise<Baixado & { ms: number }> {
-  const inicio = Date.now();
-  const baixou = page.waitForEvent('download');
-  const modal = page.getByRole('dialog');
-  const decisao = Promise.race([
-    baixou.then(() => 'baixou' as const),
-    modal.waitFor({ state: 'visible' }).then(() => 'modal' as const),
-  ]);
-  // Quem perder a corrida não pode virar rejeição solta quando a página fechar.
-  decisao.catch(() => undefined);
-  await page.getByRole('button', { name: botao }).click();
-  if ((await decisao) === 'modal') {
-    await modal.getByRole('button', { name: 'Baixar mesmo assim' }).click();
-  }
-  const arquivo = await lerDownload(await baixou);
-  return { ...arquivo, ms: Date.now() - inicio };
-}
-
-async function textoDoPdf(bytes: Uint8Array): Promise<{ paginas: string[]; total: number }> {
-  // pdf.js pode transferir o buffer: extrai de uma cópia.
-  const { text, totalPages } = await extractText(bytes.slice(), { mergePages: false });
-  return { paginas: text.map(espacos), total: totalPages };
-}
-
-function partesDoDocx(bytes: Uint8Array): Map<string, Uint8Array> {
-  return new Map(Object.entries(unzipSync(bytes)));
-}
-
-function xmlDoDocx(bytes: Uint8Array): string {
-  const documento = partesDoDocx(bytes).get('word/document.xml');
-  if (documento === undefined) throw new Error('word/document.xml ausente no .docx');
-  return strFromU8(documento);
-}
-
-const comeca = (bytes: Uint8Array, texto: string) =>
-  new TextDecoder('latin1').decode(bytes.subarray(0, texto.length)) === texto;
-
-/** Chaves + dados + clique em "Gerar ata"; espera a folha mostrar os encaminhamentos. */
-async function gerarAta(page: Page, preencher: () => Promise<void> = () => preencherReuniao(page)) {
-  await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
-  await preencher();
-  await page.getByRole('button', { name: /Gerar ata/ }).click();
-  await expect(page.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible({
-    timeout: FOLGA_FALLBACK_MS,
-  });
-  await expect(folha(page).getByRole('heading', { name: 'Encaminhamentos' })).toBeVisible();
-}
-
-/** Nada fora do app e dos provedores, nenhuma violação de CSP e nenhum erro no console. */
-async function afirmarLimpo(page: Page, rede: Rede) {
-  expect(rede.violacoes).toEqual([]);
-  expect(await violacoesDeCsp(page)).toEqual([]);
-  expect(rede.errosDePagina).toEqual([]);
-}
 
 function geradoresPedidos(rede: Rede) {
   return {

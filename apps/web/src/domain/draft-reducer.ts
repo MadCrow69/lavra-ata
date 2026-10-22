@@ -1,4 +1,4 @@
-import { TIPO_PADRAO_ID } from '../ata-types/registry';
+import { TIPO_PADRAO_ID, dadosAoTrocarDeTipo, obterTipo } from '../ata-types/registry';
 import { textoLimpo } from '../ata-types/texto-modelo';
 import { calcularAdicao } from './participantes';
 import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } from './draft';
@@ -64,8 +64,14 @@ function registrarTroca(
 export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
   switch (action.type) {
     case 'definirTipo':
-      // A ata gerada vale para o tipo anterior (as seções mudam); todo o resto é mantido.
-      return { ...state, tipoId: action.tipoId, resultado: null };
+      // A ata gerada vale para o tipo anterior (as seções mudam); todo o resto é mantido, exceto a
+      // plataforma da reunião remota, que muda de campo entre a corporativa e os demais tipos.
+      return {
+        ...state,
+        tipoId: action.tipoId,
+        dados: dadosAoTrocarDeTipo(state.dados, obterTipo(state.tipoId), obterTipo(action.tipoId)),
+        resultado: null,
+      };
     case 'definirTom':
       return { ...state, tom: action.tom };
     case 'definirCampo':

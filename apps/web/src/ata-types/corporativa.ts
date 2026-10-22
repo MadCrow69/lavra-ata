@@ -166,6 +166,7 @@ export const corporativa: AtaTypeDefinition = {
   descricao: 'Reunião de trabalho de uma empresa, equipe ou comitê.',
   campos: CAMPOS,
   camposParticipante: [],
+  plataformaNoLocal: true,
   rotuloPapel: 'Cargo / empresa',
   rotulos: { participantes: 'Participantes', pauta: 'Pauta' },
   secoes: SECOES,

@@ -59,6 +59,12 @@ export interface AtaTypeDefinition {
   campos: CampoDef[];
   /** Campos extras do participante, além de nome, papel e presença. */
   camposParticipante: CampoDef[];
+  /**
+   * Exceção D2: na modalidade remota o campo `local` guarda a plataforma (nos demais tipos,
+   * `plataforma` é campo próprio). Na troca de tipo o texto passa de um campo para o outro
+   * (`dadosAoTrocarDeTipo`), para a plataforma não virar o local de uma reunião de outro tipo.
+   */
+  plataformaNoLocal?: true;
   /** Rótulo do papel do participante, ex.: "Cargo / empresa"; `null` = sem coluna de papel. */
   rotuloPapel: string | null;
   /**
