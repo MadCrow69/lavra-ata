@@ -928,6 +928,56 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
       expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('');
     });
 
+    it('fala com o substantivo do tipo (“sócio”), no singular e no plural', async () => {
+      const user = userEvent.setup();
+      const socios: AtaTypeDefinition = {
+        ...TIPO_DE_TESTE,
+        rotulos: { ...TIPO_DE_TESTE.rotulos, pessoa: { singular: 'sócio', plural: 'sócios' } },
+      };
+      renderizar(<ParticipantesBlock tipo={socios} />);
+      expect(screen.getByText(/^Nenhum sócio ainda\./)).toBeVisible();
+      await user.type(screen.getByLabelText(/^Nome do novo sócio/), 'Ana{Enter}');
+      expect(screen.getByText('1 sócio adicionado.')).toBeVisible();
+      expect(screen.getByText('1 sócio · 1 presente')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Adicionar sócio' })).toBeVisible();
+      expect(screen.getByRole('region', { name: 'Lista de sócios' })).toBeVisible();
+      expect(screen.getByLabelText('Nome do sócio 1')).toHaveValue('Ana');
+      expect(screen.getByLabelText('Unidade do sócio 1')).toBeVisible();
+      expect(screen.queryByText(/participante/i)).not.toBeInTheDocument();
+    });
+
+    it('complemento que não identifica (ex.: participação): mesmo nome já conta como repetido', async () => {
+      const user = userEvent.setup();
+      const semIdentificar: AtaTypeDefinition = { ...TIPO_DE_TESTE, complementoIdentifica: false };
+      renderizar(<ParticipantesBlock tipo={semIdentificar} />);
+      await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+      fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+        target: { value: 'Ana Souza — Apto 101' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+      fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+        target: { value: 'ana souza — Apto 102' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      expect(
+        screen.getByText(
+          '1 participante adicionado · 1 já estava na lista (mantido em duplicidade — remova se não for o caso).',
+        ),
+      ).toBeVisible();
+    });
+
+    it('complemento que identifica (ex.: unidade): mesmo nome em outra unidade não é repetido', async () => {
+      const user = userEvent.setup();
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(1));
+      await user.click(screen.getByRole('button', { name: 'Colar lista' }));
+      fireEvent.change(screen.getByLabelText(/Nomes, um por linha/), {
+        target: { value: 'Pessoa 1 — Apto 999' },
+      });
+      await user.click(screen.getByRole('button', { name: 'Adicionar à lista' }));
+      expect(screen.getByText('1 participante adicionado.')).toBeVisible();
+    });
+
     it('sem alerta, só o texto do resumo fica à vista e é anunciado', () => {
       renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(3));
       expect(screen.queryByText(/⚠/, { selector: 'p[aria-hidden]' })).not.toBeInTheDocument();

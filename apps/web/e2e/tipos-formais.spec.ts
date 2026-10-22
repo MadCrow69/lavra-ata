@@ -55,7 +55,9 @@ const LINHAS_DA_LTDA = ['Ana Souza — 50', 'Bruno Lima — 37,5', 'Carla Dias �
 const ALERTA_SOMA_110 =
   'As participações informadas somam 110%, acima de 100%. Corrija: a ata sai com [PREENCHER] no capital presente.';
 
-const adicionados = (quantos: number) => `${String(quantos)} participantes adicionados.`;
+/** Aviso depois de colar: fala com o substantivo do tipo ("condôminos", "sócios"…). */
+const adicionados = (quantos: number, pessoas = 'participantes') =>
+  `${String(quantos)} ${pessoas} adicionados.`;
 
 /** O único corpo de requisição de geração que chegou à OpenAI. */
 function corpoDaGeracao(rede: Rede): string {
@@ -215,24 +217,24 @@ test.describe('condomínio no build com CSP ativa', () => {
           `Condômino de volume nº ${String(i + 1).padStart(3, '0')} — Apto ${String(unidadeDe(i))}`,
         CONDOMINOS,
       ),
-      adicionados(CONDOMINOS),
+      adicionados(CONDOMINOS, 'condôminos'),
     );
     await preencherVazios(page, 'Vínculo', 'Proprietário(a)');
     await expect(
       page.getByText(
-        `Vínculo “Proprietário(a)” aplicado a ${String(CONDOMINOS)} participantes sem valor.`,
+        `Vínculo “Proprietário(a)” aplicado a ${String(CONDOMINOS)} condôminos sem valor.`,
         { exact: true },
       ),
     ).toBeVisible();
 
     // Busca pela unidade: sobra uma linha.
-    const linhas = page.getByRole('region', { name: 'Lista de participantes' }).locator('tbody tr');
+    const linhas = page.getByRole('region', { name: 'Lista de condôminos' }).locator('tbody tr');
     await expect(linhas).toHaveCount(CONDOMINOS);
     await page
-      .getByLabel('Buscar participante', { exact: true })
+      .getByLabel('Buscar condômino', { exact: true })
       .fill(`Apto ${String(unidadeDe(CONDOMINOS / 4))}`);
     await expect(linhas).toHaveCount(1);
-    await page.getByLabel('Buscar participante', { exact: true }).fill('');
+    await page.getByLabel('Buscar condômino', { exact: true }).fill('');
     await expect(linhas).toHaveCount(CONDOMINOS);
 
     await preencherCampos(page, { 'Quem assina a ata': 'A mesa e os condôminos presentes' });
@@ -304,7 +306,7 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
       'Declaração de formalidades': 'A mesa declara atendidas as formalidades legais',
       'Ordem do dia': 'Mudança do endereço da sede',
     });
-    await colarParticipantes(page, LINHAS_DA_LTDA, adicionados(LINHAS_DA_LTDA.length));
+    await colarParticipantes(page, LINHAS_DA_LTDA, adicionados(LINHAS_DA_LTDA.length, 'sócios'));
     // Todos presentes: 100%; a sócia ausente tira 12,5, e o anúncio acompanha sem mudar a lista.
     await afirmarResumoDoCapital(page, 'Capital presente informado: 100%');
     await page
@@ -331,7 +333,7 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
     );
 
     // Soma acima de 100%: alerta e lacuna no documento. Voltando a 50%, tudo some.
-    const participacaoDoPrimeiro = page.getByLabel('Participação (%) do participante 1', {
+    const participacaoDoPrimeiro = page.getByLabel('Participação (%) do sócio 1', {
       exact: true,
     });
     await participacaoDoPrimeiro.fill('60');
@@ -475,7 +477,7 @@ test.describe('celular (360×740) no build com CSP ativa', () => {
   /** Cada participante vira um cartão: a tabela deixa de ser `table` e cabe na largura. */
   async function participantesEmCartoes(page: Page) {
     const exibicao = await page
-      .getByRole('region', { name: 'Lista de participantes' })
+      .getByRole('region', { name: /^Lista de / })
       .locator('tbody tr')
       .first()
       .evaluate((tr) => getComputedStyle(tr).display);
@@ -532,7 +534,7 @@ test.describe('celular (360×740) no build com CSP ativa', () => {
     await semRolagemHorizontal(page);
 
     // O alerta de soma acima de 100% (texto comprido) também cabe na largura.
-    await page.getByLabel('Participação (%) do participante 1', { exact: true }).fill('60');
+    await page.getByLabel('Participação (%) do sócio 1', { exact: true }).fill('60');
     await expect(alertaDoResumo(page, ALERTA_SOMA_110)).toBeVisible();
     await afirmarResumoDoCapital(page, null, [ALERTA_SOMA_110]);
     await semRolagemHorizontal(page);
@@ -593,7 +595,7 @@ test.describe('desktop: lista de participantes cabe no bloco', () => {
       (i) => `Condômino ${String(i + 1)} — Apto ${String(unidadeDe(i))}`,
       5,
     );
-    await colarParticipantes(page, linhas, adicionados(linhas.length));
+    await colarParticipantes(page, linhas, adicionados(linhas.length, 'condôminos'));
     await preencherVazios(page, 'Vínculo', 'Proprietário(a)');
     for (const largura of LARGURAS) await listaCabe(page, largura);
     await afirmarLimpo(page, rede);
@@ -601,7 +603,7 @@ test.describe('desktop: lista de participantes cabe no bloco', () => {
 
   test('Ltda (4 colunas e a ação)', async ({ app: page, rede }) => {
     await escolherTipo(page, TIPO_LTDA);
-    await colarParticipantes(page, LINHAS_DA_LTDA, adicionados(LINHAS_DA_LTDA.length));
+    await colarParticipantes(page, LINHAS_DA_LTDA, adicionados(LINHAS_DA_LTDA.length, 'sócios'));
     for (const largura of LARGURAS) await listaCabe(page, largura);
     await afirmarLimpo(page, rede);
   });

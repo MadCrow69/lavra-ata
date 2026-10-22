@@ -100,7 +100,12 @@ describe('CIPA: registro', () => {
     expect(obterTipo('cipa')).toBe(cipa);
     expect(cipa.rotulo).toBe('CIPA — reunião ordinária ou extraordinária');
     expect(cipa.descricao).toBe('Comissão Interna de Prevenção de Acidentes e de Assédio (NR-5).');
-    expect(cipa.rotulos).toEqual({ participantes: 'Participantes', pauta: 'Pauta' });
+    expect(cipa.rotulos).toEqual({
+      participantes: 'Participantes',
+      pauta: 'Pauta',
+      pessoa: { singular: 'participante', plural: 'participantes' },
+    });
+    expect(cipa.complementoIdentifica).toBe(true);
     expect(cipa.rotuloPapel).toBe('Cargo / função');
     expect(cipa.temEncaminhamentos).toBe(true);
     expect(cipa.camposNoPrompt).toEqual([

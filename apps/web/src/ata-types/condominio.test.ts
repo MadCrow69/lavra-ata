@@ -109,7 +109,13 @@ describe('condomínio: registro', () => {
     expect(condominio.descricao).toBe(
       'Assembleia ordinária ou extraordinária de condôminos (Código Civil).',
     );
-    expect(condominio.rotulos).toEqual({ participantes: 'Condôminos', pauta: 'Ordem do dia' });
+    expect(condominio.rotulos).toEqual({
+      participantes: 'Condôminos',
+      pauta: 'Ordem do dia',
+      pessoa: { singular: 'condômino', plural: 'condôminos' },
+    });
+    // A unidade distingue dois condôminos de mesmo nome.
+    expect(condominio.complementoIdentifica).toBe(true);
     expect(condominio.rotuloPapel).toBeNull();
     expect(condominio.campoComplemento).toBe('unidade');
     expect(condominio.temEncaminhamentos).toBe(true);

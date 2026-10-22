@@ -305,7 +305,13 @@ export const condominio: AtaTypeDefinition = {
   camposParticipante: CAMPOS_PARTICIPANTE,
   rotuloPapel: null,
   campoComplemento: 'unidade',
-  rotulos: { participantes: 'Condôminos', pauta: 'Ordem do dia' },
+  // A unidade distingue dois condôminos de mesmo nome.
+  complementoIdentifica: true,
+  rotulos: {
+    participantes: 'Condôminos',
+    pauta: 'Ordem do dia',
+    pessoa: { singular: 'condômino', plural: 'condôminos' },
+  },
   secoes: SECOES,
   temEncaminhamentos: true,
   camposNoPrompt: ['data', 'natureza', 'chamada', 'modalidade', 'presidente', 'secretario'],

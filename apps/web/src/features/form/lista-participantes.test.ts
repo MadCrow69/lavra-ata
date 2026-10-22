@@ -97,36 +97,54 @@ describe('contarRepetidos', () => {
   });
 });
 
+const PARTICIPANTE = { singular: 'participante', plural: 'participantes' };
+const CONDOMINO = { singular: 'condômino', plural: 'condôminos' };
+
 describe('descreverPreenchimento', () => {
   it('plural e singular', () => {
-    expect(descreverPreenchimento('Vínculo', 'Proprietário(a)', 200)).toBe(
+    expect(descreverPreenchimento('Vínculo', 'Proprietário(a)', 200, PARTICIPANTE)).toBe(
       'Vínculo “Proprietário(a)” aplicado a 200 participantes sem valor.',
     );
-    expect(descreverPreenchimento('Vínculo', 'Proprietário(a)', 1)).toBe(
+    expect(descreverPreenchimento('Vínculo', 'Proprietário(a)', 1, PARTICIPANTE)).toBe(
       'Vínculo “Proprietário(a)” aplicado a 1 participante sem valor.',
+    );
+  });
+
+  it('usa o substantivo do tipo', () => {
+    expect(descreverPreenchimento('Vínculo', 'Proprietário(a)', 2, CONDOMINO)).toBe(
+      'Vínculo “Proprietário(a)” aplicado a 2 condôminos sem valor.',
     );
   });
 });
 
 describe('descreverAdicao', () => {
   it('só adicionados', () => {
-    expect(descreverAdicao({ adicionados: 1, ignorados: 0, repetidos: 0 })).toBe(
+    expect(descreverAdicao({ adicionados: 1, ignorados: 0, repetidos: 0 }, PARTICIPANTE)).toBe(
       '1 participante adicionado.',
     );
   });
 
   it('avisa os que já estavam na lista', () => {
-    expect(descreverAdicao({ adicionados: 12, ignorados: 0, repetidos: 3 })).toBe(
+    expect(descreverAdicao({ adicionados: 12, ignorados: 0, repetidos: 3 }, PARTICIPANTE)).toBe(
       '12 participantes adicionados · 3 já estavam na lista (mantidos em duplicidade — remova se não for o caso).',
     );
-    expect(descreverAdicao({ adicionados: 2, ignorados: 0, repetidos: 1 })).toBe(
+    expect(descreverAdicao({ adicionados: 2, ignorados: 0, repetidos: 1 }, PARTICIPANTE)).toBe(
       '2 participantes adicionados · 1 já estava na lista (mantido em duplicidade — remova se não for o caso).',
     );
   });
 
   it('junta repetidos e limite', () => {
-    expect(descreverAdicao({ adicionados: 0, ignorados: 2, repetidos: 0 })).toBe(
+    expect(descreverAdicao({ adicionados: 0, ignorados: 2, repetidos: 0 }, PARTICIPANTE)).toBe(
       'Nenhum nome foi adicionado. 2 nomes ignorados: o limite é 500 participantes.',
+    );
+  });
+
+  it('usa o substantivo do tipo, inclusive no limite', () => {
+    expect(descreverAdicao({ adicionados: 3, ignorados: 1, repetidos: 0 }, CONDOMINO)).toBe(
+      '3 condôminos adicionados. 1 nome ignorado: o limite é 500 condôminos.',
+    );
+    expect(descreverAdicao({ adicionados: 1, ignorados: 0, repetidos: 0 }, CONDOMINO)).toBe(
+      '1 condômino adicionado.',
     );
   });
 });

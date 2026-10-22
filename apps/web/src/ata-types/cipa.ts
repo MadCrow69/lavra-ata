@@ -10,6 +10,7 @@ import {
 } from './campos-comuns';
 import { linhaSe, ou, presentes } from './comum-formal';
 import {
+  comMaiuscula,
   dataPorExtensoOuNulo,
   horaOuNulo,
   preencher,
@@ -41,9 +42,6 @@ const TEXTOS = Object.freeze({
   avisoDisponibilizacao:
     'Disponibilize esta ata a todos os integrantes da CIPA (NR-5, item 5.6.3.1) e divulgue as deliberações e os encaminhamentos a todos os empregados, em quadro de aviso ou por meio eletrônico (NR-5, item 5.6.3.2).',
 });
-
-/** Primeira letra maiúscula: o rótulo da opção é o mesmo texto fixo que o preâmbulo usa. */
-const comMaiuscula = (texto: string): string => texto.charAt(0).toUpperCase() + texto.slice(1);
 
 /** Texto do preâmbulo para cada motivo de reunião extraordinária (NR-5, 5.6.4). */
 const TEXTO_DO_MOTIVO: Readonly<Record<string, string>> = {
@@ -306,7 +304,12 @@ export const cipa: AtaTypeDefinition = {
   campos: CAMPOS,
   camposParticipante: CAMPOS_PARTICIPANTE,
   rotuloPapel: 'Cargo / função',
-  rotulos: { participantes: 'Participantes', pauta: 'Pauta' },
+  complementoIdentifica: true,
+  rotulos: {
+    participantes: 'Participantes',
+    pauta: 'Pauta',
+    pessoa: { singular: 'participante', plural: 'participantes' },
+  },
   secoes: SECOES,
   temEncaminhamentos: true,
   camposNoPrompt: ['data', 'natureza', 'motivo', 'modalidade', 'presidente', 'secretario'],

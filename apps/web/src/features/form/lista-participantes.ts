@@ -1,3 +1,4 @@
+import type { RotuloPessoa } from '../../ata-types/types';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
 import { plural } from '../../ui/plural';
 
@@ -53,13 +54,14 @@ export function contarRepetidos(
   return novos.filter((linha) => conhecidos.has(chaveDeRepeticao(linha))).length;
 }
 
-/** Aviso depois de "Preencher os vazios": que valor entrou em quantos participantes. */
+/** Aviso depois de "Preencher os vazios": que valor entrou em quantas pessoas da lista. */
 export function descreverPreenchimento(
   rotuloCampo: string,
   rotuloValor: string,
   quantos: number,
+  pessoa: RotuloPessoa,
 ): string {
-  return `${rotuloCampo} “${rotuloValor}” aplicado a ${String(quantos)} ${plural(quantos, 'participante', 'participantes')} sem valor.`;
+  return `${rotuloCampo} “${rotuloValor}” aplicado a ${String(quantos)} ${plural(quantos, pessoa.singular, pessoa.plural)} sem valor.`;
 }
 
 export interface ResumoAdicao {
@@ -70,12 +72,15 @@ export interface ResumoAdicao {
 }
 
 /** Texto do aviso que a pessoa lê depois de adicionar nomes. */
-export function descreverAdicao({ adicionados, ignorados, repetidos }: ResumoAdicao): string {
+export function descreverAdicao(
+  { adicionados, ignorados, repetidos }: ResumoAdicao,
+  pessoa: RotuloPessoa,
+): string {
   const partes: string[] = [];
   if (adicionados === 0) {
     partes.push('Nenhum nome foi adicionado.');
   } else {
-    let frase = `${String(adicionados)} ${plural(adicionados, 'participante adicionado', 'participantes adicionados')}`;
+    let frase = `${String(adicionados)} ${plural(adicionados, `${pessoa.singular} adicionado`, `${pessoa.plural} adicionados`)}`;
     if (repetidos > 0) {
       frase += ` · ${String(repetidos)} ${plural(repetidos, 'já estava', 'já estavam')} na lista (${plural(repetidos, 'mantido', 'mantidos')} em duplicidade — remova se não for o caso)`;
     }
@@ -83,7 +88,7 @@ export function descreverAdicao({ adicionados, ignorados, repetidos }: ResumoAdi
   }
   if (ignorados > 0) {
     partes.push(
-      `${String(ignorados)} ${plural(ignorados, 'nome ignorado', 'nomes ignorados')}: o limite é ${String(LIMITE_PARTICIPANTES)} participantes.`,
+      `${String(ignorados)} ${plural(ignorados, 'nome ignorado', 'nomes ignorados')}: o limite é ${String(LIMITE_PARTICIPANTES)} ${pessoa.plural}.`,
     );
   }
   return partes.join(' ');

@@ -6,7 +6,7 @@ import { MODALIDADE_REMOTA } from './campos-comuns';
 import { condominio } from './condominio';
 import { corporativa } from './corporativa';
 import { sociosLtda } from './socios-ltda';
-import { ehVisivel, rotuloDaOpcao, rotuloDoCampo, textoLimpo } from './texto-modelo';
+import { comMaiuscula, ehVisivel, rotuloDaOpcao, rotuloDoCampo, textoLimpo } from './texto-modelo';
 import type { AtaTypeDefinition, CampoDef, CampoFaltando } from './types';
 
 /**
@@ -332,11 +332,15 @@ export function camposFaltando(d: AtaDraft, tipo: AtaTypeDefinition): CampoFalta
     faltas.push({
       bloco: 'participantes',
       campo: 'participantes',
-      rotulo: 'Participante presente',
+      rotulo: `${comMaiuscula(tipo.rotulos.pessoa.singular)} presente`,
     });
   }
   if (d.participantes.some((p) => p.nome.trim() === '')) {
-    faltas.push({ bloco: 'participantes', campo: 'nome', rotulo: 'Nome do participante' });
+    faltas.push({
+      bloco: 'participantes',
+      campo: 'nome',
+      rotulo: `Nome do ${tipo.rotulos.pessoa.singular}`,
+    });
   }
   for (const campo of tipo.camposParticipante) {
     const problemas = d.participantes.map((p) =>

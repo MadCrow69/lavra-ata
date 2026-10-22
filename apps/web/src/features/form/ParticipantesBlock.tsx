@@ -10,7 +10,7 @@ import {
   type ProblemaCampo,
 } from '../../ata-types/registry';
 import { textoLimpo } from '../../ata-types/texto-modelo';
-import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
+import type { AtaTypeDefinition, CampoDef, RotuloPessoa } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
 import { ESPERA_ANUNCIO_RESUMO_MS, LARGURA_TELA_ESTREITA_REM } from '../../config/ui';
 import { useDraft } from '../../domain/DraftContext';
@@ -48,6 +48,8 @@ interface LinhaProps {
   dados: Record<string, string>;
   /** Prefixo dos ids das descrições compartilhadas por coluna (uma linha de resumo por coluna). */
   vaziosId: string;
+  /** Substantivo do tipo ("sócio", "condômino"…) nos rótulos da linha. */
+  pessoa: RotuloPessoa;
   dispatch: Dispatch<DraftAction>;
 }
 
@@ -87,6 +89,7 @@ function mesmaLinha(a: LinhaProps, b: LinhaProps): boolean {
     a.posicao !== b.posicao ||
     a.dispatch !== b.dispatch ||
     a.vaziosId !== b.vaziosId ||
+    a.pessoa !== b.pessoa ||
     !mesmasColunas(a.colunas, b.colunas)
   ) {
     return false;
@@ -168,12 +171,13 @@ function CampoExtra({
 
 /** Uma linha da tabela. Memoizada: com centenas de linhas, editar uma não redesenha as outras. */
 const Linha = memo(function Linha(props: LinhaProps) {
-  const { participante: p, posicao, colunas, dispatch } = props;
+  const { participante: p, posicao, colunas, pessoa, dispatch } = props;
   const atualizar = (patch: Partial<Participante>) => {
     dispatch({ type: 'atualizarParticipante', id: p.id, patch });
   };
   const nomeVazio = p.nome.trim() === '';
-  const quem = nomeVazio ? `participante ${String(posicao)}` : p.nome;
+  const quem = nomeVazio ? `${pessoa.singular} ${String(posicao)}` : p.nome;
+  const daLinha = `do ${pessoa.singular} ${String(posicao)}`;
   const baseId = useId();
   const problemas = problemasDaLinha(props);
 
@@ -185,7 +189,7 @@ const Linha = memo(function Linha(props: LinhaProps) {
             <input
               type="text"
               {...marcarCampo('nome')}
-              aria-label={`Nome do participante ${String(posicao)}`}
+              aria-label={`Nome ${daLinha}`}
               aria-invalid={nomeVazio}
               aria-describedby={nomeVazio ? `${baseId}-nome` : undefined}
               value={p.nome}
@@ -206,7 +210,7 @@ const Linha = memo(function Linha(props: LinhaProps) {
           <td key={coluna.id} data-rotulo={coluna.rotulo}>
             <input
               type="text"
-              aria-label={`${coluna.rotulo} do participante ${String(posicao)}`}
+              aria-label={`${coluna.rotulo} ${daLinha}`}
               value={p.papel}
               onChange={(e) => {
                 atualizar({ papel: e.target.value });
@@ -251,7 +255,7 @@ const Linha = memo(function Linha(props: LinhaProps) {
             <CampoExtra
               campo={coluna.campo}
               valor={p.extras[coluna.id] ?? ''}
-              rotulo={`${coluna.rotulo} do participante ${String(posicao)}`}
+              rotulo={`${coluna.rotulo} ${daLinha}`}
               problema={problemas[indice] ?? null}
               erroId={`${baseId}-${coluna.id}`}
               vazioId={idDoResumoVazios(props.vaziosId, coluna.id)}
@@ -293,6 +297,7 @@ interface PreencherVaziosProps {
   invalidos: number;
   /** Campo obrigatório: a contagem dos vazios já está na linha de resumo da coluna. */
   obrigatorio: boolean;
+  pessoa: RotuloPessoa;
   onAplicar: (valor: string) => void;
 }
 
@@ -303,6 +308,7 @@ function PreencherVazios({
   vazios,
   invalidos,
   obrigatorio,
+  pessoa,
   onAplicar,
 }: PreencherVaziosProps) {
   const [valor, setValor] = useState('');
@@ -341,7 +347,7 @@ function PreencherVazios({
         {[
           vazios === 0 && invalidos === 0 ? 'Ninguém está sem valor.' : null,
           vazios > 0 && !obrigatorio
-            ? `${String(vazios)} ${plural(vazios, 'participante sem valor', 'participantes sem valor')}.`
+            ? `${String(vazios)} ${plural(vazios, pessoa.singular, pessoa.plural)} sem valor.`
             : null,
           invalidos > 0 ? `${String(invalidos)} com valor inválido — corrija na lista.` : null,
         ]
@@ -386,6 +392,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const [listaAberta, setListaAberta] = useState(false);
   const listaId = useId();
   const telaEstreita = useConsultaMidia(CONSULTA_TELA_ESTREITA, false);
+  const pessoa = tipo.rotulos.pessoa;
+  /** "1 sócio" / "3 sócios": a quantidade com o substantivo do tipo. */
+  const quantas = (n: number): string =>
+    `${String(n)} ${plural(n, pessoa.singular, pessoa.plural)}`;
 
   const colunas = useMemo(() => colunasDeParticipantes(tipo, dados), [tipo, dados]);
   // Para onde vai o "X" de "Nome — X": o extra declarado pelo tipo ou, sem ele, o papel.
@@ -396,6 +406,9 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     : tipo.rotuloPapel;
   const complementoDe = (p: Participante): string =>
     destino === undefined ? p.papel : (p.extras[destino] ?? '');
+  // O aviso de repetição só compara o complemento que distingue pessoas (unidade, cargo).
+  const paraRepeticao = (l: LinhaParticipante): LinhaParticipante =>
+    tipo.complementoIdentifica ? l : { nome: l.nome, complemento: '' };
 
   const faltando = camposFaltando(state, tipo)
     .filter((f) => f.bloco === 'participantes')
@@ -474,8 +487,8 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         : linhas;
     const { adicionados, ignorados } = calcularAdicao(total, efetivas.length);
     const repetidos = contarRepetidos(
-      efetivas.slice(0, adicionados),
-      participantes.map((p) => ({ nome: p.nome, complemento: complementoDe(p) })),
+      efetivas.slice(0, adicionados).map(paraRepeticao),
+      participantes.map((p) => paraRepeticao({ nome: p.nome, complemento: complementoDe(p) })),
     );
     dispatch({
       type: 'adicionarParticipantes',
@@ -483,7 +496,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       complementos: efetivas.map((l) => l.complemento),
       ...(destino === undefined ? {} : { destino }),
     });
-    setAviso({ texto: descreverAdicao({ adicionados, ignorados, repetidos }), base: null });
+    setAviso({
+      texto: descreverAdicao({ adicionados, ignorados, repetidos }, pessoa),
+      base: null,
+    });
     return adicionados;
   };
 
@@ -505,7 +521,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     e.preventDefault();
     const nome = novoNome.trim();
     if (nome === '') {
-      setErroNovo('Informe o nome do participante.');
+      setErroNovo(`Informe o nome do ${pessoa.singular}.`);
       novoNomeRef.current?.focus();
       return;
     }
@@ -523,7 +539,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       dispatch({ type: 'atualizarParticipante', id: p.id, patch: { presenca: 'presente' } });
     }
     setAviso({
-      texto: `${String(alvo.length)} ${plural(alvo.length, 'participante marcado', 'participantes marcados')} como presente${alvo.length === 1 ? '' : 's'}.`,
+      texto: `${quantas(alvo.length)} ${plural(alvo.length, 'marcado como presente', 'marcados como presentes')}.`,
       base: null,
     });
   };
@@ -532,12 +548,17 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     const ids = participantes.filter((p) => textoLimpo(p.extras[campo.id]) === '').map((p) => p.id);
     dispatch({ type: 'preencherExtrasVazios', campo: campo.id, valor });
     setAviso({
-      texto: descreverPreenchimento(rotulo, rotuloDaOpcao(campo, valor) ?? valor, ids.length),
+      texto: descreverPreenchimento(
+        rotulo,
+        rotuloDaOpcao(campo, valor) ?? valor,
+        ids.length,
+        pessoa,
+      ),
       base: null,
       desfazer: () => {
         dispatch({ type: 'limparExtra', campo: campo.id, ids });
         setAviso({
-          texto: `Preenchimento desfeito: ${String(ids.length)} ${plural(ids.length, 'participante voltou', 'participantes voltaram')} a ficar sem valor.`,
+          texto: `Preenchimento desfeito: ${quantas(ids.length)} ${plural(ids.length, 'voltou', 'voltaram')} a ficar sem valor.`,
           base: null,
         });
         // O botão sai de cena: o foco fica no aviso, que passa a anunciar o resultado.
@@ -555,7 +576,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     >
       <div className={styles.barra}>
         <p className={styles.contador} aria-live="polite">
-          {`${String(total)} ${plural(total, 'participante', 'participantes')} · ${String(presentes)} ${plural(presentes, 'presente', 'presentes')}`}
+          {`${quantas(total)} · ${String(presentes)} ${plural(presentes, 'presente', 'presentes')}`}
         </p>
         <div className={styles.acoesBarra}>
           <Button
@@ -589,7 +610,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       ))}
 
       <form className={styles.novoParticipante} onSubmit={adicionarUm} noValidate>
-        <Field rotulo="Nome do novo participante" obrigatorio erro={erroNovo}>
+        <Field rotulo={`Nome do novo ${pessoa.singular}`} obrigatorio erro={erroNovo}>
           {(controle) => (
             <input
               {...controle}
@@ -632,7 +653,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         )}
         <div className={styles.novoParticipanteBotao}>
           <Button type="submit" variante="primario">
-            Adicionar participante
+            {`Adicionar ${pessoa.singular}`}
           </Button>
         </div>
       </form>
@@ -680,8 +701,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
 
       {total === 0 ? (
         <p className={styles.vazio}>
-          Nenhum participante ainda. Digite um nome acima e tecle Enter, ou use “Colar lista” para
-          adicionar vários de uma vez.
+          {`Nenhum ${pessoa.singular} ainda. Digite um nome acima e tecle Enter, ou use “Colar lista” para adicionar vários de uma vez.`}
         </p>
       ) : (
         <>
@@ -692,7 +712,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                 .map(({ coluna, vazios }) => (
                   <p key={coluna.id} id={idDoResumoVazios(vaziosId, coluna.id)}>
                     <span aria-hidden="true">⚠ </span>
-                    {`${coluna.rotulo}: ${String(vazios)} ${plural(vazios, 'participante sem valor', 'participantes sem valor')}.`}
+                    {`${coluna.rotulo}: ${quantas(vazios)} sem valor.`}
                   </p>
                 ))}
             </div>
@@ -707,6 +727,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                 vazios={vazios}
                 invalidos={invalidos}
                 obrigatorio={obrigatorio}
+                pessoa={pessoa}
                 onAplicar={(valor) => {
                   preencherVazios(campo, coluna.rotulo, valor);
                 }}
@@ -714,7 +735,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             ))}
           {comRolagem ? (
             <div className={styles.busca}>
-              <Field rotulo="Buscar participante">
+              <Field rotulo={`Buscar ${pessoa.singular}`}>
                 {(controle) => (
                   <input
                     {...controle}
@@ -739,10 +760,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                   setEmEdicao(null);
                 }}
               >
-                {listaAberta ? 'Ocultar a lista' : `Mostrar os ${String(total)} participantes`}
+                {listaAberta ? 'Ocultar a lista' : `Mostrar os ${quantas(total)}`}
               </Button>
               {recolhida && semNome > 0 ? (
-                <p>{`${String(semNome)} ${plural(semNome, 'participante sem nome continua', 'participantes sem nome continuam')} à vista para correção.`}</p>
+                <p>{`${quantas(semNome)} sem nome ${plural(semNome, 'continua', 'continuam')} à vista para correção.`}</p>
               ) : null}
             </div>
           ) : null}
@@ -750,7 +771,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             {visiveis.length === 0 ? (
               termo === '' ? null : (
                 <p className={styles.vazio}>
-                  {`Nenhum participante encontrado para “${busca.trim()}”. `}
+                  {`Nenhum ${pessoa.singular} encontrado para “${busca.trim()}”. `}
                   <Button
                     onClick={() => {
                       setBusca('');
@@ -764,7 +785,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
               <div
                 className={styles.tabelaRolagem}
                 role="region"
-                aria-label="Lista de participantes"
+                aria-label={`Lista de ${pessoa.plural}`}
                 tabIndex={0}
                 data-rolagem={comRolagem}
               >
@@ -796,6 +817,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                         colunas={colunas}
                         dados={dados}
                         vaziosId={vaziosId}
+                        pessoa={pessoa}
                         dispatch={dispatch}
                       />
                     ))}

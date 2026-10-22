@@ -168,7 +168,12 @@ export const corporativa: AtaTypeDefinition = {
   camposParticipante: [],
   plataformaNoLocal: true,
   rotuloPapel: 'Cargo / empresa',
-  rotulos: { participantes: 'Participantes', pauta: 'Pauta' },
+  complementoIdentifica: true,
+  rotulos: {
+    participantes: 'Participantes',
+    pauta: 'Pauta',
+    pessoa: { singular: 'participante', plural: 'participantes' },
+  },
   secoes: SECOES,
   temEncaminhamentos: true,
   camposNoPrompt: ['data', 'modalidade'],

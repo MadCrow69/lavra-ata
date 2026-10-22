@@ -55,7 +55,12 @@ describe('registro de tipos', () => {
   });
 
   it('rótulos de bloco e papel próprios da corporativa', () => {
-    expect(corporativa.rotulos).toEqual({ participantes: 'Participantes', pauta: 'Pauta' });
+    expect(corporativa.rotulos).toEqual({
+      participantes: 'Participantes',
+      pauta: 'Pauta',
+      pessoa: { singular: 'participante', plural: 'participantes' },
+    });
+    expect(corporativa.complementoIdentifica).toBe(true);
     expect(corporativa.rotuloPapel).toBe('Cargo / empresa');
   });
 

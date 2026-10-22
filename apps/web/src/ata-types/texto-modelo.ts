@@ -6,6 +6,10 @@ export function preencher(oQueFalta: string): string {
   return `[PREENCHER: ${oQueFalta}]`;
 }
 
+/** Primeira letra maiúscula (ex.: rótulo de opção a partir do texto fixo, "Sócio presente"). */
+export const comMaiuscula = (texto: string): string =>
+  texto.charAt(0).toUpperCase() + texto.slice(1);
+
 /** Texto digitado, sem espaços nas pontas; `undefined` e vazio viram `''`. */
 export function textoLimpo(valor: string | undefined): string {
   return (valor ?? '').trim();

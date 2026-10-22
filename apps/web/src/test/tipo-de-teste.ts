@@ -112,7 +112,12 @@ export const TIPO_DE_TESTE: AtaTypeDefinition = {
   camposParticipante: CAMPOS_PARTICIPANTE,
   rotuloPapel: null,
   campoComplemento: 'unidade',
-  rotulos: { participantes: 'Membros', pauta: 'Ordem do dia' },
+  complementoIdentifica: true,
+  rotulos: {
+    participantes: 'Membros',
+    pauta: 'Ordem do dia',
+    pessoa: { singular: 'participante', plural: 'participantes' },
+  },
   secoes: [
     {
       chave: 'abertura',

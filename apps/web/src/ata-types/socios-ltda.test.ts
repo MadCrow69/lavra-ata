@@ -132,7 +132,13 @@ describe('sócios de Ltda: registro', () => {
     expect(sociosLtda.descricao).toBe(
       'Deliberação dos sócios de sociedade limitada (Código Civil e DREI).',
     );
-    expect(sociosLtda.rotulos).toEqual({ participantes: 'Sócios', pauta: 'Ordem do dia' });
+    expect(sociosLtda.rotulos).toEqual({
+      participantes: 'Sócios',
+      pauta: 'Ordem do dia',
+      pessoa: { singular: 'sócio', plural: 'sócios' },
+    });
+    // A participação não identifica o sócio: mesmo nome com outro valor é repetição (M5).
+    expect(sociosLtda.complementoIdentifica).toBe(false);
     expect(sociosLtda.rotuloPapel).toBeNull();
     expect(sociosLtda.campoComplemento).toBe('participacao');
     expect(sociosLtda.temEncaminhamentos).toBe(true);
@@ -184,6 +190,18 @@ describe('sócios de Ltda: campos', () => {
     for (const d of [presencial(), digital(), semipresencial(), cienciaEscrita(), emQuotas()]) {
       expect(faltas(d)).toEqual([]);
     }
+  });
+
+  it('as faltas da lista falam de sócio (substantivo do tipo)', () => {
+    const semNomeNemPresente = SOCIOS.map((p, i) => ({
+      ...p,
+      presenca: 'ausente' as const,
+      nome: i === 0 ? '' : p.nome,
+    }));
+    expect(faltas({ ...presencial(), participantes: semNomeNemPresente })).toEqual([
+      'Sócio presente',
+      'Nome do sócio',
+    ]);
   });
 
   it('obrigatórios do tipo em rascunho vazio, na ordem do formulário', () => {

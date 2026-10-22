@@ -453,7 +453,13 @@ export const sociosLtda: AtaTypeDefinition = {
   camposParticipante: CAMPOS_PARTICIPANTE,
   rotuloPapel: null,
   campoComplemento: 'participacao',
-  rotulos: { participantes: 'Sócios', pauta: 'Ordem do dia' },
+  // A participação não identifica o sócio: o mesmo nome com outro valor é repetição.
+  complementoIdentifica: false,
+  rotulos: {
+    participantes: 'Sócios',
+    pauta: 'Ordem do dia',
+    pessoa: { singular: 'sócio', plural: 'sócios' },
+  },
   secoes: SECOES,
   temEncaminhamentos: true,
   camposNoPrompt: ['data', 'forma', 'modalidade', 'convocacao', 'presidente', 'secretario'],

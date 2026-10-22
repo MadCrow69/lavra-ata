@@ -46,6 +46,15 @@ export interface GrupoAssinaturas {
   pessoas: Assinatura[];
 }
 
+/**
+ * Substantivo de UMA pessoa da lista de participantes, em minúsculas (ex.: "condômino" /
+ * "condôminos"). Masculino ou comum de dois gêneros: concorda com "nenhum", "novo", "adicionado".
+ */
+export interface RotuloPessoa {
+  singular: string;
+  plural: string;
+}
+
 /** Resumo exibido sob a lista de participantes: uma linha de texto e alertas (só avisam). */
 export interface ResumoParticipantes {
   texto: string | null;
@@ -72,14 +81,23 @@ export interface AtaTypeDefinition {
    * Precisa estar sempre visível (sem `visivelSe`).
    */
   campoComplemento?: string;
-  /** Títulos dos blocos de participantes e de pauta no formulário e no documento. */
-  rotulos: { participantes: string; pauta: string };
+  /**
+   * O complemento de "Nome — X" distingue pessoas de mesmo nome (unidade, cargo)? Se sim, o aviso
+   * de repetição compara nome E complemento; se não (ex.: a participação de um sócio), só o nome.
+   */
+  complementoIdentifica: boolean;
+  /**
+   * Títulos dos blocos de participantes e de pauta no formulário e no documento, e o substantivo
+   * de cada pessoa da lista (textos do bloco de participantes).
+   */
+  rotulos: { participantes: string; pauta: string; pessoa: RotuloPessoa };
   /** Seções geradas, na ordem do documento. */
   secoes: SecaoDef[];
   temEncaminhamentos: boolean;
   /**
-   * Campos do formulário enviados à IA como contexto (ex.: data, modalidade). Só metadados não
-   * sensíveis: os demais (organização, local, condução…) vão direto do formulário para o documento.
+   * Campos do formulário enviados à IA como contexto: metadados da reunião (data, natureza,
+   * modalidade…) e os nomes da mesa (presidente, secretário). Nunca identificador nem endereço
+   * (CNPJ, NIRE, sede, local…): esses vão direto do formulário para o documento.
    * A cópia enviada leva SÓ estes campos: o `visivelSe` deles, e o dos extras de participante com
    * `enviarParaIA`, só pode depender de campos daqui.
    */
