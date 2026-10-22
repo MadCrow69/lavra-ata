@@ -135,6 +135,18 @@ describe('persistência do rascunho', () => {
       }),
     ],
     [
+      'falha anterior com motivo de recusa desconhecido',
+      comResultado({
+        atribuicao: {
+          resumo: {
+            provedor: 'gemini',
+            modelo: 'm',
+            falhas: [{ provedor: 'openai', erro: 'chave_invalida', motivo: 'x' }],
+          },
+        },
+      }),
+    ],
+    [
       'atribuição sem falhas nem fallbackDe',
       comResultado({ atribuicao: { resumo: { provedor: 'gemini', modelo: 'm' } } }),
     ],
@@ -209,7 +221,10 @@ describe('persistência do rascunho', () => {
         resumo: {
           provedor: 'gemini',
           modelo: 'm',
-          falhas: [{ provedor: 'openai', erro: 'limite' }],
+          falhas: [
+            { provedor: 'openai', erro: 'limite' },
+            { provedor: 'anthropic', erro: 'chave_invalida', motivo: 'sem_workspace' },
+          ],
         },
       },
     }) as AtaDraft;

@@ -91,7 +91,12 @@ export async function gerarComFallback(
           continue;
         }
         if (erro.tipo === 'chave_invalida') opcoes.aoRecusarChave?.(original, erro);
-        falhas.push({ provedor: cfg.id, erro: erro.tipo, mensagem: erro.message });
+        falhas.push({
+          provedor: cfg.id,
+          erro: erro.tipo,
+          ...(erro.motivo === undefined ? {} : { motivo: erro.motivo }),
+          mensagem: erro.message,
+        });
         break;
       }
     }

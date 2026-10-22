@@ -179,7 +179,11 @@ describe('gerarComFallback', () => {
       expect(fetchFalso).toHaveBeenCalledTimes(1);
       expect(r.provedor).toBe('gemini');
       expect(r.falhas).toHaveLength(1);
-      expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: 'chave_invalida' });
+      expect(r.falhas[0]).toMatchObject({
+        provedor: 'openai',
+        erro: 'chave_invalida',
+        motivo: 'sem_credito',
+      });
       expect(r.falhas[0]?.mensagem).toContain('sem crédito ou saldo');
       expect(aoRecusarChave).toHaveBeenCalledTimes(1);
       expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0], expect.any(ErroProvedor));

@@ -1,5 +1,5 @@
 import type { MaskMap } from '@lavra/pii-br';
-import type { ErroTipo, ProviderId } from '../ai/types';
+import type { ErroTipo, MotivoRecusa, ProviderId } from '../ai/types';
 
 export const PRESENCAS = ['presente', 'ausente', 'justificado'] as const;
 export type Presenca = (typeof PRESENCAS)[number];
@@ -68,6 +68,8 @@ export interface Encaminhamento {
 export interface FalhaAnterior {
   provedor: ProviderId;
   erro?: ErroTipo;
+  /** Motivo da chave recusada (sem crédito, sem workspace), quando conhecido. */
+  motivo?: MotivoRecusa;
 }
 
 export interface Atribuicao {

@@ -1,5 +1,5 @@
 import { RASCUNHO } from '../config/storage-keys';
-import { ERRO_TIPOS, PROVEDORES, type ProviderId } from '../ai/types';
+import { ERRO_TIPOS, MOTIVOS_RECUSA, PROVEDORES, type ProviderId } from '../ai/types';
 import {
   PRESENCAS,
   STATUS_ENCAMINHAMENTO,
@@ -66,7 +66,8 @@ function ehFalhaAnterior(v: unknown): boolean {
   return (
     ehObjeto(v) &&
     ehUm(PROVEDORES, v.provedor) &&
-    (v.erro === undefined || ehUm(ERRO_TIPOS, v.erro))
+    (v.erro === undefined || ehUm(ERRO_TIPOS, v.erro)) &&
+    (v.motivo === undefined || ehUm(MOTIVOS_RECUSA, v.motivo))
   );
 }
 

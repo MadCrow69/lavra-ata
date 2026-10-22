@@ -5,7 +5,7 @@ import type { Atribuicao, FalhaAnterior } from '../domain/draft';
 /** "OpenAI falhou (limite de uso)"; sem motivo gravado (rascunho de versão anterior), "OpenAI falhou". */
 export function textoDaFalha(f: FalhaAnterior): string {
   const nome = `${ROTULO_CURTO[f.provedor]} falhou`;
-  return f.erro === undefined ? nome : `${nome} (${resumoDoErro(f.erro)})`;
+  return f.erro === undefined ? nome : `${nome} (${resumoDoErro(f.erro, f.motivo)})`;
 }
 
 /**

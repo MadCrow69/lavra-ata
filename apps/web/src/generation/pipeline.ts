@@ -183,7 +183,11 @@ function atribuicaoDe(r: ResultadoCadeia<unknown>): Atribuicao {
   return {
     provedor: r.provedor,
     modelo: r.modelo,
-    falhas: r.falhas.map(({ provedor, erro }) => ({ provedor, erro })),
+    falhas: r.falhas.map(({ provedor, erro, motivo }) => ({
+      provedor,
+      erro,
+      ...(motivo === undefined ? {} : { motivo }),
+    })),
   };
 }
 

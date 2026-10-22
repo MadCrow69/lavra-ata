@@ -144,7 +144,7 @@ export function mensagemDaRecusa(provedor: ProviderId, motivo: MotivoRecusa): st
 
 /** Causa curta de cada erro, para listas compactas (ex.: "OpenAI falhou (limite de uso)"). */
 const RESUMO_DO_ERRO: Record<ErroTipo, string> = {
-  chave_invalida: 'chave recusada, sem crédito ou sem workspace',
+  chave_invalida: 'chave recusada',
   limite: 'limite de uso',
   instavel: 'instabilidade no provedor',
   cortado: 'resposta cortada',
@@ -157,6 +157,14 @@ const RESUMO_DO_ERRO: Record<ErroTipo, string> = {
   cancelado: 'cancelado',
 };
 
-export function resumoDoErro(tipo: ErroTipo): string {
-  return RESUMO_DO_ERRO[tipo];
+const RESUMO_DA_RECUSA: Record<MotivoRecusa, string> = {
+  sem_credito: 'sem crédito',
+  sem_workspace: 'chave sem workspace',
+};
+
+/** Causa curta; numa chave recusada, o motivo (quando conhecido) diz qual foi. */
+export function resumoDoErro(tipo: ErroTipo, motivo?: MotivoRecusa): string {
+  return tipo === 'chave_invalida' && motivo !== undefined
+    ? RESUMO_DA_RECUSA[motivo]
+    : RESUMO_DO_ERRO[tipo];
 }
