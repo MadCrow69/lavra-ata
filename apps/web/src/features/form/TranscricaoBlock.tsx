@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { camposFaltando, transcricaoExcedeLimite } from '../../ata-types/registry';
 import type { AtaTypeDefinition } from '../../ata-types/types';
 import {
@@ -7,11 +7,13 @@ import {
   PERCENTUAL_ALERTA_TRANSCRICAO,
 } from '../../config/limits';
 import { useDraft } from '../../domain/DraftContext';
+import type { DadosDoVtt } from '../../domain/draft';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { PrivacyPreview } from '../privacy/PrivacyPreview';
 import { lerVtt } from '../transcript/vtt';
+import { pessoasQueFalaram, sugerirFalantes } from './falantes-da-transcricao';
 import { minutosDaDuracao } from './fim-pela-duracao';
 import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
@@ -41,8 +43,8 @@ const TEXTO_DO_NIVEL: Record<Nivel, string> = {
 
 interface Conteudo {
   texto: string;
-  /** Duração do .vtt de onde o texto veio (`null` = sem duração). */
-  duracaoMin: number | null;
+  /** Dados do .vtt de onde o texto veio (`null` = não veio de .vtt). */
+  vtt: DadosDoVtt | null;
 }
 
 interface Status {
@@ -56,6 +58,8 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const texto = state.transcricao;
   const [erro, setErro] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  /** A colagem em curso substitui o campo inteiro (o `change` que vem depois a lê). */
+  const colagemSubstituiRef = useRef(false);
 
   const nivel = nivelDoContador(texto);
   const excedido = nivel === 'excedido';
@@ -63,18 +67,24 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     .filter((f) => f.bloco === 'transcricao')
     .map((f) => f.rotulo);
 
-  /** Sem `duracaoMin`: a duração do .vtt continua valendo (edição à mão do mesmo texto). */
-  const definir = (novo: string, duracaoMin?: number | null) => {
-    dispatch({
-      type: 'definirTranscricao',
-      texto: novo,
-      ...(duracaoMin === undefined ? {} : { duracaoMin }),
-    });
+  /** Sem `vtt`: os dados do .vtt continuam valendo (edição à mão do mesmo texto). */
+  const definir = (novo: string, vtt?: DadosDoVtt | null) => {
+    dispatch({ type: 'definirTranscricao', texto: novo, ...(vtt === undefined ? {} : { vtt }) });
   };
-  const atual: Conteudo = { texto, duracaoMin: state.duracaoTranscricaoMin ?? null };
+  const atual: Conteudo = { texto, vtt: state.vtt ?? null };
+
+  // Colar por cima do campo inteiro troca a transcrição: a duração e os nomes do .vtt anterior já
+  // não valem. Colar num trecho é edição do mesmo texto e os mantém.
+  const aoColar = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const campo = e.currentTarget;
+    colagemSubstituiRef.current =
+      campo.value !== '' && campo.selectionStart === 0 && campo.selectionEnd === campo.value.length;
+  };
 
   const aoDigitar = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    definir(e.target.value);
+    const substituiu = colagemSubstituiRef.current;
+    colagemSubstituiRef.current = false;
+    definir(e.target.value, substituiu ? null : undefined);
     // Qualquer edição à mão torna o "Desfazer" e os avisos antigos obsoletos.
     setErro(null);
     setStatus(null);
@@ -110,8 +120,8 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     }
 
     // Só o .vtt tem tempos (relativos ao começo da gravação): dão a duração, nunca o início.
-    const lido = ehVtt ? lerVtt(conteudo) : { texto: conteudo, duracaoMs: null };
-    const novo = lido.texto;
+    const lido = ehVtt ? lerVtt(conteudo) : null;
+    const novo = lido?.texto ?? conteudo;
     if (novo.trim() === '') {
       setErro(
         ehVtt
@@ -122,9 +132,16 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     }
 
     const anterior = texto.trim() === '' ? null : atual;
-    definir(novo, minutosDaDuracao(lido.duracaoMs));
+    const duracaoMin = minutosDaDuracao(lido?.duracaoMs ?? null);
+    const vtt: DadosDoVtt | null = lido
+      ? { ...(duracaoMin === null ? {} : { duracaoMin }), falantes: lido.falantesDasTags }
+      : null;
+    definir(novo, vtt);
+    const falaram = sugerirFalantes(novo, state.participantes, vtt?.falantes).falantes.length;
     const partes = [
-      `Arquivo “${nome}” carregado: ${NUMERO.format(novo.length)} caracteres.`,
+      `Arquivo “${nome}” carregado: ${NUMERO.format(novo.length)} caracteres${
+        falaram > 0 ? ` e ${pessoasQueFalaram(falaram)} — veja a sugestão abaixo.` : '.'
+      }`,
       anterior === null ? '' : 'O texto anterior foi substituído.',
       novo.includes('�')
         ? 'Atenção: há caracteres ilegíveis, então o arquivo provavelmente não está em UTF-8. Salve-o como UTF-8 e envie de novo.'
@@ -140,7 +157,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   };
 
   const desfazer = () => {
-    if (status?.anterior != null) definir(status.anterior.texto, status.anterior.duracaoMin);
+    if (status?.anterior != null) definir(status.anterior.texto, status.anterior.vtt);
     setStatus(null);
   };
 
@@ -193,6 +210,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             rows={12}
             spellCheck={false}
             value={texto}
+            onPaste={aoColar}
             onChange={aoDigitar}
           />
         )}

@@ -149,6 +149,78 @@ describe('participantes a partir de quem falou', () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it('o aviso do upload cita quem falou; os textos da sugestão não são aria-live (sem anúncio repetido)', async () => {
+    const { user, container } = montar();
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const transcricao = within(blocoTranscricao());
+    expect(await transcricao.findByRole('status')).toHaveTextContent(
+      /^Arquivo “reuniao\.vtt” carregado: [\d.]+ caracteres e 4 pessoas que falaram — veja a sugestão abaixo\.$/,
+    );
+    const textos = [
+      ...screen.getByTestId('sugestao-falantes').querySelectorAll('[aria-live]'),
+      ...(screen.queryByTestId('sugestao-fim')?.querySelectorAll('[aria-live]') ?? []),
+    ];
+    expect(textos).toEqual([]);
+
+    await user.click(transcricao.getByRole('button', { name: 'Adicionar como participantes' }));
+    const texto = transcricao.getByText('Todos os que falaram já estão na lista.');
+    expect(texto).toHaveFocus();
+    expect(texto.closest('[aria-live]')).toBeNull();
+  });
+
+  it('.vtt com convidados de reunião online: sugere pelo nome da marca, sem o sufixo e sem reordenar', async () => {
+    const { user, container } = montar();
+    const conteudo = [
+      'WEBVTT',
+      '',
+      '1a2b3c4d-0000-4000-8000-000000000001/1-0',
+      '00:00:01.000 --> 00:00:04.000',
+      '<v Souza, Ana>Bom dia,',
+      'vamos começar.</v>',
+      '',
+      '1a2b3c4d-0000-4000-8000-000000000001/2-0',
+      '00:00:05.000 --> 00:00:08.000',
+      '<v Rui Matos (Convidado)>Olá a todos.</v>',
+    ].join('\n');
+    await user.upload(campoArquivo(container), vtt(conteudo));
+    expect(
+      await within(blocoTranscricao()).findByText(
+        'Encontramos 2 pessoas que falaram: Souza, Ana e Rui Matos.',
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('colar por cima do campo inteiro troca a transcrição', () => {
+  it('a duração e os nomes do .vtt anterior somem; colar num trecho os mantém', async () => {
+    const { user, container } = montar({ dados: { inicio: '14:00' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const dados = within(blocoDados());
+    expect(await dados.findByText('A transcrição dura 27 min.')).toBeInTheDocument();
+    const campo = within(blocoTranscricao()).getByLabelText(/^Transcrição da reunião/);
+
+    // Colar num trecho (cursor no fim): edição do mesmo texto.
+    await user.click(campo);
+    (campo as HTMLTextAreaElement).setSelectionRange(
+      (campo as HTMLTextAreaElement).value.length,
+      (campo as HTMLTextAreaElement).value.length,
+    );
+    await user.paste(' complemento');
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+
+    // Selecionar tudo e colar: outra transcrição.
+    (campo as HTMLTextAreaElement).setSelectionRange(
+      0,
+      (campo as HTMLTextAreaElement).value.length,
+    );
+    await user.paste('Iva Reis: outra reunião.');
+    expect(campo).toHaveValue('Iva Reis: outra reunião.');
+    expect(dados.queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+    expect(
+      within(blocoTranscricao()).getByText('Encontramos 1 pessoa que falou: Iva Reis.'),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('término a partir da duração do .vtt', () => {

@@ -152,9 +152,15 @@ describe('persistência do rascunho', () => {
     ],
     ['avisos com número', comResultado({ avisos: { resumo: [1] } })],
     ['editadas que não é lista', comResultado({ editadas: 'resumo' })],
-    ['duração da transcrição não numérica', { ...rascunhoCompleto(), duracaoTranscricaoMin: '72' }],
-    ['duração da transcrição zero', { ...rascunhoCompleto(), duracaoTranscricaoMin: 0 }],
-    ['duração da transcrição fracionada', { ...rascunhoCompleto(), duracaoTranscricaoMin: 1.5 }],
+    ['vtt não é objeto', { ...rascunhoCompleto(), vtt: 72 }],
+    ['vtt sem lista de nomes', { ...rascunhoCompleto(), vtt: { duracaoMin: 72 } }],
+    ['vtt com nome não texto', { ...rascunhoCompleto(), vtt: { falantes: [1] } }],
+    [
+      'vtt com duração não numérica',
+      { ...rascunhoCompleto(), vtt: { duracaoMin: '72', falantes: [] } },
+    ],
+    ['vtt com duração zero', { ...rascunhoCompleto(), vtt: { duracaoMin: 0, falantes: ['Ana'] } }],
+    ['vtt vazio', { ...rascunhoCompleto(), vtt: { falantes: [] } }],
     ['valor que não é objeto', 42],
     ['null', null],
   ])('formato inválido (%s) → null', (_nome, valor) => {
@@ -246,15 +252,15 @@ describe('persistência do rascunho', () => {
     });
   });
 
-  it('a duração da transcrição faz ida e volta (só na sessão, como o resto do rascunho)', () => {
+  it('os dados do .vtt fazem ida e volta (só na sessão, como o resto do rascunho)', () => {
     const d = draftReducer(rascunhoCompleto(), {
       type: 'definirTranscricao',
       texto: 'Ana: bom dia.',
-      duracaoMin: 72,
+      vtt: { duracaoMin: 72, falantes: ['Souza, Ana'] },
     });
     salvarRascunho(d);
     expect(carregarRascunho()).toEqual(d);
-    expect(carregarRascunho()?.duracaoTranscricaoMin).toBe(72);
+    expect(carregarRascunho()?.vtt).toEqual({ duracaoMin: 72, falantes: ['Souza, Ana'] });
     expect(localStorage.length).toBe(0);
   });
 

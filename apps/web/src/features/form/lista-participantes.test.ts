@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   analisarLista,
+  chaveDeNome,
   contarRepetidos,
   descreverAdicao,
   descreverPreenchimento,
+  nomeParaGravar,
   normalizarBusca,
 } from './lista-participantes';
 
@@ -94,6 +96,22 @@ describe('contarRepetidos', () => {
 
   it('sem complemento dos dois lados, só o nome conta (comportamento atual)', () => {
     expect(contarRepetidos([l('Ana')], [l('ANA')])).toBe(1);
+  });
+
+  it('caractere invisível e NFC × NFD não separam o mesmo nome (mesma regra da sugestão)', () => {
+    expect(contarRepetidos([l('Ana\u200b Souza')], [l('Ana Souza')])).toBe(1);
+    expect(contarRepetidos([l('Joa\u0303o')], [l('João')])).toBe(1);
+  });
+});
+
+describe('chaveDeNome e nomeParaGravar', () => {
+  it('chaveDeNome ignora invisíveis, acento, caixa e espaço extra', () => {
+    expect(chaveDeNome('  ANA\u200b  Sóuza ')).toBe(chaveDeNome('ana souza'));
+  });
+
+  it('nomeParaGravar tira invisíveis e grava em NFC, sem mudar a grafia', () => {
+    expect(nomeParaGravar(' Joa\u0303o\u200b Prado ')).toBe('João Prado');
+    expect(nomeParaGravar('Souza, Ana')).toBe('Souza, Ana');
   });
 });
 

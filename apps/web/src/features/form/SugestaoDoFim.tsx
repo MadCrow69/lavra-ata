@@ -39,11 +39,7 @@ export function SugestaoDoFim({
 
   if (!temCampo(CAMPO_INICIO.id) || !temCampo(CAMPO_FIM.id)) return null;
   const valido = preenchido !== null && preenchido.fim === fim ? preenchido : null;
-  const sugestao = sugerirFim(
-    state.duracaoTranscricaoMin ?? null,
-    state.dados[CAMPO_INICIO.id],
-    fim,
-  );
+  const sugestao = sugerirFim(state.vtt?.duracaoMin ?? null, state.dados[CAMPO_INICIO.id], fim);
   if (valido === null && sugestao === null) return null;
 
   const preencher = (novo: string, texto: string) => {
@@ -60,7 +56,8 @@ export function SugestaoDoFim({
 
   return (
     <div className={`${styles.sugestao ?? ''} ${className ?? ''}`} data-testid="sugestao-fim">
-      <p ref={textoRef} tabIndex={-1} className={styles.texto} aria-live="polite">
+      {/* Sem aria-live: o clique leva o foco a este texto, que é lido uma vez só. */}
+      <p ref={textoRef} tabIndex={-1} className={styles.texto}>
         {valido?.texto ?? (sugestao ? textoDaSugestaoDoFim(sugestao) : '')}
       </p>
       {valido !== null ? <Button onClick={desfazer}>Desfazer</Button> : null}

@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
-import { ROTULOS_FALANTE_GENERICO } from '../../config/falantes';
+import {
+  ROTULOS_DE_CAMPO,
+  ROTULOS_FALANTE_GENERICO,
+  SUFIXOS_DE_CONVIDADO,
+} from '../../config/falantes';
+import { falantesDoTexto, lerVtt } from '../transcript/vtt';
 import {
   descreverAdicaoDeFalantes,
   ehRotuloGenerico,
   listarNomes,
+  semSufixoDeConvidado,
   sugerirFalantes,
 } from './falantes-da-transcricao';
 import { normalizarBusca } from './lista-participantes';
@@ -32,8 +38,85 @@ describe('sugerirFalantes', () => {
     const texto = [`${nfd}: oi`, 'helena duarte: oi', 'Íris Melo: oi'].join('\n');
     const existentes = nomes('João Prado', ' Helena   Duarte ', 'iris melo');
     expect(sugerirFalantes(texto, existentes)).toEqual({
-      falantes: [nfd, 'helena duarte', 'Íris Melo'],
+      falantes: [nfd.normalize('NFC'), 'helena duarte', 'Íris Melo'],
       novos: [],
+    });
+  });
+
+  it('o nome sugerido é o que será gravado: sem invisíveis e em NFC', () => {
+    // Pela marca <v> (a regra "Nome: fala" do texto recusa o caractere invis\u00edvel).
+    const { novos } = sugerirFalantes('', [], ['Joa\u0303o\u200b Prado']);
+    expect(novos).toEqual(['João Prado']);
+  });
+
+  it('rótulos de campo do texto colado ("Assunto:", "Pauta:") não viram participantes', () => {
+    const texto = [
+      'Assunto: orçamento de 2027',
+      'Data: 14/10',
+      'Observação: sem quórum',
+      'Tópico: obras',
+      'Ana Souza: Bom dia.',
+    ].join('\n');
+    expect(sugerirFalantes(texto, []).falantes).toEqual(['Ana Souza']);
+  });
+
+  it('"Speaker 1: oi" no texto e <v Speaker 1> no .vtt não viram participantes', () => {
+    const vtt = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:02.000',
+      '<v Speaker 1>oi</v>',
+      '',
+      '00:00:03.000 --> 00:00:04.000',
+      '<v Ana Souza>olá</v>',
+    ].join('\n');
+    const lido = lerVtt(vtt);
+    expect(lido.falantesDasTags).toEqual(['Speaker 1', 'Ana Souza']);
+    const texto = `${lido.texto}\nSpeaker 1: oi`;
+    expect(sugerirFalantes(texto, [], lido.falantesDasTags).falantes).toEqual(['Ana Souza']);
+  });
+
+  describe('nomes das marcas <v> do .vtt (ex.: convidados de reunião online)', () => {
+    const vtt = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:02.000',
+      '<v Souza, Ana>Bom dia.',
+      'Vamos começar.</v>',
+      '',
+      '00:00:03.000 --> 00:00:04.000',
+      '<v Rui Matos (Convidado)>Olá.</v>',
+      '',
+      '00:00:05.000 --> 00:00:06.000',
+      '<v Iva Reis (External)>Oi.</v>',
+      '',
+      '00:00:07.000 --> 00:00:08.000',
+      '<v Bia Luz (Diretoria)>Oi.</v>',
+      '',
+      '00:00:09.000 --> 00:00:10.000',
+      '<v Carla Dias>Tchau.</v>',
+    ].join('\n');
+
+    it('a regra "Nome: fala" do texto continua recusando esses nomes (não mudou)', () => {
+      expect(falantesDoTexto(lerVtt(vtt).texto)).toEqual(['Carla Dias']);
+    });
+
+    it('são sugeridos como escritos, sem o sufixo de convidado e sem reordenar "Souza, Ana"', () => {
+      const lido = lerVtt(vtt);
+      expect(sugerirFalantes(lido.texto, [], lido.falantesDasTags).falantes).toEqual([
+        'Souza, Ana',
+        'Rui Matos',
+        'Iva Reis',
+        'Bia Luz (Diretoria)',
+        'Carla Dias',
+      ]);
+    });
+
+    it('o mesmo nome no texto e na marca conta uma vez; quem já está na lista não volta', () => {
+      const lido = lerVtt(vtt);
+      expect(
+        sugerirFalantes(lido.texto, nomes('rui matos', 'Souza, Ana'), lido.falantesDasTags).novos,
+      ).toEqual(['Iva Reis', 'Bia Luz (Diretoria)', 'Carla Dias']);
     });
   });
 
@@ -46,8 +129,9 @@ describe('sugerirFalantes', () => {
   });
 
   it('caractere invisível no nome não cria uma segunda pessoa', () => {
-    const texto = ['Ana Souza: oi', 'Ana\u200b Souza: oi'].join('\n');
-    expect(sugerirFalantes(texto, []).falantes).toEqual(['Ana Souza']);
+    expect(sugerirFalantes('Ana Souza: oi', [], ['Ana\u200b Souza']).falantes).toEqual([
+      'Ana Souza',
+    ]);
   });
 
   it('rótulos genéricos não viram participantes', () => {
@@ -69,10 +153,25 @@ describe('ehRotuloGenerico', () => {
     expect(ehRotuloGenerico(`${rotulo} #12`)).toBe(true);
   });
 
-  it('a lista em config está normalizada e sem repetição', () => {
-    expect(ROTULOS_FALANTE_GENERICO.length).toBeGreaterThan(0);
-    for (const rotulo of ROTULOS_FALANTE_GENERICO) expect(normalizarBusca(rotulo)).toBe(rotulo);
-    expect(new Set(ROTULOS_FALANTE_GENERICO).size).toBe(ROTULOS_FALANTE_GENERICO.length);
+  it.each(ROTULOS_DE_CAMPO)('rótulo de campo "%s" não é pessoa', (rotulo) => {
+    expect(ehRotuloGenerico(rotulo)).toBe(true);
+    expect(ehRotuloGenerico(rotulo.toUpperCase())).toBe(true);
+  });
+
+  it.each([
+    ['ROTULOS_FALANTE_GENERICO', ROTULOS_FALANTE_GENERICO],
+    ['ROTULOS_DE_CAMPO', ROTULOS_DE_CAMPO],
+    ['SUFIXOS_DE_CONVIDADO', SUFIXOS_DE_CONVIDADO],
+  ])('%s em config está normalizada e sem repetição', (_nome, lista) => {
+    expect(lista.length).toBeGreaterThan(0);
+    for (const item of lista) expect(normalizarBusca(item)).toBe(item);
+    expect(new Set(lista).size).toBe(lista.length);
+  });
+
+  it('acentuado no texto casa com a lista normalizada', () => {
+    expect(ehRotuloGenerico('Observação')).toBe(true);
+    expect(ehRotuloGenerico('Decisão')).toBe(true);
+    expect(ehRotuloGenerico('Horário')).toBe(true);
   });
 
   it('acento e caixa não importam; nome de pessoa não é genérico', () => {
@@ -80,6 +179,19 @@ describe('ehRotuloGenerico', () => {
     expect(ehRotuloGenerico('Ana Souza')).toBe(false);
     expect(ehRotuloGenerico('Speaker Ana')).toBe(false);
     expect(ehRotuloGenerico('Pessoa Física')).toBe(false);
+  });
+});
+
+describe('semSufixoDeConvidado', () => {
+  it.each(SUFIXOS_DE_CONVIDADO)('tira "(%s)" do fim, com qualquer caixa', (sufixo) => {
+    expect(semSufixoDeConvidado(`Ana Souza (${sufixo})`)).toBe('Ana Souza');
+    expect(semSufixoDeConvidado(`Ana Souza (${sufixo.toUpperCase()}) `)).toBe('Ana Souza');
+  });
+
+  it('outro parêntese, ou no meio, fica como está', () => {
+    expect(semSufixoDeConvidado('Ana Souza (TI)')).toBe('Ana Souza (TI)');
+    expect(semSufixoDeConvidado('Ana (Convidada) Souza')).toBe('Ana (Convidada) Souza');
+    expect(semSufixoDeConvidado('Souza, Ana')).toBe('Souza, Ana');
   });
 });
 

@@ -64,18 +64,19 @@ function separarLinha(
   linha: string,
   falanteAtual: string | null,
   permitirPrefixo: boolean,
-): { falante: string | null; texto: string } {
+): { falante: string | null; texto: string; daTag: boolean } {
   const tag = FALANTE_TAG.exec(linha);
   if (tag?.[1] !== undefined) {
     const nome = limparMarcacao(tag[1]);
     return {
       falante: nome === '' ? null : nome,
       texto: limparMarcacao(linha.slice(tag[0].length)),
+      daTag: true,
     };
   }
   const limpa = limparMarcacao(linha);
   const prefixo = permitirPrefixo ? falanteDoPrefixo(limpa) : null;
-  return prefixo ?? { falante: falanteAtual, texto: limpa };
+  return { ...(prefixo ?? { falante: falanteAtual, texto: limpa }), daTag: false };
 }
 
 /**
@@ -117,6 +118,11 @@ export interface VttLido {
    * gravação: o .vtt não diz a data nem a hora em que a reunião começou.
    */
   duracaoMs: number | null;
+  /**
+   * Nomes das marcas `<v Nome>`, como escritos (sem marcação), distintos e na ordem da primeira
+   * fala. Guardam o que a regra "Nome: fala" do texto recusa ("Souza, Ana", "Ana (Convidada)").
+   */
+  falantesDasTags: string[];
 }
 
 /**
@@ -128,11 +134,12 @@ export function vttParaTexto(vtt: string): string {
   return lerVtt(vtt).texto;
 }
 
-/** O texto de `vttParaTexto` e a duração da gravação, numa só leitura do arquivo. */
+/** O texto de `vttParaTexto`, a duração da gravação e os nomes das marcas `<v>`, numa só leitura. */
 export function lerVtt(vtt: string): VttLido {
   const semBom = vtt.startsWith(String.fromCharCode(0xfeff)) ? vtt.slice(1) : vtt;
   const linhas = semBom.split(/\r\n|\r|\n/);
   const falas: Fala[] = [];
+  const falantesDasTags = new Set<string>();
   let primeiroInicio = Infinity;
   let ultimoFim = -Infinity;
   let i = 0;
@@ -161,8 +168,9 @@ export function lerVtt(vtt: string): VttLido {
     let falanteDoCue: string | null = null;
     for (const [k, linha] of bloco.slice(indiceTempo + 1).entries()) {
       // "Nome:" só vale na primeira linha do cue; nas seguintes é parte da fala.
-      const { falante, texto } = separarLinha(linha, falanteDoCue, k === 0);
+      const { falante, texto, daTag } = separarLinha(linha, falanteDoCue, k === 0);
       falanteDoCue = falante;
+      if (daTag && falante !== null) falantesDasTags.add(falante);
       if (texto !== '') falas.push({ falante, texto });
     }
   }
@@ -176,5 +184,6 @@ export function lerVtt(vtt: string): VttLido {
   return {
     texto: saida.map((f) => (f.falante ? `${f.falante}: ${f.texto}` : f.texto)).join('\n'),
     duracaoMs: ultimoFim >= primeiroInicio ? ultimoFim - primeiroInicio : null,
+    falantesDasTags: [...falantesDasTags],
   };
 }

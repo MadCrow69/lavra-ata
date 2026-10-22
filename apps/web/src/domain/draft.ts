@@ -11,9 +11,36 @@ export const ROTULO_PRESENCA: Record<Presenca, string> = {
   justificado: 'Ausência justificada',
 };
 
-/** Duração da transcrição gravável: minutos inteiros e positivos (o reducer e a persistência usam esta regra). */
+/**
+ * O que o .vtt enviado traz além do texto. Vale enquanto a transcrição é a que veio dele: some ao
+ * limpar, ao enviar outro arquivo ou ao colar outro texto por cima do campo inteiro.
+ */
+export interface DadosDoVtt {
+  /** Duração da gravação em minutos inteiros (> 0). O .vtt não traz data nem hora de início. */
+  duracaoMin?: number;
+  /** Nomes das marcas `<v Nome>`, como escritos, distintos e na ordem da primeira fala. */
+  falantes: string[];
+}
+
+/** Minutos inteiros e positivos. */
 export function ehDuracaoValida(v: unknown): v is number {
   return typeof v === 'number' && Number.isInteger(v) && v > 0;
+}
+
+/**
+ * `DadosDoVtt` aproveitável (duração válida ou ao menos um nome), sem o que não vale; senão `null`.
+ * Regra única do reducer e da persistência.
+ */
+export function dadosDoVttValidos(v: unknown): DadosDoVtt | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const { duracaoMin, falantes } = v as Record<string, unknown>;
+  const nomes = Array.isArray(falantes)
+    ? falantes.filter((f): f is string => typeof f === 'string' && f.trim() !== '')
+    : [];
+  const duracao = ehDuracaoValida(duracaoMin) ? { duracaoMin } : {};
+  return nomes.length === 0 && !ehDuracaoValida(duracaoMin)
+    ? null
+    : { ...duracao, falantes: nomes };
 }
 
 export const TONS = ['formal', 'conciso', 'detalhado'] as const;
@@ -102,11 +129,8 @@ export interface AtaDraft {
   pauta: string[];
   participantes: Participante[];
   transcricao: string;
-  /**
-   * Duração da gravação em minutos inteiros (> 0), lida do .vtt enviado; ausente sem .vtt. Serve só
-   * para sugerir o término: o .vtt não traz data nem hora de início.
-   */
-  duracaoTranscricaoMin?: number;
+  /** Duração e nomes das marcas `<v>` do .vtt de onde a transcrição veio; ausente sem .vtt. */
+  vtt?: DadosDoVtt;
   /** Mesmo mapa de mascaramento durante todo o rascunho. */
   mapa: MaskMap | null;
   resultado: ResultadoAta | null;
@@ -139,10 +163,10 @@ export type DraftAction =
   | { type: 'atualizarParticipante'; id: string; patch: Partial<Participante> }
   | { type: 'removerParticipante'; id: string }
   /**
-   * `duracaoMin` (do .vtt) grava a duração; `null` a apaga; ausente a mantém (edição à mão), salvo
-   * se o texto ficar vazio.
+   * `vtt` grava os dados do .vtt; `null` os apaga (outro arquivo, colagem sobre o campo inteiro);
+   * ausente os mantém (edição à mão), salvo se o texto ficar vazio.
    */
-  | { type: 'definirTranscricao'; texto: string; duracaoMin?: number | null }
+  | { type: 'definirTranscricao'; texto: string; vtt?: DadosDoVtt | null }
   | { type: 'registrarResultado'; resultado: ResultadoAta; mapa: MaskMap }
   | {
       type: 'substituirSecao';

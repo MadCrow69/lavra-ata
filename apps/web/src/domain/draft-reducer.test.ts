@@ -176,49 +176,56 @@ describe('draftReducer', () => {
     expect(d.transcricao).toBe('fala');
   });
 
-  describe('duração da transcrição (vem do .vtt; serve para sugerir o término)', () => {
-    it('definirTranscricao com duracaoMin grava; null apaga', () => {
+  describe('dados do .vtt (duração e nomes das marcas <v>)', () => {
+    const VTT = { duracaoMin: 72, falantes: ['Souza, Ana', 'Rui Matos (Convidado)'] };
+
+    it('definirTranscricao com vtt grava; null apaga', () => {
       let d = draftReducer(criarRascunho(), {
         type: 'definirTranscricao',
         texto: 'Ana: oi',
-        duracaoMin: 72,
+        vtt: VTT,
       });
-      expect(d.duracaoTranscricaoMin).toBe(72);
-      d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi', duracaoMin: null });
-      expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+      expect(d.vtt).toEqual(VTT);
+      d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi', vtt: null });
+      expect(d).not.toHaveProperty('vtt');
     });
 
-    it('editar o texto à mão mantém a duração; esvaziar o texto a apaga', () => {
+    it('editar o texto à mão mantém os dados; esvaziar o texto os apaga', () => {
       let d = draftReducer(criarRascunho(), {
         type: 'definirTranscricao',
         texto: 'Ana: oi',
-        duracaoMin: 72,
+        vtt: VTT,
       });
       d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi, gente' });
-      expect(d.duracaoTranscricaoMin).toBe(72);
+      expect(d.vtt).toEqual(VTT);
       d = draftReducer(d, { type: 'definirTranscricao', texto: '   ' });
-      expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+      expect(d).not.toHaveProperty('vtt');
     });
 
-    it('duração inválida (zero, negativa, fracionada) não é gravada', () => {
+    it('duração inválida (zero, negativa, fracionada) cai; os nomes ficam', () => {
       for (const ruim of [0, -3, 1.5, Number.NaN]) {
         const d = draftReducer(criarRascunho(), {
           type: 'definirTranscricao',
           texto: 'x',
-          duracaoMin: ruim,
+          vtt: { duracaoMin: ruim, falantes: ['Ana'] },
         });
-        expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+        expect(d.vtt).toEqual({ falantes: ['Ana'] });
       }
     });
 
-    it('novaAta apaga a duração', () => {
-      let d = draftReducer(criarRascunho(), {
+    it('sem duração válida nem nomes, nada é gravado', () => {
+      const d = draftReducer(criarRascunho(), {
         type: 'definirTranscricao',
         texto: 'x',
-        duracaoMin: 10,
+        vtt: { duracaoMin: 0, falantes: ['', '  '] },
       });
+      expect(d).not.toHaveProperty('vtt');
+    });
+
+    it('novaAta apaga os dados do .vtt', () => {
+      let d = draftReducer(criarRascunho(), { type: 'definirTranscricao', texto: 'x', vtt: VTT });
       d = draftReducer(d, { type: 'novaAta' });
-      expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+      expect(d).not.toHaveProperty('vtt');
     });
   });
 

@@ -1,5 +1,6 @@
 import type { RotuloPessoa } from '../../ata-types/types';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
+import { semInvisiveis } from '../../domain/texto-invisivel';
 import { plural } from '../../ui/plural';
 
 export interface LinhaParticipante {
@@ -37,9 +38,23 @@ export function normalizarBusca(texto: string): string {
   return texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+/**
+ * Regra ÚNICA de "mesmo nome" na lista (aviso de repetição do bloco 3 e sugestão de quem falou):
+ * sem caractere invisível, sem acento, sem diferença de caixa e com espaço simples. Só serve para
+ * avisar ou não duplicar; nunca escolhe nem altera um participante.
+ */
+export function chaveDeNome(texto: string): string {
+  return normalizarBusca(semInvisiveis(texto));
+}
+
+/** Nome como é gravado quando vem de fora (transcrição): sem invisíveis e em NFC. */
+export function nomeParaGravar(nome: string): string {
+  return semInvisiveis(nome).normalize('NFC').trim();
+}
+
 /** Par nome + complemento normalizados; JSON evita que um separador no texto una dois pares. */
 function chaveDeRepeticao({ nome, complemento }: LinhaParticipante): string {
-  return JSON.stringify([normalizarBusca(nome), normalizarBusca(complemento)]);
+  return JSON.stringify([chaveDeNome(nome), chaveDeNome(complemento)]);
 }
 
 /**

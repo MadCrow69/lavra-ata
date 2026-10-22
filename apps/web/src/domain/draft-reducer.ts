@@ -2,7 +2,7 @@ import { TIPO_PADRAO_ID, dadosAoTrocarDeTipo, obterTipo } from '../ata-types/reg
 import { textoLimpo } from '../ata-types/texto-modelo';
 import { calcularAdicao } from './participantes';
 import {
-  ehDuracaoValida,
+  dadosDoVttValidos,
   type AtaDraft,
   type Atribuicao,
   type DraftAction,
@@ -148,18 +148,11 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
     case 'removerParticipante':
       return { ...state, participantes: state.participantes.filter((p) => p.id !== action.id) };
     case 'definirTranscricao': {
-      const { duracaoTranscricaoMin: anterior, ...resto } = state;
-      const duracao =
-        action.texto.trim() === ''
-          ? null
-          : action.duracaoMin === undefined
-            ? (anterior ?? null)
-            : action.duracaoMin;
-      return {
-        ...resto,
-        transcricao: action.texto,
-        ...(ehDuracaoValida(duracao) ? { duracaoTranscricaoMin: duracao } : {}),
-      };
+      const { vtt: anterior, ...resto } = state;
+      const vtt = dadosDoVttValidos(
+        action.texto.trim() === '' ? null : action.vtt === undefined ? anterior : action.vtt,
+      );
+      return { ...resto, transcricao: action.texto, ...(vtt === null ? {} : { vtt }) };
     }
     case 'registrarResultado':
       return { ...state, resultado: action.resultado, mapa: action.mapa };

@@ -282,4 +282,20 @@ describe('.vtt no formato exportado por ferramentas de reunião (fixture fictíc
     expect(falantes).toHaveLength(36);
     expect([...new Set(falantes)]).toEqual([...FALANTES_FICTICIOS]);
   });
+
+  it('os nomes das marcas <v> vêm distintos, na ordem da primeira fala, como escritos', () => {
+    expect(lerVtt(vtt).falantesDasTags).toEqual([...FALANTES_FICTICIOS]);
+    const comVirgula = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:02.000',
+      '<v.loud Souza, Ana>Oi',
+      'tudo bem?</v>',
+      '',
+      '00:00:03.000 --> 00:00:04.000',
+      'Rui Matos: sem marca',
+    ].join('\n');
+    expect(lerVtt(comVirgula).falantesDasTags).toEqual(['Souza, Ana']);
+    expect(lerVtt('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nsó texto').falantesDasTags).toEqual([]);
+  });
 });

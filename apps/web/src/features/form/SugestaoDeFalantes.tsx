@@ -7,7 +7,12 @@ import { calcularAdicao } from '../../domain/participantes';
 import { Button } from '../../ui/Button';
 import { plural } from '../../ui/plural';
 import { useToast } from '../../ui/Toast';
-import { descreverAdicaoDeFalantes, listarNomes, sugerirFalantes } from './falantes-da-transcricao';
+import {
+  descreverAdicaoDeFalantes,
+  listarNomes,
+  pessoasQueFalaram,
+  sugerirFalantes,
+} from './falantes-da-transcricao';
 import { NUMERO_BLOCO } from './numero-bloco';
 import styles from './sugestao.module.css';
 
@@ -19,10 +24,10 @@ export function SugestaoDeFalantes({ tipo }: { tipo: AtaTypeDefinition }) {
   const { state, dispatch } = useDraft();
   const { mostrar } = useToast();
   const textoRef = useRef<HTMLParagraphElement>(null);
-  const { transcricao, participantes } = state;
+  const { transcricao, participantes, vtt } = state;
   const sugestao = useMemo(
-    () => sugerirFalantes(transcricao, participantes),
-    [transcricao, participantes],
+    () => sugerirFalantes(transcricao, participantes, vtt?.falantes),
+    [transcricao, participantes, vtt],
   );
   const { falantes, novos } = sugestao;
   if (falantes.length === 0) return null;
@@ -43,7 +48,7 @@ export function SugestaoDeFalantes({ tipo }: { tipo: AtaTypeDefinition }) {
     novos.length === 0
       ? 'Todos os que falaram já estão na lista.'
       : [
-          `Encontramos ${String(falantes.length)} ${plural(falantes.length, 'pessoa que falou', 'pessoas que falaram')}: ${listarNomes(falantes, MAX_NOMES_NA_SUGESTAO)}.`,
+          `Encontramos ${pessoasQueFalaram(falantes.length)}: ${listarNomes(falantes, MAX_NOMES_NA_SUGESTAO)}.`,
           jaNaLista > 0
             ? `${String(jaNaLista)} ${plural(jaNaLista, 'já está', 'já estão')} na lista.`
             : '',
@@ -53,7 +58,8 @@ export function SugestaoDeFalantes({ tipo }: { tipo: AtaTypeDefinition }) {
 
   return (
     <div className={styles.sugestao} data-testid="sugestao-falantes">
-      <p ref={textoRef} tabIndex={-1} className={styles.texto} aria-live="polite">
+      {/* Sem aria-live: o clique leva o foco a este texto (lido uma vez) e o toast anuncia o resto. */}
+      <p ref={textoRef} tabIndex={-1} className={styles.texto}>
         {principal}
       </p>
       {novos.length > 0 && semVaga ? (
