@@ -243,6 +243,7 @@ function Bancada({
         documento={documento}
         onConfigurarChaves={abrirChaves}
         onVerExemplo={exemplo.abrirSeletor}
+        rascunhoVazio={!temConteudo(state)}
         aviso={exemplo.aviso}
         aba={aba}
         onTrocarAba={setAba}

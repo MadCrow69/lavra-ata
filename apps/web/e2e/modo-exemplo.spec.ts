@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   CHAVE_OPENAI,
   CPF,
@@ -176,6 +176,84 @@ test.describe('modo exemplo no build com CSP ativa', () => {
 
     await abaFuncionaComBanner(page, 'Editar');
     await abaFuncionaComBanner(page, 'Documento');
+
+    await afirmarLimpo(page, rede);
+    expect(rede.chamadas).toEqual([]);
+  });
+});
+
+/** Teto do cabeçalho a 360 px (antes da grade compacta ele ocupava 231 dos 740 px da tela). */
+const ALTURA_MAXIMA_CABECALHO_360 = 170;
+
+/** Cor de fundo calculada de um elemento, e a de um elemento com `background: var(token)`. */
+async function fundo(alvo: Locator): Promise<string> {
+  return alvo.evaluate((el) => getComputedStyle(el).backgroundColor);
+}
+async function corDoToken(page: Page, token: string): Promise<string> {
+  return page.evaluate((nome) => {
+    const sonda = document.createElement('div');
+    sonda.style.setProperty('background', `var(${nome})`);
+    document.body.append(sonda);
+    const cor = getComputedStyle(sonda).backgroundColor;
+    sonda.remove();
+    return cor;
+  }, token);
+}
+
+test.describe('visitante sem chave, no celular', () => {
+  test.use({ viewport: { width: 360, height: 740 } });
+
+  test('"Ver exemplo" é a ação principal, o cabeçalho é compacto, o toast não cobre o diálogo e o texto longo rola pelo teclado', async ({
+    app: page,
+    rede,
+  }) => {
+    const cabecalho = page.getByRole('banner');
+    const altura = (await cabecalho.boundingBox())?.height ?? Infinity;
+    expect(altura).toBeLessThanOrEqual(ALTURA_MAXIMA_CABECALHO_360);
+    const acoes = cabecalho.getByRole('navigation', { name: 'Ações do cabeçalho' });
+    for (const alvo of [
+      acoes.getByRole('button', { name: 'Ver exemplo', exact: true }),
+      acoes.getByRole('button', { name: 'Privacidade: como verificar', exact: true }),
+      acoes.getByRole('button', { name: 'Configurar chaves de IA', exact: true }),
+      acoes.getByRole('link', { name: /^GitHub/ }),
+    ]) {
+      const caixa = await alvo.boundingBox();
+      expect(caixa?.height ?? 0).toBeGreaterThanOrEqual(44);
+      expect((caixa?.x ?? 0) + (caixa?.width ?? Infinity)).toBeLessThanOrEqual(360);
+    }
+
+    // Sem chave e sem nada na bancada: o exemplo é o botão cheio; as chaves, o contornado.
+    const primaria = await corDoToken(page, '--cor-primaria');
+    const verExemploBotao = acoes.getByRole('button', { name: 'Ver exemplo', exact: true });
+    const chaves = acoes.getByRole('button', { name: 'Configurar chaves de IA', exact: true });
+    expect(await fundo(verExemploBotao)).toBe(primaria);
+    expect(await fundo(chaves)).not.toBe(primaria);
+
+    await verExemplo(page, ROTULOS_TIPO.corporativa);
+    // Com o exemplo na bancada, a ênfase volta às chaves (o caminho para a ata da pessoa).
+    expect(await fundo(verExemploBotao)).not.toBe(primaria);
+    expect(await fundo(chaves)).toBe(primaria);
+
+    // O toast do exemplo segue na tela; com um diálogo aberto ele sobe para o topo.
+    const toast = page.getByText(/^Exemplo carregado:/);
+    await expect(toast).toBeVisible();
+    expect((await toast.boundingBox())?.y ?? 0).toBeGreaterThan(740 / 2);
+    await acoes.getByRole('button', { name: 'Privacidade: como verificar', exact: true }).click();
+    const dialogo = page.getByRole('dialog', { name: 'Privacidade: como verificar' });
+    await expect(dialogo).toBeVisible();
+    await expect(toast).toBeVisible();
+    expect((await toast.boundingBox())?.y ?? Infinity).toBeLessThan(740 / 2);
+
+    // O corpo longo entra no Tab e rola pelas setas até "O que não é protegido" (só texto).
+    const corpo = dialogo.getByRole('region', { name: 'Texto de Privacidade: como verificar' });
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(corpo).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(dialogo.getByRole('heading', { name: 'O que não é protegido' })).toBeInViewport();
+    expect(await corpo.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await expect(dialogo).toBeHidden();
 
     await afirmarLimpo(page, rede);
     expect(rede.chamadas).toEqual([]);

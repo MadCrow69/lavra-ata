@@ -11,12 +11,18 @@ export interface HeaderProps {
   onConfigurarChaves: () => void;
   /** Abre o exemplo pronto; sem ele o botão "Ver exemplo" não aparece. */
   onVerExemplo?: () => void;
+  /**
+   * Nada na bancada (rascunho vazio). Sem chave e sem nada a perder, quem chega é visitante: "Ver
+   * exemplo" vira a ação principal do cabeçalho e "Configurar chaves de IA" passa a secundária.
+   */
+  rascunhoVazio?: boolean;
 }
 
-export function Header({ onConfigurarChaves, onVerExemplo }: HeaderProps) {
+export function Header({ onConfigurarChaves, onVerExemplo, rascunhoVazio = false }: HeaderProps) {
   const { cadeia } = useKeys();
   const [privacidadeAberta, setPrivacidadeAberta] = useState(false);
   const ativos = cadeia().map((c) => ROTULO_CURTO[c.id]);
+  const exemploEmDestaque = onVerExemplo !== undefined && ativos.length === 0 && rascunhoVazio;
 
   return (
     <header className={styles.cabecalho}>
@@ -27,6 +33,7 @@ export function Header({ onConfigurarChaves, onVerExemplo }: HeaderProps) {
       <nav className={styles.acoes} aria-label="Ações do cabeçalho">
         {onVerExemplo ? (
           <Button
+            variante={exemploEmDestaque ? 'primario' : 'secundario'}
             onClick={() => {
               onVerExemplo();
             }}
@@ -34,14 +41,20 @@ export function Header({ onConfigurarChaves, onVerExemplo }: HeaderProps) {
             Ver exemplo
           </Button>
         ) : null}
+        {/* No celular, privacidade e GitHub viram links menores (ver AppShell.module.css). */}
+        <span className={styles.acaoMenor}>
+          <Button
+            onClick={() => {
+              setPrivacidadeAberta(true);
+            }}
+          >
+            {TITULO_COMO_VERIFICAR}
+          </Button>
+        </span>
         <Button
-          onClick={() => {
-            setPrivacidadeAberta(true);
-          }}
+          variante={exemploEmDestaque ? 'secundario' : 'primario'}
+          onClick={onConfigurarChaves}
         >
-          {TITULO_COMO_VERIFICAR}
-        </Button>
-        <button type="button" className={styles.botaoPrimario} onClick={onConfigurarChaves}>
           {ativos.length === 0 ? (
             'Configurar chaves de IA'
           ) : (
@@ -50,8 +63,10 @@ export function Header({ onConfigurarChaves, onVerExemplo }: HeaderProps) {
               <span className="somente-leitor"> — configurar chaves de IA</span>
             </>
           )}
-        </button>
-        <LinkExterno href={SITE.repositorio}>GitHub</LinkExterno>
+        </Button>
+        <span className={styles.acaoMenor}>
+          <LinkExterno href={SITE.repositorio}>GitHub</LinkExterno>
+        </span>
       </nav>
       <ComoVerificarModal
         aberto={privacidadeAberta}

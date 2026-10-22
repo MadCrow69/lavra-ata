@@ -18,6 +18,8 @@ export type AppShellProps = ControleDaAba & {
   onConfigurarChaves: () => void;
   /** Abre o seletor de exemplos; sem ele o cabeçalho não mostra "Ver exemplo". */
   onVerExemplo?: () => void;
+  /** Rascunho vazio: sem chave, "Ver exemplo" vira a ação principal do cabeçalho. */
+  rascunhoVazio?: boolean;
   /** Aviso da página toda (ex.: modo exemplo), logo abaixo do cabeçalho e visível nas duas abas. */
   aviso?: ReactNode;
   /** Avisos por aba, mostrados como contador na própria aba (tela estreita). */
@@ -35,6 +37,7 @@ export function AppShell({
   documento,
   onConfigurarChaves,
   onVerExemplo,
+  rascunhoVazio = false,
   aviso,
   aba: abaControlada,
   onTrocarAba,
@@ -49,7 +52,11 @@ export function AppShell({
 
   return (
     <div className={styles.casca}>
-      <Header onConfigurarChaves={onConfigurarChaves} {...(onVerExemplo ? { onVerExemplo } : {})} />
+      <Header
+        onConfigurarChaves={onConfigurarChaves}
+        rascunhoVazio={rascunhoVazio}
+        {...(onVerExemplo ? { onVerExemplo } : {})}
+      />
       {aviso}
       {!largo && <MobileTabs ativa={aba} onChange={trocarAba} {...(avisos ? { avisos } : {})} />}
       <main className={largo ? styles.duasColunas : styles.umaColuna}>
