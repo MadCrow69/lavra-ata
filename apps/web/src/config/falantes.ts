@@ -80,5 +80,12 @@ export const MAX_CARACTERES_NOME_SUGERIDO = 120;
  */
 export const PARTICULAS_DO_NOME: readonly string[] = ['de', 'da', 'do', 'das', 'dos', 'e', "d'"];
 
+/**
+ * Numerais romanos que ficam maiúsculos ao padronizar um nome, salvo quando abrem o nome
+ * ("JOÃO PAULO II" → "João Paulo II"). Só os usados como sufixo de nome: "Li" ou "Di" são
+ * sobrenomes, não numerais.
+ */
+export const NUMERAIS_DO_NOME: readonly string[] = ['ii', 'iii', 'iv'];
+
 /** Quantos nomes a sugestão de participantes mostra antes de resumir em "e mais N". */
 export const MAX_NOMES_NA_SUGESTAO = 6;

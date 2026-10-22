@@ -1,6 +1,7 @@
 import type { RotuloPessoa } from '../../ata-types/types';
 import {
   MAX_CARACTERES_NOME_SUGERIDO,
+  NUMERAIS_DO_NOME,
   PARTICULAS_DO_NOME,
   ROTULOS_DE_CAMPO,
   ROTULOS_FALANTE_GENERICO,
@@ -29,6 +30,7 @@ export function ehRotuloGenerico(nome: string): boolean {
 
 const LOCALE = 'pt-BR';
 const PARTICULAS = new Set(PARTICULAS_DO_NOME);
+const NUMERAIS = new Set(NUMERAIS_DO_NOME);
 /** Partículas que são prefixo da palavra ("d'"), da mais longa para a mais curta. */
 const PREFIXOS = PARTICULAS_DO_NOME.filter((p) => p.endsWith("'")).sort(
   (a, b) => b.length - a.length,
@@ -52,6 +54,7 @@ function palavraPadronizada(palavra: string, primeira: boolean): string {
   const minuscula = palavra.toLocaleLowerCase(LOCALE);
   if (primeira) return capitalizarPorParte(minuscula);
   if (PARTICULAS.has(minuscula)) return minuscula;
+  if (NUMERAIS.has(minuscula)) return minuscula.toLocaleUpperCase(LOCALE);
   const prefixo = PREFIXOS.find((p) => minuscula.replace('’', "'").startsWith(p));
   return prefixo === undefined || minuscula.length === prefixo.length
     ? capitalizarPorParte(minuscula)
@@ -60,7 +63,8 @@ function palavraPadronizada(palavra: string, primeira: boolean): string {
 
 /**
  * Nome escrito todo em maiúsculas ou todo em minúsculas (olhando só as letras) → cada palavra com
- * inicial maiúscula, partículas de `PARTICULAS_DO_NOME` em minúsculas (salvo a primeira palavra).
+ * inicial maiúscula, partículas de `PARTICULAS_DO_NOME` em minúsculas e numerais de
+ * `NUMERAIS_DO_NOME` em maiúsculas (salvo a primeira palavra).
  * Nome em caixa mista fica como a pessoa escreveu ("McDonald", "DiCaprio"). Só para o nome sugerido:
  * a transcrição não muda.
  */
