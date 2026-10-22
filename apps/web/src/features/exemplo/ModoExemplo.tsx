@@ -1,7 +1,12 @@
 import { createContext, use, type ReactNode } from 'react';
 import type { LogoDoc } from '../../document/model';
 
-/** Motivo de todo botão de IA parado no modo exemplo (Gerar, Regerar, Ajustar, "Tentar de novo"). */
+/**
+ * Motivo de todo botão de IA parado no modo exemplo (Gerar, Regerar, Ajustar, "Tentar de novo").
+ * Exceção deliberada: o "Testar" do modal de chaves segue livre — é a pessoa conferindo a própria
+ * chave (só a chave vai ao provedor, nada do exemplo); a página "Privacidade: como verificar" diz
+ * isso.
+ */
 export const MOTIVO_EXEMPLO =
   'No exemplo, nada é enviado para IA. Para gerar com a sua chave, clique em “Começar a minha”.';
 

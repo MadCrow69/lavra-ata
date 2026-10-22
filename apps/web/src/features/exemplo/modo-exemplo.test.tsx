@@ -9,6 +9,7 @@ import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } fro
 import type { LogoDoc } from '../../document/model';
 import type { AtaDraft } from '../../domain/draft';
 import { criarRascunho } from '../../domain/draft-reducer';
+import { PREFERENCIAS } from '../../config/storage-keys';
 import { salvarRascunho } from '../../domain/persistence';
 import { MENSAGEM_ERRO_EXEMPLO, type CarregadoresExemplo } from '../../exemplos/carregar';
 import { exemplo as exemploCipa } from '../../exemplos/dados/exemplo-cipa';
@@ -21,6 +22,7 @@ import {
   criarPreferenciasStore,
   type PreferenciasStore,
 } from '../../preferencias/preferencias-store';
+import { storageFalso } from '../../test/storage-falso';
 import { ToastProvider } from '../../ui/Toast';
 import { Workbench } from '../workbench/Workbench';
 import { MOTIVO_EXEMPLO, MOTIVO_TIPO_NO_EXEMPLO } from './ModoExemplo';
@@ -519,19 +521,70 @@ describe('modo exemplo: sair', () => {
     expect(screen.getByRole('button', { name: 'Nova ata' })).toHaveFocus();
   });
 
-  it('"Nova ata" no modo exemplo desliga o modo e apaga a marca da sessão', async () => {
+  it('"Nova ata" no modo exemplo: diz o que acontece (tom volta ao da pessoa), desliga o modo e apaga a marca', async () => {
     simularLargura(true);
-    const { user } = renderizar();
+    const preferencias = criarPreferenciasStore(null, null);
+    preferencias.definir({ tom: 'conciso' });
+    const { user } = renderizar({ preferencias });
     await verExemplo(user, cipa.rotulo);
 
     await user.click(screen.getByRole('button', { name: 'Nova ata' }));
     const dialogo = screen.getByRole('dialog', { name: 'Começar uma nova ata?' });
+    expect(dialogo).toHaveTextContent(
+      'O exemplo desta aba (dados, participantes, transcrição e ata gerada) será apagado. O tipo de ata é mantido e o tom da redação volta ao que você usava.',
+    );
+    expect(dialogo).not.toHaveTextContent('O tipo de ata e o tom da redação são mantidos.');
     await user.click(within(dialogo).getByRole('button', { name: 'Apagar e começar' }));
 
     expect(banner()).toBeNull();
     expect(lerExemploDaSessao()).toBeNull();
-    expect(screen.getByText(/^Nova ata iniciada\./)).toBeVisible();
+    expect(
+      screen.getByText('Nova ata iniciada. Tipo mantido; o tom voltou ao que você usava.'),
+    ).toBeVisible();
+    expect(screen.queryByText('Nova ata iniciada. Tipo e tom mantidos.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^Tom da redação/)).toHaveValue('conciso');
     expect(screen.queryByRole('img', { name: 'Logo da organização' })).not.toBeInTheDocument();
+  });
+
+  it('"Nova ata" no modo exemplo com logo da pessoa: o texto diz que a logo dela fica', async () => {
+    simularLargura(true);
+    const logoStore = criarLogoStore(null, null);
+    logoStore.definir(LOGO_PESSOA);
+    const { user } = renderizar({ logoStore });
+    await verExemplo(user, cipa.rotulo);
+
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+    const dialogo = screen.getByRole('dialog', { name: 'Começar uma nova ata?' });
+    expect(dialogo).toHaveTextContent(
+      'O exemplo desta aba (dados, participantes, transcrição e ata gerada) será apagado. O tipo de ata é mantido e o tom da redação volta ao que você usava. A sua logo é mantida.',
+    );
+    await user.click(within(dialogo).getByRole('button', { name: 'Apagar e começar' }));
+    expect(
+      screen.getByText('Nova ata iniciada. Tipo e logo mantidos; o tom voltou ao que você usava.'),
+    ).toBeVisible();
+  });
+
+  it('"Lembrar preferências" no exemplo não grava o tipo nem o tom do exemplo (ordem e modelos sim)', async () => {
+    simularLargura(true);
+    const local = storageFalso();
+    const preferencias = criarPreferenciasStore(null, local.storage);
+    preferencias.definir({ tipoId: 'corporativa', tom: 'conciso' });
+    const definir = vi.spyOn(preferencias, 'definir');
+    const { user } = renderizar({ preferencias, store: comChave() });
+    await verExemplo(user, cipa.rotulo);
+
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Lembrar preferências neste navegador' }),
+    );
+
+    expect(definir).toHaveBeenCalledTimes(1);
+    const gravado = definir.mock.calls[0]?.[0] ?? {};
+    expect(gravado).not.toHaveProperty('tipoId');
+    expect(gravado).not.toHaveProperty('tom');
+    expect(gravado).toHaveProperty('ordem');
+    expect(preferencias.lembrar()).toBe(true);
+    const noNavegador: unknown = JSON.parse(local.itens.get(PREFERENCIAS) ?? '{}');
+    expect(noNavegador).toMatchObject({ tipoId: 'corporativa', tom: 'conciso' });
   });
 });
 
@@ -628,5 +681,166 @@ describe('modo exemplo: recarregar a página', () => {
     expect(banner()).toBeNull();
     expect(lerExemploDaSessao()).toBeNull();
     expect(screen.getByText(RECUPERADO)).toBeVisible();
+  });
+});
+
+describe('modo exemplo: recarregar com o exemplo editado', () => {
+  it('editado antes do F5: "Começar a minha" pergunta e "Ver exemplo" avisa a substituição', async () => {
+    simularLargura(true);
+    const primeira = renderizar();
+    await verExemplo(primeira.user, cipa.rotulo);
+    await primeira.user.click(screen.getByLabelText(/^Transcrição da reunião/));
+    await primeira.user.keyboard('{Control>}a{/Control}');
+    await primeira.user.paste('Ana: a transcrição da minha reunião.');
+    primeira.unmount();
+
+    const segunda = renderizar();
+    await waitFor(() => {
+      expect(segunda.processar).toHaveBeenCalled();
+    });
+    expect(screen.getByLabelText(/^Transcrição da reunião/)).toHaveValue(
+      'Ana: a transcrição da minha reunião.',
+    );
+
+    const dialogo = await abrirSeletor(segunda.user);
+    expect(dialogo).toHaveTextContent(AVISO_SUBSTITUIR);
+    await segunda.user.keyboard('{Escape}');
+
+    await segunda.user.click(
+      within(bannerAtivo()).getByRole('button', { name: 'Começar a minha' }),
+    );
+    expect(screen.getByRole('dialog', { name: 'Fechar o exemplo?' })).toBeVisible();
+    expect(screen.getByLabelText(/^Transcrição da reunião/)).toHaveValue(
+      'Ana: a transcrição da minha reunião.',
+    );
+  });
+
+  it('intacto antes do F5: "Começar a minha" não pergunta e "Ver exemplo" não avisa', async () => {
+    simularLargura(true);
+    const primeira = renderizar();
+    await verExemplo(primeira.user, cipa.rotulo);
+    primeira.unmount();
+
+    const segunda = renderizar();
+    await waitFor(() => {
+      expect(segunda.processar).toHaveBeenCalled();
+    });
+    const dialogo = await abrirSeletor(segunda.user);
+    expect(dialogo).not.toHaveTextContent(AVISO_SUBSTITUIR);
+    await segunda.user.keyboard('{Escape}');
+
+    await segunda.user.click(
+      within(bannerAtivo()).getByRole('button', { name: 'Começar a minha' }),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(banner()).toBeNull();
+  });
+
+  it('o exemplo não carrega no F5: na dúvida, "Começar a minha" pergunta', async () => {
+    simularLargura(true);
+    const primeira = renderizar();
+    await verExemplo(primeira.user, cipa.rotulo);
+    primeira.unmount();
+
+    const segunda = renderizar({
+      exemplos: { ...exemplosReais, cipa: () => Promise.reject(new Error('sem rede')) },
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(banner()).not.toBeNull();
+    await segunda.user.click(
+      within(bannerAtivo()).getByRole('button', { name: 'Começar a minha' }),
+    );
+    expect(screen.getByRole('dialog', { name: 'Fechar o exemplo?' })).toBeVisible();
+    expect(segunda.processar).not.toHaveBeenCalled();
+  });
+});
+
+describe('modo exemplo: corridas', () => {
+  it('regeração de seção em andamento: entrar no exemplo a aborta e o resultado tardio nunca cai nele', async () => {
+    simularLargura(true);
+    salvarRascunho({
+      ...completo(),
+      resultado: {
+        secoes: Object.fromEntries(
+          corporativa.secoes.map((sec) => [
+            sec.chave,
+            [{ tipo: 'paragrafo' as const, texto: `Texto de ${sec.chave}.`, itens: [] }],
+          ]),
+        ),
+        encaminhamentos: [],
+        atribuicao: {},
+        avisos: {},
+        editadas: [],
+      },
+    });
+    let sinal: AbortSignal | null = null;
+    let entregar: (v: unknown) => void = () => undefined;
+    const { user } = renderizar({
+      store: comChave(),
+      gerar: (_cfg, req) => {
+        sinal = req.signal;
+        return new Promise((resolve) => {
+          entregar = resolve;
+        });
+      },
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Regerar seção Resumo' }));
+    expect(screen.getByRole('progressbar', { name: 'Regerando a seção Resumo' })).toBeVisible();
+
+    const dialogo = await abrirSeletor(user);
+    expect(dialogo).toHaveTextContent(AVISO_CANCELAR);
+    await user.click(within(dialogo).getByRole('button', { name: cipa.rotulo }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect((sinal as AbortSignal | null)?.aborted).toBe(true);
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+
+    await act(async () => {
+      entregar({ blocos: [{ tipo: 'paragrafo', texto: 'Seção tardia.', itens: [] }] });
+      await Promise.resolve();
+    });
+    expect(within(folha()).queryByText('Seção tardia.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/regerada por/)).not.toBeInTheDocument();
+    expect(within(folha()).getAllByText(/Metalúrgica Exemplo Ltda\./).length).toBeGreaterThan(0);
+  });
+
+  it('duas escolhas seguidas: a primeira, mais lenta, chega por último e não vale', async () => {
+    simularLargura(true);
+    let entregarCipa: (ex: Exemplo) => void = () => undefined;
+    const { user } = renderizar({
+      exemplos: {
+        ...exemplosReais,
+        cipa: () =>
+          new Promise<Exemplo>((resolve) => {
+            entregarCipa = resolve;
+          }),
+      },
+    });
+
+    let dialogo = await abrirSeletor(user);
+    await user.click(within(dialogo).getByRole('button', { name: cipa.rotulo }));
+    await user.keyboard('{Escape}');
+    dialogo = await abrirSeletor(user);
+    // A escolha anterior foi descartada: nada fica ocupado nem parado.
+    expect(within(dialogo).getByRole('button', { name: cipa.rotulo })).not.toHaveAttribute(
+      'aria-busy',
+    );
+    await user.click(within(dialogo).getByRole('button', { name: corporativa.rotulo }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    await act(async () => {
+      entregarCipa(exemploCipa);
+      await Promise.resolve();
+    });
+    expect(bannerAtivo()).toHaveTextContent(`Exemplo: ${corporativa.rotulo}.`);
+    expect(within(folha()).queryByText(/Metalúrgica Exemplo Ltda\./)).not.toBeInTheDocument();
+    expect(lerExemploDaSessao()).toBe('corporativa');
+    expect(screen.queryByText(new RegExp(`Exemplo carregado: ${cipa.rotulo}`))).toBeNull();
   });
 });

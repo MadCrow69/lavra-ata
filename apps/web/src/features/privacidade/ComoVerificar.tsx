@@ -141,7 +141,11 @@ export function ComoVerificarModal({
             </li>
             <li>O que é enviado fica sob os termos do provedor que você escolheu.</li>
             <li>Uma extensão do navegador com acesso à página pode ler a chave e o texto.</li>
-            <li>O modo exemplo não chama nenhum provedor: o exemplo já vem pronto no site.</li>
+            <li>
+              O modo exemplo não envia nada para IA: o exemplo já vem pronto no site. Só o “Testar”
+              do modal de chaves, se você clicar nele, fala com o provedor, para conferir a sua
+              chave, sem nada do exemplo.
+            </li>
           </ul>
         </section>
       </div>

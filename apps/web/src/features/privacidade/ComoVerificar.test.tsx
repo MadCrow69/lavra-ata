@@ -117,7 +117,11 @@ describe('Privacidade: como verificar (modal)', () => {
       screen.getByText(/Informação sensível escrita em linguagem natural/),
     ).toBeInTheDocument();
     expect(screen.getByText(/sob os termos do provedor que você escolheu/)).toBeInTheDocument();
-    expect(screen.getByText(/O modo exemplo não chama nenhum provedor/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'O modo exemplo não envia nada para IA: o exemplo já vem pronto no site. Só o “Testar” do modal de chaves, se você clicar nele, fala com o provedor, para conferir a sua chave, sem nada do exemplo.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('o passo a passo da aba Rede cita os hosts e o marcador de exemplo', () => {

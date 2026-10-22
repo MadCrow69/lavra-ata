@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
 import { ESPERA_SALVAR_RASCUNHO_MS } from '../../config/ui';
@@ -6,14 +6,8 @@ import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
 import { criarRascunho, temConteudo } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
-import {
-  CARREGADORES_EXEMPLO,
-  carregarExemplo,
-  rascunhoDoExemplo,
-  type CarregadoresExemplo,
-} from '../../exemplos/carregar';
+import { CARREGADORES_EXEMPLO, type CarregadoresExemplo } from '../../exemplos/carregar';
 import { gravarExemploNaSessao, lerExemploDaSessao } from '../../exemplos/sessao';
-import type { Exemplo } from '../../exemplos/tipos';
 import { OperacaoIAProvider, useOperacaoIA } from '../../generation/OperacaoIA';
 import { LogoProvider, useLogo } from '../../logo/LogoContext';
 import type { LogoStore } from '../../logo/logo-store';
@@ -26,9 +20,8 @@ import { useLarguraLarga } from '../../shell/useLarguraLarga';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
-import { BannerExemplo } from '../exemplo/BannerExemplo';
-import { EscolherExemplo } from '../exemplo/EscolherExemplo';
-import { ModoExemploProvider, type EstadoExemplo } from '../exemplo/ModoExemplo';
+import { ModoExemploProvider } from '../exemplo/ModoExemplo';
+import { useModoExemploDaBancada } from '../exemplo/useModoExemploDaBancada';
 import { DadosBlock } from '../form/DadosBlock';
 import { GenerateBar } from '../form/GenerateBar';
 import { ParticipantesBlock } from '../form/ParticipantesBlock';
@@ -41,6 +34,11 @@ import styles from './workbench.module.css';
 
 const MENSAGEM_NOVA_ATA = 'Nova ata iniciada. Tipo e tom mantidos.';
 const MENSAGEM_NOVA_ATA_COM_LOGO = 'Nova ata iniciada. Tipo, tom e logo mantidos.';
+/** No exemplo o tom é sempre formal: "Nova ata" devolve o tom da pessoa, e diz isso. */
+const MENSAGEM_NOVA_ATA_NO_EXEMPLO =
+  'Nova ata iniciada. Tipo mantido; o tom voltou ao que você usava.';
+const MENSAGEM_NOVA_ATA_NO_EXEMPLO_COM_LOGO =
+  'Nova ata iniciada. Tipo e logo mantidos; o tom voltou ao que você usava.';
 
 /** Quantos avisos a ata gerada tem (gerais e por seção): a aba Documento os conta no celular. */
 function contarAvisos(d: AtaDraft): number {
@@ -83,14 +81,6 @@ function useSalvarRascunho(state: AtaDraft): void {
   }, []);
 }
 
-/** Modo exemplo ligado: o tipo, o rascunho como chegou (`base`) e a logo fictícia, só em memória. */
-interface ModoAtivo {
-  tipoId: string;
-  /** O rascunho do exemplo intacto: `state === base` = nada a perder ao sair. */
-  base: AtaDraft;
-  logo: LogoDoc | null;
-}
-
 interface BancadaProps {
   recuperou: boolean;
   /** Tipo do exemplo que esta aba mostrava antes de recarregar (o rascunho de partida é ele). */
@@ -108,23 +98,15 @@ function Bancada({
   exemplos,
   processarLogo,
 }: BancadaProps) {
-  const { state, dispatch } = useDraft();
-  const { operacao, interromper } = useOperacaoIA();
+  const { state } = useDraft();
+  const { operacao } = useOperacaoIA();
   const { mostrar } = useToast();
   const { logo } = useLogo();
-  const preferencias = usePreferenciasStore();
   const largo = useLarguraLarga();
   const [aba, setAba] = useState<AbaId>('editar');
   const [chavesAbertas, setChavesAbertas] = useState(false);
   const [avisoRecuperado, setAvisoRecuperado] = useState(recuperou);
   const [confirmando, setConfirmando] = useState(false);
-  const [escolhendoExemplo, setEscolhendoExemplo] = useState(false);
-  const [fechandoExemplo, setFechandoExemplo] = useState(false);
-  const [modo, setModo] = useState<ModoAtivo | null>(() =>
-    exemploRecuperado === null ? null : { tipoId: exemploRecuperado, base: state, logo: null },
-  );
-  /** Cresce a cada entrada e saída do modo: a logo de um exemplo que chega tarde não cai em outro. */
-  const logoExemploRef = useRef(0);
   /** Cresce a cada "Nova ata": remonta formulário e folha, zerando o estado local de cada um. */
   const [rodada, setRodada] = useState(0);
   const [geracoes, setGeracoes] = useState(0);
@@ -161,105 +143,31 @@ function Bancada({
     setChavesAbertas(true);
   };
 
-  /** Logo fictícia do exemplo, rasterizada pela mesma porta da logo da pessoa. Falha = sem logo. */
-  const prepararLogoDoExemplo = useCallback(
-    (exemplo: Exemplo) => {
-      const vez = ++logoExemploRef.current;
-      const arquivo = new File([exemplo.logoSvg], 'logo-exemplo.svg', { type: 'image/svg+xml' });
-      processarLogo(arquivo)
-        .then((logoDoExemplo) => {
-          if (vez !== logoExemploRef.current) return;
-          setModo((m) => (m?.tipoId === exemplo.tipoId ? { ...m, logo: logoDoExemplo } : m));
-        })
-        .catch(() => {
-          // A logo é enfeite do exemplo: sem ela, a folha segue sem logo e sem mensagem.
-        });
+  const exemplo = useModoExemploDaBancada({
+    exemploRecuperado,
+    exemplos,
+    processarLogo,
+    // Exemplo carregado ou deixado: formulário e folha remontam e os avisos da bancada fecham.
+    recomecar: (destino) => {
+      setRodada((r) => r + 1);
+      setAvisoRecuperado(false);
+      setConfirmando(false);
+      setAba(destino);
     },
-    [processarLogo],
-  );
-
-  // Recarregou no modo exemplo: a logo, que vive só na memória, é refeita do próprio site (o
-  // chunk do exemplo; nenhum provedor de IA).
-  useEffect(() => {
-    if (exemploRecuperado === null) return;
-    let vivo = true;
-    carregarExemplo(exemploRecuperado, exemplos)
-      .then((exemplo) => {
-        if (vivo) prepararLogoDoExemplo(exemplo);
-      })
-      .catch(() => {
-        // Sem o exemplo, segue sem a logo dele (o rascunho já está na tela).
-      });
-    return () => {
-      vivo = false;
-    };
-  }, [exemploRecuperado, exemplos, prepararLogoDoExemplo]);
-
-  /**
-   * Núcleo de "Nova ata" e de "Começar a minha": formulário vazio (tipo e tom mantidos), fora do
-   * modo exemplo, na aba Editar. Cada chamador mostra o seu aviso.
-   */
-  const reiniciar = () => {
-    // Primeiro a IA: o resultado de uma chamada antiga nunca pode cair na ata nova.
-    interromper();
-    dispatch({ type: 'novaAta' });
-    // O exemplo vem sempre em tom formal: ao sair dele, volta o tom da pessoa (só leitura).
-    const tomDaPessoa = preferencias.atual().tom;
-    if (modo !== null && tomDaPessoa !== undefined)
-      dispatch({ type: 'definirTom', tom: tomDaPessoa });
-    setRodada((r) => r + 1);
-    setAvisoRecuperado(false);
-    setConfirmando(false);
-    setFechandoExemplo(false);
-    logoExemploRef.current++;
-    setModo(null);
-    gravarExemploNaSessao(null);
-    setAba('editar');
-  };
+  });
 
   const novaAta = () => {
-    reiniciar();
-    mostrar({ titulo: logo === null ? MENSAGEM_NOVA_ATA : MENSAGEM_NOVA_ATA_COM_LOGO });
+    const noExemplo = exemplo.ligado;
+    exemplo.reiniciar();
+    const titulo = noExemplo
+      ? logo === null
+        ? MENSAGEM_NOVA_ATA_NO_EXEMPLO
+        : MENSAGEM_NOVA_ATA_NO_EXEMPLO_COM_LOGO
+      : logo === null
+        ? MENSAGEM_NOVA_ATA
+        : MENSAGEM_NOVA_ATA_COM_LOGO;
+    mostrar({ titulo });
   };
-
-  const comecarAMinha = () => {
-    const rotulo = tipo.rotulo;
-    reiniciar();
-    mostrar({
-      titulo: `Exemplo fechado. O formulário está vazio para a sua ata; o tipo “${rotulo}” foi mantido.`,
-    });
-  };
-
-  // Exemplo intacto: nada a perder, então "Começar a minha" não pergunta.
-  const exemploIntacto = modo !== null && state === modo.base;
-  const pedirComecarAMinha = () => {
-    if (exemploIntacto) comecarAMinha();
-    else setFechandoExemplo(true);
-  };
-
-  const aoCarregarExemplo = (exemplo: Exemplo) => {
-    // Primeiro a IA: o resultado tardio de uma geração nunca pode cair no exemplo.
-    interromper();
-    const rascunho = rascunhoDoExemplo(exemplo);
-    dispatch({ type: 'substituirRascunho', rascunho });
-    setRodada((r) => r + 1);
-    setModo({ tipoId: exemplo.tipoId, base: rascunho, logo: null });
-    gravarExemploNaSessao(exemplo.tipoId);
-    setAvisoRecuperado(false);
-    setConfirmando(false);
-    setFechandoExemplo(false);
-    setEscolhendoExemplo(false);
-    setAba('documento');
-    mostrar({
-      titulo: `Exemplo carregado: ${obterTipo(exemplo.tipoId).rotulo}. Nada foi enviado para IA.`,
-    });
-    prepararLogoDoExemplo(exemplo);
-  };
-
-  const valorModo = useMemo<EstadoExemplo>(
-    () => ({ tipoId: modo?.tipoId ?? null, logo: modo?.logo ?? null }),
-    [modo],
-  );
 
   // Rascunho vazio e IA parada: não há o que perder, então "Nova ata" não pergunta.
   const pedirNovaAta = () => {
@@ -328,59 +236,18 @@ function Bancada({
   );
 
   return (
-    <ModoExemploProvider valor={valorModo}>
+    <ModoExemploProvider valor={exemplo.valor}>
       <AppShell
         editar={editar}
         documento={documento}
         onConfigurarChaves={abrirChaves}
-        onVerExemplo={() => {
-          setEscolhendoExemplo(true);
-        }}
-        aviso={
-          modo === null ? null : (
-            <BannerExemplo
-              rotulo={obterTipo(modo.tipoId).rotulo}
-              onComecarMinha={pedirComecarAMinha}
-            />
-          )
-        }
+        onVerExemplo={exemplo.abrirSeletor}
+        aviso={exemplo.aviso}
         aba={aba}
         onTrocarAba={setAba}
         avisos={{ documento: avisos }}
       />
-      <EscolherExemplo
-        aberto={escolhendoExemplo}
-        onFechar={() => {
-          setEscolhendoExemplo(false);
-        }}
-        carregadores={exemplos}
-        substituiRascunho={temConteudo(state) && !exemploIntacto}
-        cancelaGeracao={operacao !== null}
-        onCarregado={aoCarregarExemplo}
-      />
-      <Modal
-        aberto={fechandoExemplo}
-        titulo="Fechar o exemplo?"
-        onFechar={() => {
-          setFechandoExemplo(false);
-        }}
-        acoes={
-          <>
-            <Button
-              onClick={() => {
-                setFechandoExemplo(false);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button variante="perigo" onClick={comecarAMinha}>
-              Apagar e começar a minha
-            </Button>
-          </>
-        }
-      >
-        <p>As alterações que você fez no exemplo serão apagadas.</p>
-      </Modal>
+      {exemplo.modais}
       <KeysModal
         aberto={chavesAbertas}
         onFechar={() => {
@@ -409,13 +276,21 @@ function Bancada({
           </>
         }
       >
-        <p>
-          Os dados da reunião, os participantes, a transcrição e a ata gerada nesta aba serão
-          apagados.{' '}
-          {logo === null
-            ? 'O tipo de ata e o tom da redação são mantidos.'
-            : 'O tipo de ata, o tom da redação e a logo são mantidos.'}
-        </p>
+        {exemplo.ligado ? (
+          <p>
+            O exemplo desta aba (dados, participantes, transcrição e ata gerada) será apagado. O
+            tipo de ata é mantido e o tom da redação volta ao que você usava.
+            {logo === null ? '' : ' A sua logo é mantida.'}
+          </p>
+        ) : (
+          <p>
+            Os dados da reunião, os participantes, a transcrição e a ata gerada nesta aba serão
+            apagados.{' '}
+            {logo === null
+              ? 'O tipo de ata e o tom da redação são mantidos.'
+              : 'O tipo de ata, o tom da redação e a logo são mantidos.'}
+          </p>
+        )}
         {operacao !== null ? <p>A geração em andamento será cancelada.</p> : null}
       </Modal>
     </ModoExemploProvider>

@@ -4,9 +4,11 @@ import { storageFalso } from '../test/storage-falso';
 import { gravarExemploNaSessao, lerExemploDaSessao } from './sessao';
 
 afterEach(() => {
+  // Primeiro: um getter de sessionStorage espionado faria o clear() abaixo lançar.
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   sessionStorage.clear();
   localStorage.clear();
-  vi.unstubAllGlobals();
 });
 
 describe('marca do modo exemplo na sessão', () => {
@@ -47,7 +49,6 @@ describe('marca do modo exemplo na sessão', () => {
       gravarExemploNaSessao('cipa');
     }).not.toThrow();
     expect(lerExemploDaSessao()).toBeNull();
-    vi.restoreAllMocks();
   });
 
   it.each([

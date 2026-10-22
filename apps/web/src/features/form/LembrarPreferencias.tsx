@@ -3,6 +3,7 @@ import { useKeys } from '../../ai/KeysContext';
 import type { ProviderId } from '../../ai/types';
 import { useDraft } from '../../domain/DraftContext';
 import { usePreferencias } from '../../preferencias/PreferenciasContext';
+import { useModoExemplo } from '../exemplo/ModoExemplo';
 import { Button } from '../../ui/Button';
 import { useToast } from '../../ui/Toast';
 import logo from './logo.module.css';
@@ -20,6 +21,7 @@ export function LembrarPreferencias() {
   const preferencias = usePreferencias();
   const keys = useKeys();
   const { state } = useDraft();
+  const noExemplo = useModoExemplo().tipoId !== null;
   const { mostrar } = useToast();
   const ajudaId = useId();
   const caixaRef = useRef<HTMLInputElement>(null);
@@ -40,8 +42,9 @@ export function LembrarPreferencias() {
     const modelos: Partial<Record<ProviderId, string>> = {};
     for (const c of keys.listar()) modelos[c.provedor] = c.modelo;
     preferencias.definir({
-      tipoId: state.tipoId,
-      tom: state.tom,
+      // No modo exemplo, tipo e tom são os do exemplo, não escolhas da pessoa: ficam os que ela já
+      // tinha. Ordem e modelos dos provedores (e a cor de destaque) são dela e vão.
+      ...(noExemplo ? {} : { tipoId: state.tipoId, tom: state.tom }),
       ordem: keys.ordem(),
       modelos,
     });
