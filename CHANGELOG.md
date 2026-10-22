@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/MadCrow69/lavra-ata/compare/v0.2.0...v0.2.1) (2026-10-22)
+
+
+### Correções
+
+* **web:** numeral romano maiúsculo no nome sugerido e CHANGELOG sem título sobrando ([#13](https://github.com/MadCrow69/lavra-ata/issues/13)) ([b34a161](https://github.com/MadCrow69/lavra-ata/commit/b34a161ee801928034b079cc18a26839019b2bca))
+
 ## [0.2.0](https://github.com/MadCrow69/lavra-ata/compare/v0.1.0...v0.2.0) (2026-10-22)
 
 
