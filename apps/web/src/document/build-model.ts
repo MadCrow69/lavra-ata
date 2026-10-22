@@ -1,4 +1,9 @@
-import { prazoOuNulo, textoLimpo } from '../ata-types/texto-modelo';
+import {
+  colunasDeParticipantes,
+  ehObrigatorio,
+  type ColunaParticipante,
+} from '../ata-types/registry';
+import { prazoOuNulo, rotuloDaOpcao, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import {
   AVISO_MINUTA,
@@ -22,6 +27,7 @@ import {
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { ROTULO_CURTO } from '../config/models';
 import type { DocBloco, DocumentModel, Inline, LogoDoc } from './model';
+import { largurasPorPeso } from './larguras';
 import { partesDoRodape } from './rodape';
 
 /** Lacuna que a pessoa completa à mão: `[PREENCHER: o que falta]`. Sempre em maiúsculas. */
@@ -30,8 +36,6 @@ const LACUNA = /\[PREENCHER(?::[^\]]*)?\]/g;
 /** Chave da seção que ocupa o lugar das seções geradas antes da geração. */
 const CHAVE_SECOES_PENDENTES = 'pendente';
 
-const TITULO_PARTICIPANTES = 'Participantes';
-const TITULO_PAUTA = 'Pauta';
 const TITULO_SECOES_PENDENTES = 'Seções da ata';
 const COLUNAS_ENCAMINHAMENTOS = ['Ação', 'Responsável', 'Prazo', 'Status'];
 
@@ -101,10 +105,6 @@ function paragrafo(texto: string): DocBloco {
   return { tipo: 'paragrafo', partes: dividirPreencher(texto) };
 }
 
-function opcaoDo(campo: CampoDef, valor: string): string | null {
-  return campo.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null;
-}
-
 /** Texto de presença; a justificativa só vale (e só é impressa) para quem está justificado. */
 function celulaPresenca(p: Participante): string {
   const rotulo = ROTULO_PRESENCA[p.presenca];
@@ -117,21 +117,43 @@ function celulaPresenca(p: Participante): string {
 function celulaExtra(campo: CampoDef, p: Participante): string {
   const valor = textoLimpo(p.extras[campo.id]);
   if (valor === '') return CELULA_VAZIA;
-  return (campo.tipo === 'escolha' ? opcaoDo(campo, valor) : null) ?? valor;
+  return (campo.tipo === 'escolha' ? rotuloDaOpcao(campo, valor) : null) ?? valor;
+}
+
+/**
+ * Colunas da tabela de participantes no documento (folha, PDF e DOCX): as do formulário, menos a
+ * OPCIONAL (papel ou extra não obrigatório) que nenhum participante da lista preencheu — uma coluna
+ * inteira de "—" só tira largura das outras. Nome, presença e extra obrigatório ficam sempre.
+ */
+export function colunasDoDocumento(
+  tipo: AtaTypeDefinition,
+  dados: Record<string, string>,
+  participantes: readonly Participante[],
+): ColunaParticipante[] {
+  const alguemPreencheu = (valor: (p: Participante) => string | undefined): boolean =>
+    participantes.some((p) => textoLimpo(valor(p)) !== '');
+  return colunasDeParticipantes(tipo, dados).filter((coluna) => {
+    if (coluna.id === 'nome' || coluna.id === 'presenca') return true;
+    if (coluna.id === 'papel') return alguemPreencheu((p) => p.papel);
+    if (coluna.campo !== null && ehObrigatorio(coluna.campo, dados)) return true;
+    return alguemPreencheu((p) => p.extras[coluna.id]);
+  });
 }
 
 function tabelaDeParticipantes(d: EntradaDoDocumento, tipo: AtaTypeDefinition): DocBloco {
-  const extras = tipo.camposParticipante;
+  const colunas = colunasDoDocumento(tipo, d.dados, d.participantes);
+  const celula = (p: Participante, id: string, campo: CampoDef | null): string => {
+    if (id === 'nome') return textoLimpo(p.nome) || CELULA_VAZIA;
+    if (id === 'papel') return textoLimpo(p.papel) || CELULA_VAZIA;
+    if (id === 'presenca') return celulaPresenca(p);
+    return campo ? celulaExtra(campo, p) : CELULA_VAZIA;
+  };
   return {
     tipo: 'tabela',
-    colunas: ['Nome', tipo.rotuloPapel, ...extras.map((c) => c.rotulo), 'Presença'],
-    linhas: d.participantes.map((p) => [
-      textoLimpo(p.nome) || CELULA_VAZIA,
-      textoLimpo(p.papel) || CELULA_VAZIA,
-      ...extras.map((c) => celulaExtra(c, p)),
-      celulaPresenca(p),
-    ]),
-    colunaPresenca: 2 + extras.length,
+    colunas: colunas.map((c) => c.rotulo),
+    linhas: d.participantes.map((p) => colunas.map((c) => celula(p, c.id, c.campo))),
+    larguras: largurasPorPeso(colunas.map((c) => c.peso)),
+    colunaPresenca: colunas.findIndex((c) => c.id === 'presenca'),
     presencas: d.participantes.map((p) => p.presenca),
   };
 }
@@ -185,10 +207,27 @@ function rodapeInterno(blocos: DocBloco[], resultado: ResultadoAta | null): stri
 }
 
 /**
+ * Um bloco de assinaturas por grupo com pessoas, cada um sob o título do grupo (se tiver). O grupo
+ * sem título não leva `grupo`; o sem pessoas some por inteiro (nem o título aparece).
+ */
+function blocosDeAssinaturas(tipo: AtaTypeDefinition, d: EntradaDoDocumento): DocBloco[] {
+  return tipo.assinaturas(d).flatMap(({ titulo, pessoas }): DocBloco[] => {
+    if (pessoas.length === 0) return [];
+    return titulo
+      ? [
+          { tipo: 'subtitulo', texto: titulo },
+          { tipo: 'assinaturas', pessoas, grupo: titulo },
+        ]
+      : [{ tipo: 'assinaturas', pessoas }];
+  });
+}
+
+/**
  * Monta o documento da ata. Antes de gerar (sem `resultado`) traz só o que o formulário já tem,
  * mais um placeholder no lugar das seções. Depois, preâmbulo, seções na ordem do tipo (as vazias
- * não aparecem), encaminhamentos, fecho, assinaturas e o aviso de minuta. A `logo` (já rasterizada)
- * vai só para o cabeçalho: nunca faz parte do rascunho nem do que a IA recebe.
+ * não aparecem), encaminhamentos, fecho, assinaturas por grupo, o aviso de minuta e os avisos
+ * finais do tipo. A `logo` (já rasterizada) vai só para o cabeçalho: nunca faz parte do rascunho
+ * nem do que a IA recebe.
  */
 export function construirDocumento(
   d: EntradaDoDocumento,
@@ -201,13 +240,16 @@ export function construirDocumento(
   if (resultado) blocos.push(paragrafo(tipo.preambulo(d)));
 
   if (d.participantes.length > 0) {
-    blocos.push({ tipo: 'subtitulo', texto: TITULO_PARTICIPANTES }, tabelaDeParticipantes(d, tipo));
+    blocos.push(
+      { tipo: 'subtitulo', texto: tipo.rotulos.participantes },
+      tabelaDeParticipantes(d, tipo),
+    );
   }
 
   const pauta = d.pauta.map(textoLimpo).filter((item) => item !== '');
   if (pauta.length > 0) {
     blocos.push(
-      { tipo: 'subtitulo', texto: TITULO_PAUTA },
+      { tipo: 'subtitulo', texto: tipo.rotulos.pauta },
       { tipo: 'lista', itens: pauta.map(dividirPreencher) },
     );
   }
@@ -238,9 +280,11 @@ export function construirDocumento(
       );
     }
     blocos.push(paragrafo(tipo.fecho(d)));
-    const pessoas = tipo.assinaturas(d);
-    if (pessoas.length > 0) blocos.push({ tipo: 'assinaturas', pessoas });
+    blocos.push(...blocosDeAssinaturas(tipo, d));
     blocos.push({ tipo: 'aviso', texto: AVISO_MINUTA });
+    blocos.push(
+      ...(tipo.avisosFinais?.(d).map((texto): DocBloco => ({ tipo: 'aviso', texto })) ?? []),
+    );
   }
 
   return {

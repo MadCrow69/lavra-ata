@@ -5,11 +5,18 @@ export const DURACAO_TOAST_MS = 6_000;
 export const ESPERA_SALVAR_RASCUNHO_MS = 500;
 
 /**
- * Largura máxima (rem) em que a tabela de participantes vira cartões, um por pessoa. Espelha o
- * `@media (max-width: 40rem)` de `features/form/form.module.css` (CSS não importa constante JS):
- * mudar um exige mudar o outro.
+ * Espera, em ms, sem mudança no resumo dos participantes antes de o leitor de tela o anunciar
+ * (a região `aria-live` do bloco de participantes).
  */
-export const LARGURA_CARTOES_REM = 40;
+export const ESPERA_ANUNCIO_RESUMO_MS = 600;
+
+/**
+ * Largura máxima (rem) da tela estreita (celular), em que a lista longa de participantes começa
+ * recolhida. Espelha os `@media` de 40rem de `features/form/form.module.css` (CSS não importa
+ * constante JS): mudar um exige mudar o outro. Os cartões da lista NÃO dependem dela, e sim da
+ * largura do próprio bloco (`@container` no mesmo arquivo).
+ */
+export const LARGURA_TELA_ESTREITA_REM = 40;
 
 /**
  * Espera, em ms, antes de revogar a URL de objeto de um download: revogar na hora cancela o

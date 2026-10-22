@@ -36,7 +36,12 @@ export type DocBloco =
       /** Presença de cada linha (mesma ordem de `linhas`), para o ícone sem ler o texto da célula. */
       presencas?: Presenca[];
     }
-  | { tipo: 'assinaturas'; pessoas: { nome: string; papel: string }[] }
+  | {
+      tipo: 'assinaturas';
+      pessoas: { nome: string; papel: string }[];
+      /** Título do grupo (nome acessível na folha); PDF e DOCX o ignoram: o subtítulo já o imprime. */
+      grupo?: string;
+    }
   | { tipo: 'aviso'; texto: string };
 
 export interface DocumentModel {

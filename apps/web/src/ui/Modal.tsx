@@ -1,4 +1,11 @@
-import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
 import styles from './Modal.module.css';
 
@@ -9,6 +16,8 @@ export interface ModalProps {
   children: ReactNode;
   /** Botões do rodapé (ex.: confirmar). O botão "Fechar" do cabeçalho existe sempre. */
   acoes?: ReactNode;
+  /** Elemento que recebe o foco ao abrir; ausente = o painel (comportamento atual). */
+  focoInicial?: RefObject<HTMLElement | null>;
 }
 
 const FOCAVEIS =
@@ -44,7 +53,7 @@ function focaveisDe(raiz: HTMLElement): HTMLElement[] {
  * atrás não rola. Div com `role="dialog"` (e não `<dialog>`) para o comportamento ser o mesmo
  * em qualquer navegador e testável.
  */
-export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps) {
+export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }: ModalProps) {
   const tituloId = useId();
   const painelRef = useRef<HTMLDivElement>(null);
   // Identidade deste modal na pilha de modais abertos.
@@ -54,8 +63,10 @@ export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps)
   const pressionouFundoRef = useRef(false);
   // O callback muda a cada render do pai; o efeito de abertura não pode reiniciar por causa dele.
   const onFecharRef = useRef(onFechar);
+  const focoInicialRef = useRef(focoInicial);
   useEffect(() => {
     onFecharRef.current = onFechar;
+    focoInicialRef.current = focoInicial;
   });
 
   useEffect(() => {
@@ -64,7 +75,7 @@ export function Modal({ aberto, titulo, onFechar, children, acoes }: ModalProps)
     const id = idRef.current;
     pilha.push(id);
     const soltarRolagem = travarRolagem();
-    painelRef.current?.focus();
+    (focoInicialRef.current?.current ?? painelRef.current)?.focus();
 
     // Foco que escapa (clique fora do alcance, leitor de tela) volta para o painel.
     const guardaFoco = (e: FocusEvent) => {

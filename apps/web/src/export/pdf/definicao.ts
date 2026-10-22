@@ -32,14 +32,59 @@ interface Trecho {
   font: string;
   bold?: boolean;
   background?: string;
+  noWrap?: boolean;
 }
 
-/** Partes do texto → trechos com a fonte certa; a lacuna `[PREENCHER]` em negrito com fundo. */
-function trechos(partes: Inline[], familia: FamiliaPdf = 'corpo'): Trecho[] {
+/**
+ * Palavra com hífen interno ("realizou-se", "1.080-A", "e-mail"), com o espaço ou a tabulação que
+ * a segue: ficam no mesmo trecho para não abrir mais um ponto em que a justificação põe espaço
+ * extra. Quebra de linha NÃO entra (sairia do trecho e a linha se perderia).
+ */
+const PALAVRA_COM_HIFEN = /\S+-\S+[ \t]*/g;
+
+/**
+ * Até quantos caracteres a palavra com hífen vai inteira (`noWrap`). O pdfmake nunca quebra um
+ * trecho `noWrap` mais largo que a linha: um endereço comprido com hífens (plataforma, sistema)
+ * passaria da margem. Acima disso, a palavra segue quebrável, como antes.
+ */
+export const HIFEN_INTEIRO_ATE_CARACTERES = 40;
+
+/**
+ * Separa as palavras com hífen do resto do texto. No texto justificado, o pdfmake abre ponto de
+ * quebra depois do hífen seguido de letra e distribui a sobra da linha por trecho, não por espaço:
+ * "realizou-" e "se" viravam dois trechos e ganhavam espaço entre eles ("realizou- se"). A palavra
+ * inteira vai num trecho `noWrap`, que ele não divide. (O hífen inseparável U+2011 não serve: o
+ * Inter embutido não o desenha.)
+ */
+function semQuebraNoHifen(texto: string): { texto: string; inteira: boolean }[] {
+  const pedacos: { texto: string; inteira: boolean }[] = [];
+  let inicio = 0;
+  for (const achado of texto.matchAll(PALAVRA_COM_HIFEN)) {
+    if (achado.index > inicio)
+      pedacos.push({ texto: texto.slice(inicio, achado.index), inteira: false });
+    pedacos.push({
+      texto: achado[0],
+      inteira: achado[0].trimEnd().length <= HIFEN_INTEIRO_ATE_CARACTERES,
+    });
+    inicio = achado.index + achado[0].length;
+  }
+  if (inicio < texto.length) pedacos.push({ texto: texto.slice(inicio), inteira: false });
+  return pedacos;
+}
+
+/**
+ * Partes do texto → trechos com a fonte certa; a lacuna `[PREENCHER]` em negrito com fundo. Com
+ * `hifenInteiro` (parágrafo justificado), a palavra com hífen não se parte (`semQuebraNoHifen`).
+ */
+function trechos(partes: Inline[], familia: FamiliaPdf = 'corpo', hifenInteiro = false): Trecho[] {
   return partes.flatMap((parte) =>
-    separarPorFonte(parte.texto, familia).map((t) =>
-      parte.destaque === 'preencher' ? { ...t, bold: true, background: COR_FUNDO_PREENCHER } : t,
-    ),
+    (hifenInteiro ? semQuebraNoHifen(parte.texto) : [{ texto: parte.texto, inteira: false }])
+      .flatMap(({ texto, inteira }) =>
+        separarPorFonte(texto, familia).map((t): Trecho => (inteira ? { ...t, noWrap: true } : t)),
+      )
+      .map((t) =>
+        parte.destaque === 'preencher' ? { ...t, bold: true, background: COR_FUNDO_PREENCHER } : t,
+      ),
   );
 }
 
@@ -179,7 +224,11 @@ function blocoPdf(bloco: DocBloco): Content[] {
       return [tituloDeSecao(bloco.texto, T.subtituloPt)];
     case 'paragrafo':
       return [
-        { text: trechos(bloco.partes), alignment: 'justify', margin: [0, 0, 0, E.aposBlocoPt] },
+        {
+          text: trechos(bloco.partes, 'corpo', true),
+          alignment: 'justify',
+          margin: [0, 0, 0, E.aposBlocoPt],
+        },
       ];
     case 'lista':
       return [

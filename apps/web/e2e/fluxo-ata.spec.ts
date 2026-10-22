@@ -14,6 +14,7 @@ import {
   folha,
   preencherDados,
   preencherReuniao,
+  semRolagemHorizontal,
   test,
   violacoesDeCsp,
 } from './apoio';
@@ -138,37 +139,11 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
       app: page,
       rede,
     }) => {
-      const semRolagemHorizontal = async () => {
-        const medidas = await page.evaluate(() => {
-          const raiz = document.documentElement;
-          const conteiner = document.querySelector('main')?.getBoundingClientRect();
-          const cartoes = Array.from(
-            document.querySelectorAll<HTMLElement>('main section[data-bloco], main article'),
-          )
-            .filter((el) => el.offsetParent !== null)
-            .map((el) => el.getBoundingClientRect());
-          return {
-            rolagem: raiz.scrollWidth,
-            largura: raiz.clientWidth,
-            direitaDoConteiner: conteiner?.right ?? 0,
-            maiorDireitaDosCartoes: Math.max(0, ...cartoes.map((c) => c.right)),
-            menorEsquerdaDosCartoes: Math.min(Infinity, ...cartoes.map((c) => c.left)),
-            quantos: cartoes.length,
-          };
-        });
-        expect(medidas.quantos).toBeGreaterThan(0);
-        expect(medidas.rolagem).toBeLessThanOrEqual(medidas.largura);
-        expect(medidas.maiorDireitaDosCartoes).toBeLessThanOrEqual(
-          medidas.direitaDoConteiner + 0.5,
-        );
-        expect(medidas.menorEsquerdaDosCartoes).toBeGreaterThanOrEqual(-0.5);
-      };
-
       await expect(page.getByRole('tab', { name: 'Editar' })).toHaveAttribute(
         'aria-selected',
         'true',
       );
-      await semRolagemHorizontal();
+      await semRolagemHorizontal(page);
 
       // 30 participantes com cargo comprido: a lista vira cartões e não pode estourar a largura.
       await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
@@ -182,7 +157,7 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
         ),
       );
       await page.getByLabel('Transcrição da reunião').fill(TRANSCRICAO_BASICA);
-      await semRolagemHorizontal();
+      await semRolagemHorizontal(page);
 
       // As abas trocam o painel visível sem perder o que foi digitado.
       await page.getByRole('tab', { name: 'Documento' }).click();
@@ -192,7 +167,7 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
       );
       await expect(folha(page)).toBeVisible();
       await expect(page.getByRole('button', { name: /Gerar ata/ })).toBeHidden();
-      await semRolagemHorizontal();
+      await semRolagemHorizontal(page);
 
       await page.getByRole('tab', { name: 'Editar' }).click();
       await expect(page.getByLabel('Organização')).toHaveValue('Instituto Horizonte');
@@ -207,7 +182,7 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
       );
       await expect(folha(page).getByRole('heading', { name: 'Decisões' })).toBeVisible();
       await expect(folha(page)).toContainText(CPF);
-      await semRolagemHorizontal();
+      await semRolagemHorizontal(page);
 
       expect(rede.violacoes).toEqual([]);
       expect(await violacoesDeCsp(page)).toEqual([]);

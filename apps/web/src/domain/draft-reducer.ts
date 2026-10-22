@@ -1,4 +1,5 @@
-import { TIPO_PADRAO_ID } from '../ata-types/registry';
+import { TIPO_PADRAO_ID, dadosAoTrocarDeTipo, obterTipo } from '../ata-types/registry';
+import { textoLimpo } from '../ata-types/texto-modelo';
 import { calcularAdicao } from './participantes';
 import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } from './draft';
 
@@ -26,14 +27,19 @@ export function criarRascunho(tipoId: string = TIPO_PADRAO_ID): AtaDraft {
   };
 }
 
-function novoParticipante(nome: string, papel: string): Participante {
+function novoParticipante(
+  nome: string,
+  complemento: string,
+  destino: string | undefined,
+): Participante {
+  const noExtra = destino !== undefined && complemento !== '';
   return {
     id: crypto.randomUUID(),
     nome,
-    papel,
+    papel: destino === undefined ? complemento : '',
     presenca: 'presente',
     justificativa: '',
-    extras: {},
+    extras: noExtra ? { [destino]: complemento } : {},
   };
 }
 
@@ -58,7 +64,14 @@ function registrarTroca(
 export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
   switch (action.type) {
     case 'definirTipo':
-      return { ...state, tipoId: action.tipoId };
+      // A ata gerada vale para o tipo anterior (as seções mudam); todo o resto é mantido, exceto a
+      // plataforma da reunião remota, que muda de campo entre a corporativa e os demais tipos.
+      return {
+        ...state,
+        tipoId: action.tipoId,
+        dados: dadosAoTrocarDeTipo(state.dados, obterTipo(state.tipoId), obterTipo(action.tipoId)),
+        resultado: null,
+      };
     case 'definirTom':
       return { ...state, tom: action.tom };
     case 'definirCampo':
@@ -67,13 +80,41 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
       return { ...state, pauta: action.itens };
     case 'adicionarParticipantes': {
       const validos = action.nomes
-        .map((nome, i) => ({ nome: nome.trim(), papel: (action.papeis?.[i] ?? '').trim() }))
+        .map((nome, i) => ({
+          nome: nome.trim(),
+          complemento: (action.complementos?.[i] ?? '').trim(),
+        }))
         .filter((p) => p.nome !== '');
       const { adicionados } = calcularAdicao(state.participantes.length, validos.length);
-      const novos = validos.slice(0, adicionados).map((p) => novoParticipante(p.nome, p.papel));
+      const novos = validos
+        .slice(0, adicionados)
+        .map((p) => novoParticipante(p.nome, p.complemento, action.destino));
       return novos.length === 0
         ? state
         : { ...state, participantes: [...state.participantes, ...novos] };
+    }
+    case 'preencherExtrasVazios': {
+      const vazio = (p: Participante) => textoLimpo(p.extras[action.campo]) === '';
+      if (!state.participantes.some(vazio)) return state;
+      return {
+        ...state,
+        participantes: state.participantes.map((p) =>
+          vazio(p) ? { ...p, extras: { ...p.extras, [action.campo]: action.valor } } : p,
+        ),
+      };
+    }
+    case 'limparExtra': {
+      const alvo = new Set(action.ids);
+      return {
+        ...state,
+        participantes: state.participantes.map((p) => {
+          if (!alvo.has(p.id) || !(action.campo in p.extras)) return p;
+          const extras = Object.fromEntries(
+            Object.entries(p.extras).filter(([campo]) => campo !== action.campo),
+          );
+          return { ...p, extras };
+        }),
+      };
     }
     case 'atualizarParticipante':
       return {

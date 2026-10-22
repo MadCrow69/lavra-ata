@@ -1,5 +1,5 @@
 import { PAPEL_DA_IA, REGRAS_COMUNS, REGRAS_TOM } from '../ata-types/regras-comuns';
-import { ehVisivel, rotuloDoCampo } from '../ata-types/registry';
+import { ehVisivel, rotuloDaOpcao, rotuloDoCampo } from '../ata-types/registry';
 import { dataOuNulo, horaOuNulo, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef, SecaoDef } from '../ata-types/types';
 import { TITULO_ENCAMINHAMENTOS } from '../config/documento';
@@ -9,6 +9,7 @@ import {
   type AtaDraft,
   type Bloco,
   type Encaminhamento,
+  type Participante,
 } from '../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../domain/draft-reducer';
 import { exigirChaveDeSecao } from './output-schema';
@@ -16,8 +17,9 @@ import { exigirChaveDeSecao } from './output-schema';
 /**
  * Instruções enviadas à IA, escritas para este projeto (spec 7.5): papel, regras comuns, regras do
  * tipo, tom, o que vai em cada seção e o formato da resposta. A mensagem do usuário só leva
- * metadados não sensíveis, a pauta, os participantes (nome, papel, presença) e a transcrição
- * MASCARADA. Quem chama passa `d` com os textos livres já mascarados (`pipeline.ts`).
+ * metadados não sensíveis, a pauta, os participantes (nome, papel, extras marcados para a IA,
+ * presença) e a transcrição MASCARADA. Quem chama passa `d` com os textos livres já mascarados
+ * (`pipeline.ts`).
  */
 
 export interface Prompt {
@@ -71,10 +73,33 @@ function valorDoCampo(campo: CampoDef, dados: Record<string, string>): string {
     case 'hora':
       return horaOuNulo(bruto) ?? NAO_INFORMADO;
     case 'escolha':
-      return campo.opcoes?.find((o) => o.valor === bruto)?.rotulo ?? NAO_INFORMADO;
+      return rotuloDaOpcao(campo, bruto) ?? NAO_INFORMADO;
     default:
       return bruto;
   }
+}
+
+/**
+ * Extras de participante que seguem para a IA: os marcados com `enviarParaIA` e visíveis para os
+ * `dados` desta cópia (o invariante do registro garante que o `visivelSe` deles só lê o que a
+ * cópia tem). Os demais (unidade, fração, participação…) ficam no navegador.
+ */
+function extrasParaIA(tipo: AtaTypeDefinition, dados: Record<string, string>): CampoDef[] {
+  return tipo.camposParticipante.filter((c) => c.enviarParaIA === true && ehVisivel(c, dados));
+}
+
+/** "nome — cargo / empresa — <extras enviados> — presença"; as colunas que o tipo não tem somem. */
+function colunasDoPrompt(tipo: AtaTypeDefinition, dados: Record<string, string>): string {
+  const papel = tipo.rotuloPapel === null ? [] : [tipo.rotuloPapel];
+  const extras = extrasParaIA(tipo, dados).map((c) => rotuloDoCampo(c, dados));
+  return ['Nome', ...papel, ...extras, 'Presença'].map((c) => c.toLowerCase()).join(' — ');
+}
+
+/** Valor do extra para a IA: o rótulo da opção (`escolha`) ou o texto já mascarado; `''` se vazio. */
+function valorDoExtra(campo: CampoDef, p: Participante): string {
+  const valor = textoLimpo(p.extras[campo.id]);
+  if (valor === '' || campo.tipo !== 'escolha') return valor;
+  return rotuloDaOpcao(campo, valor) ?? '';
 }
 
 function dadosDaReuniao(tipo: AtaTypeDefinition, d: AtaDraft): string {
@@ -90,18 +115,26 @@ function dadosDaReuniao(tipo: AtaTypeDefinition, d: AtaDraft): string {
   const itensPauta =
     pauta.length === 0 ? 'não informada' : pauta.map((i, n) => `${String(n + 1)}. ${i}`).join('\n');
 
-  // Só nome, papel e presença: campos extras e justificativas ficam fora (podem ter dados pessoais).
+  // Nome, papel (se o tipo tem), extras marcados com `enviarParaIA` e presença: justificativas e os
+  // demais extras ficam fora (podem ter dados pessoais).
+  const extras = extrasParaIA(tipo, d.dados);
   const participantes = d.participantes
     .filter((p) => p.nome.trim() !== '')
     .map((p) => {
-      const partes = [p.nome.trim(), p.papel.trim(), ROTULO_PRESENCA[p.presenca].toLowerCase()];
+      const papel = tipo.rotuloPapel === null ? '' : p.papel.trim();
+      const partes = [
+        p.nome.trim(),
+        papel,
+        ...extras.map((c) => valorDoExtra(c, p)),
+        ROTULO_PRESENCA[p.presenca].toLowerCase(),
+      ];
       return `- ${partes.filter((x) => x !== '').join(' — ')}`;
     });
 
   return [
     `Dados da reunião:\n${linhas.join('\n')}`,
-    `Pauta:\n${itensPauta}`,
-    `Participantes (nome — ${tipo.rotuloPapel.toLowerCase()} — presença):\n${participantes.length === 0 ? 'nenhum informado' : participantes.join('\n')}`,
+    `${tipo.rotulos.pauta}:\n${itensPauta}`,
+    `Participantes (${colunasDoPrompt(tipo, d.dados)}):\n${participantes.length === 0 ? 'nenhum informado' : participantes.join('\n')}`,
   ].join('\n\n');
 }
 

@@ -108,6 +108,7 @@ export interface AtaDraft {
 export type EntradaDoDocumento = Pick<AtaDraft, 'dados' | 'pauta' | 'participantes' | 'resultado'>;
 
 export type DraftAction =
+  /** Troca o tipo: zera `resultado` (as seções mudam) e mantém todo o resto. */
   | { type: 'definirTipo'; tipoId: string }
   | { type: 'definirTom'; tom: Tom }
   | { type: 'definirCampo'; campo: string; valor: string }
@@ -115,9 +116,14 @@ export type DraftAction =
   | {
       type: 'adicionarParticipantes';
       nomes: string[];
-      /** Cargo/empresa de cada nome, pela mesma posição de `nomes` (opcional). */
-      papeis?: string[];
+      /** Complemento de cada nome, pela posição ("Nome — X"). */
+      complementos?: string[];
+      /** Onde o complemento entra: ausente = papel; senão o id do extra. */
+      destino?: string;
     }
+  | { type: 'preencherExtrasVazios'; campo: string; valor: string }
+  /** Desfaz um preenchimento em lote: apaga o extra `campo` dos participantes `ids`. */
+  | { type: 'limparExtra'; campo: string; ids: string[] }
   | { type: 'atualizarParticipante'; id: string; patch: Partial<Participante> }
   | { type: 'removerParticipante'; id: string }
   | { type: 'definirTranscricao'; texto: string }

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { Modal } from './Modal';
 
@@ -118,6 +118,100 @@ describe('Modal', () => {
     fireEvent.mouseDown(fundo);
     fireEvent.click(fundo);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+function ComFocoInicial() {
+  const [aberto, setAberto] = useState(false);
+  const manterRef = useRef<HTMLButtonElement>(null);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          setAberto(true);
+        }}
+      >
+        Abrir
+      </button>
+      <Modal
+        aberto={aberto}
+        titulo="Com foco inicial"
+        focoInicial={manterRef}
+        onFechar={() => {
+          setAberto(false);
+        }}
+        acoes={
+          <>
+            <button type="button">Confirmar</button>
+            <button ref={manterRef} type="button">
+              Manter
+            </button>
+          </>
+        }
+      >
+        <p>Texto</p>
+      </Modal>
+    </div>
+  );
+}
+
+describe('Modal › focoInicial', () => {
+  it('com o ref, o foco vai para o elemento indicado ao abrir', async () => {
+    const user = userEvent.setup();
+    render(<ComFocoInicial />);
+    await user.click(screen.getByRole('button', { name: 'Abrir' }));
+    expect(screen.getByRole('button', { name: 'Manter' })).toHaveFocus();
+  });
+
+  it('ao fechar, o foco volta à origem', async () => {
+    const user = userEvent.setup();
+    render(<ComFocoInicial />);
+    const origem = screen.getByRole('button', { name: 'Abrir' });
+    await user.click(origem);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(origem).toHaveFocus();
+  });
+
+  it('sem a prop, o foco fica no painel (comportamento atual)', async () => {
+    const user = userEvent.setup();
+    render(<Exemplo />);
+    await user.click(screen.getByRole('button', { name: 'Abrir' }));
+    expect(screen.getByRole('dialog')).toHaveFocus();
+  });
+
+  it('ref ainda vazio (elemento ausente) cai no painel', async () => {
+    const user = userEvent.setup();
+    function RefVazio() {
+      const [aberto, setAberto] = useState(false);
+      const vazioRef = useRef<HTMLButtonElement>(null);
+      return (
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              setAberto(true);
+            }}
+          >
+            Abrir
+          </button>
+          <Modal
+            aberto={aberto}
+            titulo="Ref vazio"
+            focoInicial={vazioRef}
+            onFechar={() => {
+              setAberto(false);
+            }}
+          >
+            <p>Texto</p>
+          </Modal>
+        </div>
+      );
+    }
+    render(<RefVazio />);
+    await user.click(screen.getByRole('button', { name: 'Abrir' }));
+    expect(screen.getByRole('dialog')).toHaveFocus();
   });
 });
 

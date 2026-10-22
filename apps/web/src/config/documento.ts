@@ -28,11 +28,29 @@ export const CELULA_VAZIA = '—';
 /** Larguras (%) das colunas da tabela de encaminhamentos: Ação · Responsável · Prazo · Status. */
 export const LARGURAS_ENCAMINHAMENTOS = [50, 20, 15, 15] as const;
 
+/**
+ * Peso de cada coluna da tabela de participantes (proporção entre elas; vira a largura em % por
+ * `largurasPorPeso`). `extra` é o padrão de um campo de participante sem `peso` próprio.
+ */
+export const PESOS_COLUNA = { nome: 3, papel: 2, extra: 1.5, presenca: 2 } as const;
+
 /** Responsável do encaminhamento quando a transcrição não deixa claro quem fará. */
 export const RESPONSAVEL_A_DEFINIR = 'A definir';
 
 /** Página A4 do PDF e do DOCX (pt). Fonte única para os dois formatos. */
 export const PAGINA_DOCUMENTO = { margemPt: 56, margemInferiorPt: 64 } as const;
+
+/** Tamanho do A4 (210 × 297 mm) em pt. O DOCX o converte para os vinte avos de ponto do Word. */
+export const A4_PT = { largura: 595.28, altura: 841.89 } as const;
+
+/** Largura da área de texto (pt): a página menos as duas margens laterais. Derivada, nunca literal. */
+export const LARGURA_UTIL_PT = A4_PT.largura - 2 * PAGINA_DOCUMENTO.margemPt;
+
+/**
+ * Respiro horizontal máximo (pt) de uma célula de tabela no layout `lightHorizontalLines` do
+ * pdfmake (8 pt de cada lado): o que sobra para o texto é a coluna menos isto.
+ */
+export const RESPIRO_CELULA_PT = 16;
 
 /** Tamanhos de texto (pt) do PDF e do DOCX. */
 export const TIPOGRAFIA_DOCUMENTO = {

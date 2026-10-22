@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
 import { erroProvedor } from '../../ai/errors';
 import { erroSemCredito } from '../../ai/providers/comum';
@@ -9,11 +9,12 @@ import { criarKeyStore, type KeyStore } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
 import { LOGO, RASCUNHO } from '../../config/storage-keys';
 import { ESPERA_SALVAR_RASCUNHO_MS } from '../../config/ui';
-import type { AtaDraft } from '../../domain/draft';
+import type { AtaDraft, ResultadoAta } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
 import type { LogoDoc } from '../../document/model';
 import { criarLogoStore, type LogoStore } from '../../logo/logo-store';
+import { registrarTipoDeTeste } from '../../test/tipo-de-teste';
 import { ToastProvider } from '../../ui/Toast';
 import { Workbench } from './Workbench';
 
@@ -701,5 +702,131 @@ describe('Workbench: acessibilidade', () => {
     await user.click(botaoGerar());
     expect(await screen.findByRole('alert')).toHaveTextContent('A ata não foi alterada.');
     expect(screen.queryByText(/Ata gerada por/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Workbench: troca de tipo de ata', () => {
+  let limparTipo: () => void = () => undefined;
+  beforeEach(() => {
+    limparTipo = registrarTipoDeTeste();
+  });
+  afterEach(() => {
+    limparTipo();
+  });
+
+  function ataGerada(): ResultadoAta {
+    return {
+      secoes: Object.fromEntries(
+        corporativa.secoes.map((s) => [
+          s.chave,
+          s.chave === 'resumo'
+            ? [{ tipo: 'paragrafo' as const, texto: 'Resumo da reunião gerado.', itens: [] }]
+            : [],
+        ]),
+      ),
+      encaminhamentos: [],
+      atribuicao: {},
+      avisos: {},
+      editadas: [],
+    };
+  }
+
+  const radioTeste = () => screen.getByRole('radio', { name: /Tipo de teste/ });
+  const radioCorporativa = () => screen.getByRole('radio', { name: /Reunião corporativa/ });
+
+  it('trocar de tipo com ata gerada pergunta e descarta', async () => {
+    salvarRascunho(completo({ resultado: ataGerada() }));
+    const { user } = renderizar();
+    await user.click(screen.getByRole('button', { name: 'Fechar aviso de rascunho recuperado' }));
+    expect(within(folha()).getByText('Resumo da reunião gerado.')).toBeVisible();
+
+    await user.click(radioTeste());
+    const dialogo = screen.getByRole('dialog', { name: 'Trocar o tipo de ata?' });
+    expect(dialogo).toHaveTextContent(
+      'A ata gerada para “Reunião corporativa” será descartada, porque as seções mudam de um tipo para outro.',
+    );
+    expect(dialogo).toHaveTextContent(
+      'Dados da reunião em comum, pauta, participantes e transcrição são mantidos; os campos novos aparecem marcados em “falta”.',
+    );
+    const manter = within(dialogo).getByRole('button', { name: 'Manter “Reunião corporativa”' });
+    expect(manter).toHaveFocus();
+
+    // Manter: nada muda.
+    await user.click(manter);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(radioCorporativa()).toBeChecked();
+    expect(within(folha()).getByText('Resumo da reunião gerado.')).toBeVisible();
+
+    // Esc também mantém.
+    await user.click(radioTeste());
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(radioCorporativa()).toBeChecked();
+
+    // Confirmar: descarta a ata e mantém o resto.
+    await user.click(radioTeste());
+    await user.click(screen.getByRole('button', { name: 'Trocar e descartar a ata gerada' }));
+    expect(radioTeste()).toBeChecked();
+    expect(
+      within(folha()).getByText('As seções aparecem aqui depois de gerar a ata.'),
+    ).toBeVisible();
+    expect(within(folha()).queryByText('Resumo da reunião gerado.')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Tipo de ata: Tipo de teste. A ata gerada foi descartada; confira os campos marcados em “falta”.',
+      ),
+    ).toBeVisible();
+    expect(screen.getByLabelText(/^Data/)).toHaveValue('2026-10-14');
+    expect(screen.getByLabelText('Nome do participante 1')).toHaveValue('Ana Souza');
+    expect(screen.getByLabelText(/^Transcrição da reunião/)).toHaveValue(
+      `Ana: reembolso ao CPF ${CPF}.`,
+    );
+
+    // Voltar ao primeiro tipo traz de volta o que só ele usa.
+    await user.click(radioCorporativa());
+    expect(screen.getByLabelText(/^Organização/)).toHaveValue('Cooperativa Fictícia');
+  });
+
+  it('trocar sem ata gerada não pergunta', async () => {
+    salvarRascunho(completo());
+    const { user } = renderizar();
+    await user.click(screen.getByRole('button', { name: 'Fechar aviso de rascunho recuperado' }));
+    await user.click(radioTeste());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(radioTeste()).toBeChecked();
+    expect(
+      screen.getByText('Tipo de ata: Tipo de teste. Confira os campos marcados em “falta”.'),
+    ).toBeVisible();
+    // Modalidade "remota" não existe no tipo de teste: vira falta, o valor não é apagado.
+    expect(screen.getByLabelText(/^Modalidade/)).toHaveValue('');
+    expect(screen.getByText(/falta:.*Modalidade \(corrigir\)/)).toBeVisible();
+    await user.click(radioCorporativa());
+    expect(screen.getByLabelText(/^Modalidade/)).toHaveValue('remota');
+  });
+
+  it('durante a geração o tipo não muda', async () => {
+    salvarRascunho(completo());
+    let entregar: (v: unknown) => void = () => undefined;
+    const { user } = renderizar({
+      store: comChave(),
+      gerar: () =>
+        new Promise((resolve) => {
+          entregar = resolve;
+        }),
+    });
+    await user.click(screen.getByRole('button', { name: 'Fechar aviso de rascunho recuperado' }));
+    await user.click(botaoGerar());
+    expect(screen.getByRole('progressbar', { name: 'Gerando a ata' })).toBeVisible();
+
+    expect(radioTeste()).toBeDisabled();
+    expect(radioTeste()).toHaveAccessibleDescription('Aguarde a geração em andamento terminar.');
+    expect(radioCorporativa()).toBeDisabled();
+
+    await act(async () => {
+      entregar(resposta());
+      await Promise.resolve();
+    });
+    expect(await within(folha()).findByText(`Reembolso a ${CPF}.`)).toBeVisible();
+    expect(radioTeste()).toBeEnabled();
   });
 });

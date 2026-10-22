@@ -59,6 +59,68 @@ describe('draftReducer', () => {
     expect(d.tom).toBe('conciso');
   });
 
+  describe('definirTipo troca o tipo sem perder o que a pessoa digitou', () => {
+    it('zera só o resultado e mantém dados (inclusive ids de outro tipo), pauta, participantes, transcrição, mapa e tom', () => {
+      let d = comResultado();
+      d = draftReducer(d, { type: 'definirTom', tom: 'detalhado' });
+      d = draftReducer(d, { type: 'definirCampo', campo: 'organizacao', valor: 'Empresa Exemplo' });
+      d = draftReducer(d, { type: 'definirCampo', campo: 'data', valor: '2026-10-14' });
+      d = draftReducer(d, { type: 'definirPauta', itens: ['A', 'B'] });
+      d = draftReducer(d, { type: 'adicionarParticipantes', nomes: ['Ana'] });
+      const id = d.participantes[0]?.id ?? '';
+      d = draftReducer(d, {
+        type: 'atualizarParticipante',
+        id,
+        patch: { extras: { unidade: 'Apto 101' } },
+      });
+      d = draftReducer(d, { type: 'definirTranscricao', texto: 'fala' });
+
+      const depois = draftReducer(d, { type: 'definirTipo', tipoId: 'outro' });
+
+      expect(depois.tipoId).toBe('outro');
+      expect(depois.resultado).toBeNull();
+      expect(depois.dados).toEqual(d.dados);
+      expect(depois.pauta).toEqual(['A', 'B']);
+      expect(depois.participantes).toEqual(d.participantes);
+      expect(depois.participantes[0]?.extras).toEqual({ unidade: 'Apto 101' });
+      expect(depois.transcricao).toBe('fala');
+      expect(depois.mapa).toEqual(MAPA);
+      expect(depois.tom).toBe('detalhado');
+    });
+  });
+
+  describe('definirTipo e a plataforma da reunião remota (exceção D2)', () => {
+    function remotaComPlataforma(): AtaDraft {
+      let d = criarRascunho('corporativa');
+      d = draftReducer(d, { type: 'definirCampo', campo: 'modalidade', valor: 'remota' });
+      return draftReducer(d, { type: 'definirCampo', campo: 'local', valor: 'videoconferência' });
+    }
+
+    it('a plataforma da corporativa não vira o local da CIPA e volta ao `local` ao retornar', () => {
+      const naCipa = draftReducer(remotaComPlataforma(), { type: 'definirTipo', tipoId: 'cipa' });
+      expect(naCipa.dados.local).toBeUndefined();
+      expect(naCipa.dados.plataforma).toBe('videoconferência');
+      expect(naCipa.dados.modalidade).toBe('remota');
+
+      const devolta = draftReducer(naCipa, { type: 'definirTipo', tipoId: 'corporativa' });
+      expect(devolta.dados).toEqual(remotaComPlataforma().dados);
+    });
+
+    it('local e plataforma preenchidos (Ltda: sede e Teams) trocam de campo sem perder nenhum', () => {
+      let d = criarRascunho('socios-ltda');
+      d = draftReducer(d, { type: 'definirCampo', campo: 'modalidade', valor: 'remota' });
+      d = draftReducer(d, { type: 'definirCampo', campo: 'local', valor: 'Sede' });
+      d = draftReducer(d, { type: 'definirCampo', campo: 'plataforma', valor: 'Teams' });
+
+      const naCorporativa = draftReducer(d, { type: 'definirTipo', tipoId: 'corporativa' });
+      expect(naCorporativa.dados.local).toBe('Teams');
+      expect(naCorporativa.dados.plataforma).toBe('Sede');
+
+      const devolta = draftReducer(naCorporativa, { type: 'definirTipo', tipoId: 'socios-ltda' });
+      expect(devolta.dados).toEqual(d.dados);
+    });
+  });
+
   it('definirCampo grava sem mutar o estado anterior', () => {
     const antes = criarRascunho();
     const depois = draftReducer(antes, {
@@ -93,16 +155,29 @@ describe('draftReducer', () => {
       });
     });
 
-    it('papeis acompanha os nomes pela posição, mesmo com linhas vazias no meio', () => {
+    it('complementos acompanha os nomes pela posição, mesmo com linhas vazias no meio', () => {
       const d = draftReducer(criarRascunho(), {
         type: 'adicionarParticipantes',
         nomes: ['Ana Souza', '', 'Bruno Lima', 'Carla Dias'],
-        papeis: ['Diretora', 'Ignorado', ' Analista ', ''],
+        complementos: ['Diretora', 'Ignorado', ' Analista ', ''],
       });
       expect(d.participantes.map((p) => [p.nome, p.papel])).toEqual([
         ['Ana Souza', 'Diretora'],
         ['Bruno Lima', 'Analista'],
         ['Carla Dias', ''],
+      ]);
+    });
+
+    it('destino grava o complemento no extra e deixa o papel vazio', () => {
+      const d = draftReducer(criarRascunho(), {
+        type: 'adicionarParticipantes',
+        nomes: ['Ana Souza', 'Bruno Lima'],
+        complementos: [' Apto 101 ', ''],
+        destino: 'unidade',
+      });
+      expect(d.participantes.map((p) => [p.nome, p.papel, p.extras])).toEqual([
+        ['Ana Souza', '', { unidade: 'Apto 101' }],
+        ['Bruno Lima', '', {}],
       ]);
     });
 
@@ -259,6 +334,89 @@ describe('draftReducer', () => {
       });
       expect(d.resultado?.atribuicao.encaminhamentos).toEqual(ATRIB);
       expect(d.resultado?.editadas).toEqual([]);
+    });
+  });
+
+  describe('preencherExtrasVazios', () => {
+    function comTres(): AtaDraft {
+      let d = draftReducer(criarRascunho(), {
+        type: 'adicionarParticipantes',
+        nomes: ['Ana', 'Bruno', 'Carla'],
+      });
+      const [a, b, c] = d.participantes;
+      d = draftReducer(d, {
+        type: 'atualizarParticipante',
+        id: b?.id ?? '',
+        patch: { extras: { vinculo: 'procurador' } },
+      });
+      d = draftReducer(d, {
+        type: 'atualizarParticipante',
+        id: c?.id ?? '',
+        patch: { extras: { vinculo: '   ' } },
+      });
+      expect(a).toBeDefined();
+      return d;
+    }
+
+    it('só altera quem está vazio e não toca no id', () => {
+      const antes = comTres();
+      const depois = draftReducer(antes, {
+        type: 'preencherExtrasVazios',
+        campo: 'vinculo',
+        valor: 'proprietario',
+      });
+      expect(depois.participantes.map((p) => p.extras.vinculo)).toEqual([
+        'proprietario',
+        'procurador',
+        'proprietario',
+      ]);
+      expect(depois.participantes.map((p) => p.id)).toEqual(antes.participantes.map((p) => p.id));
+      // Quem já tinha valor segue sendo o mesmo objeto (a linha memoizada não redesenha).
+      expect(depois.participantes[1]).toBe(antes.participantes[1]);
+    });
+
+    it('espaços e caracteres de espaço contam como vazio (mesmo critério da validação)', () => {
+      const base = comTres();
+      const d = draftReducer(base, {
+        type: 'atualizarParticipante',
+        id: base.participantes[0]?.id ?? '',
+        patch: { extras: { vinculo: '  ' } },
+      });
+      expect(d.participantes[0]?.extras.vinculo).toBe('  ');
+      const depois = draftReducer(d, {
+        type: 'preencherExtrasVazios',
+        campo: 'vinculo',
+        valor: 'proprietario',
+      });
+      expect(depois.participantes[0]?.extras.vinculo).toBe('proprietario');
+    });
+
+    it('limparExtra desfaz o preenchimento só nos ids pedidos', () => {
+      const antes = comTres();
+      const preenchido = draftReducer(antes, {
+        type: 'preencherExtrasVazios',
+        campo: 'vinculo',
+        valor: 'proprietario',
+      });
+      const ids = [antes.participantes[0]?.id ?? '', antes.participantes[2]?.id ?? ''];
+      const depois = draftReducer(preenchido, { type: 'limparExtra', campo: 'vinculo', ids });
+      expect(depois.participantes.map((p) => p.extras.vinculo)).toEqual([
+        undefined,
+        'procurador',
+        undefined,
+      ]);
+      expect(depois.participantes[1]).toBe(preenchido.participantes[1]);
+    });
+
+    it('sem ninguém vazio, devolve o mesmo estado', () => {
+      const cheio = draftReducer(comTres(), {
+        type: 'preencherExtrasVazios',
+        campo: 'vinculo',
+        valor: 'proprietario',
+      });
+      expect(
+        draftReducer(cheio, { type: 'preencherExtrasVazios', campo: 'vinculo', valor: 'x' }),
+      ).toBe(cheio);
     });
   });
 

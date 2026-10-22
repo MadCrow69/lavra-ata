@@ -1,16 +1,21 @@
+import { readFile } from 'node:fs/promises';
 import {
   expect,
   test as base,
   type BrowserContext,
+  type Download,
   type Locator,
   type Page,
 } from '@playwright/test';
+import { strFromU8, unzipSync } from 'fflate';
+import { extractText } from 'unpdf';
 import {
   ERRO_LIMITE_OPENAI,
   ataGeradaJson,
   respostaAnthropic,
   respostaGemini,
   respostaOpenAi,
+  type TipoFixture,
 } from './fixtures/respostas';
 
 /**
@@ -68,6 +73,8 @@ export interface Cenario {
   openai: 'limite' | 'ok';
   /** Quantos encaminhamentos a resposta traz (padrão: os 2 do fixture). */
   encaminhamentos?: number;
+  /** Tipo de ata cujas seções a resposta traz (padrão: `corporativa`). */
+  tipo?: TipoFixture;
 }
 
 const CORS = { 'access-control-allow-origin': '*' };
@@ -82,9 +89,10 @@ function json(corpo: unknown, status = 200) {
  */
 async function auditarRede(context: BrowserContext, cenario: Cenario): Promise<Rede> {
   const rede: Rede = { violacoes: [], chamadas: [], arquivosDoApp: [], errosDePagina: [] };
-  const texto = ataGeradaJson(
-    cenario.encaminhamentos === undefined ? {} : { encaminhamentos: cenario.encaminhamentos },
-  );
+  const texto = ataGeradaJson({
+    ...(cenario.encaminhamentos === undefined ? {} : { encaminhamentos: cenario.encaminhamentos }),
+    ...(cenario.tipo === undefined ? {} : { tipo: cenario.tipo }),
+  });
 
   await context.route('**/*', async (route) => {
     const requisicao = route.request();
@@ -190,17 +198,62 @@ export async function configurarChaves(
 export async function preencherDados(page: Page) {
   await page.getByLabel('Organização').fill('Instituto Horizonte');
   await page.getByLabel('Assunto').fill('Migração do cadastro de fornecedores');
-  await page.getByLabel(/^Data/).fill('2026-10-14');
+  await campo(page, 'Data').fill('2026-10-14');
   await page.getByLabel('Início').fill('14:00');
   await page.getByLabel('Modalidade').selectOption('remota');
   await page.getByLabel('Plataforma').fill('videoconferência');
   await page.getByLabel('Pauta').fill('Cronograma do projeto\nCadastro de fornecedores');
 }
 
-export async function colarParticipantes(page: Page, linhas: string[]) {
+/** Cola a lista pelo "Colar lista"; com `aviso`, espera o texto exato que o app anuncia depois. */
+export async function colarParticipantes(page: Page, linhas: string[], aviso?: string) {
   await page.getByRole('button', { name: 'Colar lista' }).click();
   await page.getByLabel('Nomes, um por linha').fill(linhas.join('\n'));
   await page.getByRole('button', { name: 'Adicionar à lista' }).click();
+  if (aviso !== undefined) await expect(page.getByText(aviso, { exact: true })).toBeVisible();
+}
+
+const escaparRegExp = (texto: string) => texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Campo do formulário pelo rótulo exato: "Data" não casa com "Data do edital". O `getByLabel` lê o
+ * texto do `<label>` (inclusive o " *" do obrigatório, que é `aria-hidden`), por isso o asterisco
+ * opcional no fim da âncora.
+ */
+export function campo(page: Page, rotulo: string): Locator {
+  return page.getByLabel(new RegExp(`^${escaparRegExp(rotulo)}(?:\\s*\\*)?$`));
+}
+
+/**
+ * Preenche campos do bloco "Dados da reunião" na ordem dada (um campo condicional só existe depois
+ * do que o ativa): `select` pelo texto da opção, o resto digitado. Rótulo ambíguo falha (modo estrito).
+ */
+export async function preencherCampos(page: Page, valores: Record<string, string>) {
+  for (const [rotulo, valor] of Object.entries(valores)) {
+    const alvo = campo(page, rotulo);
+    if ((await alvo.evaluate((el) => el.tagName)) === 'SELECT') {
+      await alvo.selectOption({ label: valor });
+    } else {
+      await alvo.fill(valor);
+    }
+  }
+}
+
+/** "Preencher os vazios — {rotuloCampo}": escolhe o valor e aplica só a quem ainda não tem. */
+export async function preencherVazios(page: Page, rotuloCampo: string, rotuloValor: string) {
+  await page
+    .getByLabel(`Valor para os vazios — ${rotuloCampo}`, { exact: true })
+    .selectOption({ label: rotuloValor });
+  await page.getByRole('button', { name: `Aplicar — ${rotuloCampo}`, exact: true }).click();
+}
+
+/** Marca o tipo de ata pelo rótulo exato (o nome do rádio inclui a descrição, por isso o `label`). */
+export async function escolherTipo(page: Page, rotulo: string) {
+  await page
+    .locator('label')
+    .filter({ has: page.getByText(rotulo, { exact: true }) })
+    .getByRole('radio')
+    .click();
 }
 
 export const PARTICIPANTES_BASICOS = [
@@ -218,7 +271,7 @@ export const TRANSCRICAO_BASICA = [
 export async function preencherReuniao(page: Page) {
   await preencherDados(page);
   await colarParticipantes(page, PARTICIPANTES_BASICOS);
-  await page.getByLabel('Transcrição da reunião').fill(TRANSCRICAO_BASICA);
+  await campo(page, 'Transcrição da reunião').fill(TRANSCRICAO_BASICA);
 }
 
 /**
@@ -257,3 +310,112 @@ export async function violacoesDeCsp(page: Page): Promise<string[]> {
 export function folha(page: Page): Locator {
   return page.getByRole('article', { name: 'Prévia da ata' });
 }
+
+/** A página não rola na horizontal e os cartões do formulário e da folha cabem na largura. */
+export async function semRolagemHorizontal(page: Page) {
+  const medidas = await page.evaluate(() => {
+    const raiz = document.documentElement;
+    const conteiner = document.querySelector('main')?.getBoundingClientRect();
+    const cartoes = Array.from(
+      document.querySelectorAll<HTMLElement>('main section[data-bloco], main article'),
+    )
+      .filter((el) => el.offsetParent !== null)
+      .map((el) => el.getBoundingClientRect());
+    return {
+      rolagem: raiz.scrollWidth,
+      largura: raiz.clientWidth,
+      direitaDoConteiner: conteiner?.right ?? 0,
+      maiorDireitaDosCartoes: Math.max(0, ...cartoes.map((c) => c.right)),
+      menorEsquerdaDosCartoes: Math.min(Infinity, ...cartoes.map((c) => c.left)),
+      quantos: cartoes.length,
+    };
+  });
+  expect(medidas.quantos).toBeGreaterThan(0);
+  expect(medidas.rolagem).toBeLessThanOrEqual(medidas.largura);
+  expect(medidas.maiorDireitaDosCartoes).toBeLessThanOrEqual(medidas.direitaDoConteiner + 0.5);
+  expect(medidas.menorEsquerdaDosCartoes).toBeGreaterThanOrEqual(-0.5);
+}
+
+/** Nada fora do app e dos provedores, nenhuma violação de CSP e nenhum erro no console. */
+export async function afirmarLimpo(page: Page, rede: Rede) {
+  expect(rede.violacoes).toEqual([]);
+  expect(await violacoesDeCsp(page)).toEqual([]);
+  expect(rede.errosDePagina).toEqual([]);
+}
+
+/** O botão "Gerar ata" (o ícone é `aria-hidden`: o nome acessível é só o texto). */
+export function botaoGerar(page: Page): Locator {
+  return page.getByRole('button', { name: 'Gerar ata', exact: true });
+}
+
+/** Chaves + dados + clique em "Gerar ata"; espera a folha mostrar os encaminhamentos. */
+export async function gerarAta(
+  page: Page,
+  preencher: () => Promise<void> = () => preencherReuniao(page),
+) {
+  await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
+  await preencher();
+  await botaoGerar(page).click();
+  await expect(page.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible({
+    timeout: FOLGA_FALLBACK_MS,
+  });
+  await expect(folha(page).getByRole('heading', { name: 'Encaminhamentos' })).toBeVisible();
+}
+
+export const espacos = (texto: string) => texto.replace(/\s+/g, ' ');
+
+export interface Baixado {
+  nome: string;
+  bytes: Uint8Array;
+}
+
+async function lerDownload(download: Download): Promise<Baixado> {
+  const caminho = await download.path();
+  return { nome: download.suggestedFilename(), bytes: new Uint8Array(await readFile(caminho)) };
+}
+
+/**
+ * Clica no botão de exportação e devolve o arquivo baixado. Se a ata tiver lacunas (ou algo mais
+ * a confirmar), `aoConfirmar` inspeciona o modal e o "Baixar mesmo assim" segue.
+ */
+export async function baixar(
+  page: Page,
+  botao: string,
+  aoConfirmar?: (modal: Locator) => Promise<void>,
+): Promise<Baixado & { ms: number }> {
+  const inicio = Date.now();
+  const baixou = page.waitForEvent('download');
+  const modal = page.getByRole('dialog');
+  const decisao = Promise.race([
+    baixou.then(() => 'baixou' as const),
+    modal.waitFor({ state: 'visible' }).then(() => 'modal' as const),
+  ]);
+  // Quem perder a corrida não pode virar rejeição solta quando a página fechar.
+  decisao.catch(() => undefined);
+  await page.getByRole('button', { name: botao, exact: true }).click();
+  if ((await decisao) === 'modal') {
+    await aoConfirmar?.(modal);
+    await modal.getByRole('button', { name: 'Baixar mesmo assim' }).click();
+  }
+  const arquivo = await lerDownload(await baixou);
+  return { ...arquivo, ms: Date.now() - inicio };
+}
+
+export async function textoDoPdf(bytes: Uint8Array): Promise<{ paginas: string[]; total: number }> {
+  // pdf.js pode transferir o buffer: extrai de uma cópia.
+  const { text, totalPages } = await extractText(bytes.slice(), { mergePages: false });
+  return { paginas: text.map(espacos), total: totalPages };
+}
+
+export function partesDoDocx(bytes: Uint8Array): Map<string, Uint8Array> {
+  return new Map(Object.entries(unzipSync(bytes)));
+}
+
+export function xmlDoDocx(bytes: Uint8Array): string {
+  const documento = partesDoDocx(bytes).get('word/document.xml');
+  if (documento === undefined) throw new Error('word/document.xml ausente no .docx');
+  return strFromU8(documento);
+}
+
+export const comeca = (bytes: Uint8Array, texto: string) =>
+  new TextDecoder('latin1').decode(bytes.subarray(0, texto.length)) === texto;

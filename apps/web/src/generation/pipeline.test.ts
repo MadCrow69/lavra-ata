@@ -1,6 +1,10 @@
 import { createMaskMap, mask } from '@lavra/pii-br';
 import { describe, expect, it, vi } from 'vitest';
+import { cipa } from '../ata-types/cipa';
+import { condominio } from '../ata-types/condominio';
 import { corporativa } from '../ata-types/corporativa';
+import { sociosLtda } from '../ata-types/socios-ltda';
+import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { ErroCadeia, ErroProvedor, erroProvedor } from '../ai/errors';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../ai/types';
 import type { AtaDraft, Bloco, Encaminhamento, Participante, ResultadoAta } from '../domain/draft';
@@ -456,5 +460,335 @@ describe('normalizarResultado', () => {
       { ...corporativa, temEncaminhamentos: false },
     );
     expect(r.encaminhamentos).toEqual([]);
+  });
+});
+
+describe('gerarAta: extras de participante', () => {
+  const UNIDADE = 'Apto 101';
+  const FRACAO = '0,0125';
+  const respostaDoTeste = () => ({
+    secoes: Object.fromEntries(TIPO_DE_TESTE.secoes.map((s) => [s.chave, []])),
+    encaminhamentos: [],
+  });
+  const dTeste = (parcial: Partial<Participante> = {}): AtaDraft => ({
+    ...rascunho(),
+    tipoId: TIPO_DE_TESTE.id,
+    dados: { data: '2026-10-14', natureza: 'ordinaria', modalidade: 'hibrida' },
+    participantes: [
+      {
+        ...ANA,
+        papel: '',
+        extras: { unidade: UNIDADE, vinculo: 'proprietario', fracao: FRACAO },
+        ...parcial,
+      },
+    ],
+    transcricao: 'Ana: concordo.',
+  });
+
+  it('extras que não vão para a IA não saem do navegador', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(dTeste(), TIPO_DE_TESTE, CADEIA, sinal(), opcoes);
+    const enviado = `${pedidos[0]?.sistema ?? ''}\n${pedidos[0]?.usuario ?? ''}`;
+    expect(enviado).toContain('Ana Souza — Proprietário(a) — presente');
+    expect(enviado).not.toContain(UNIDADE);
+    expect(enviado).not.toContain(FRACAO);
+  });
+
+  it('CPF digitado no nome chega mascarado', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(dTeste({ nome: `Ana ${CPF}` }), TIPO_DE_TESTE, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Ana [CPF_1]');
+    expect(usuario).not.toContain(CPF);
+  });
+
+  it('CPF digitado em um extra que não segue não aparece, nem como CPF nem como marcador', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(
+      dTeste({ extras: { unidade: CPF, vinculo: 'proprietario' } }),
+      TIPO_DE_TESTE,
+      CADEIA,
+      sinal(),
+      opcoes,
+    );
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).not.toContain(CPF);
+    expect(usuario).not.toContain('52998224725');
+    // O texto fixo do prompt cita "[CPF_1]" como exemplo: confere só dos dados em diante.
+    expect(usuario.slice(0, usuario.indexOf('Transcrição'))).not.toMatch(/\[CPF_\d+\]/);
+    expect(usuario).toContain('<transcricao>\nAna: concordo.\n</transcricao>');
+  });
+
+  it('a visibilidade do extra enviado é decidida sobre a cópia mascarada dos dados (uma decisão só)', async () => {
+    const lidos: Record<string, string>[] = [];
+    const tipo = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: TIPO_DE_TESTE.camposParticipante.map((c) =>
+        c.id === 'vinculo'
+          ? {
+              ...c,
+              visivelSe: (dados: Record<string, string>) => {
+                lidos.push({ ...dados });
+                return true;
+              },
+            }
+          : c,
+      ),
+    };
+    const { opcoes } = adaptadores({ openai: () => Promise.resolve(respostaDoTeste()) });
+    const d = { ...dTeste(), dados: { ...dTeste().dados, modalidade: `híbrida ${CPF}` } };
+    await gerarAta(d, tipo, CADEIA, sinal(), opcoes);
+    expect(lidos.length).toBeGreaterThan(0);
+    expect(JSON.stringify(lidos)).not.toContain(CPF);
+    expect(lidos.every((dados) => dados.modalidade?.includes('[CPF_') === true)).toBe(true);
+  });
+
+  it('extra marcado para a IA segue, mas mascarado', async () => {
+    const tipo = {
+      ...TIPO_DE_TESTE,
+      camposParticipante: [
+        ...TIPO_DE_TESTE.camposParticipante,
+        {
+          id: 'procuracao',
+          rotulo: 'Procuração',
+          tipo: 'texto' as const,
+          obrigatorio: false,
+          enviarParaIA: true,
+        },
+      ],
+    };
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaDoTeste()),
+    });
+    await gerarAta(
+      dTeste({ extras: { vinculo: 'procurador', procuracao: `outorgada por ${CPF}` } }),
+      tipo,
+      CADEIA,
+      sinal(),
+      opcoes,
+    );
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Ana Souza — Procurador(a) — outorgada por [CPF_1] — presente');
+    expect(usuario).not.toContain(CPF);
+  });
+});
+
+describe('regerarSecao: CIPA (primeiro tipo registrado com extras enviados à IA)', () => {
+  const base = (): AtaDraft => ({
+    ...rascunho(),
+    tipoId: cipa.id,
+    dados: {
+      data: '2026-10-14',
+      natureza: 'ordinaria',
+      modalidade: 'hibrida',
+      presidente: 'Ana Souza',
+      secretario: 'Bruno Lima',
+      gestao: '2026/2027',
+      local: 'Sala 2',
+      plataforma: 'Sala virtual',
+    },
+    participantes: [
+      { ...ANA, extras: { representacao: 'organizacao', condicao: 'titular' } },
+      {
+        ...ANA,
+        id: 'p2',
+        nome: `Bruno Lima ${CPF_2}`,
+        papel: 'Técnico',
+        presenca: 'justificado',
+        justificativa: `Atestado ${TELEFONE}`,
+        // Valor fora das opções (rascunho corrompido) com um CPF: não sai, nem como marcador.
+        extras: { representacao: CPF, condicao: 'suplente' },
+      },
+    ],
+    transcricao: `Ana: o CPF ${CPF} foi corrigido no cadastro.`,
+  });
+
+  it('envia representação e condição (rótulos), mascara o resto e não vaza valor fora das opções', async () => {
+    const d0 = base();
+    const mapa = mask(d0.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      d0,
+      { secoes: { deliberacoes: [par(`Aprovada por consenso a correção do CPF ${CPF}.`)] } },
+      mapa,
+    );
+    const { opcoes, pedidos } = adaptadores({
+      openai: () =>
+        Promise.resolve({ blocos: [par('Aprovada por consenso a correção de [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, cipa, 'deliberacoes', null, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain(
+      'Ana Souza — Diretora — Representante da organização — Titular — presente',
+    );
+    expect(usuario).toMatch(/Bruno Lima \[CPF_\d\] — Técnico — Suplente — ausência justificada/);
+    expect(usuario).toContain('Aprovada por consenso a correção do CPF [CPF_1].');
+    for (const vazado of [
+      CPF,
+      CPF_2,
+      TELEFONE,
+      '2026/2027',
+      'Sala 2',
+      'Sala virtual',
+      'Atestado',
+    ]) {
+      expect(usuario).not.toContain(vazado);
+    }
+    expect(r.blocos).toEqual([par(`Aprovada por consenso a correção de ${CPF}.`)]);
+    expect(r.avisos).toEqual([]);
+  });
+});
+
+describe('regerarSecao: condomínio (extras que ficam no navegador num tipo registrado)', () => {
+  const UNIDADE = 'Apto 101';
+  const FRACAO = '0,0125';
+
+  it('envia o vínculo; unidade, fração, CNPJ, endereço e local nunca saem, nem como marcador', async () => {
+    const d0: AtaDraft = {
+      ...rascunho(),
+      tipoId: condominio.id,
+      dados: {
+        condominio: 'Condomínio Edifício Exemplo',
+        cnpj: '11.222.333/0001-81',
+        endereco: 'Rua das Flores, 100',
+        natureza: 'ordinaria',
+        chamada: 'segunda',
+        data: '2026-10-14',
+        modalidade: 'presencial',
+        local: 'Salão de festas',
+        presidente: 'Ana Souza',
+        secretario: 'Bruno Lima',
+      },
+      participantes: [
+        {
+          ...ANA,
+          papel: '',
+          extras: { unidade: UNIDADE, vinculo: 'proprietario', fracao: FRACAO },
+        },
+        // CPF digitado na unidade (extra que não segue): não sai, nem como CPF nem como marcador.
+        {
+          ...ANA,
+          id: 'p2',
+          nome: 'Bruno Lima',
+          papel: '',
+          extras: { unidade: CPF_2, vinculo: 'locatario' },
+        },
+      ],
+      transcricao: `Ana: o CPF ${CPF} foi corrigido no cadastro.`,
+    };
+    const mapa = mask(d0.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      d0,
+      {
+        secoes: {
+          ordem_do_dia: [par(`Item 1: correção do CPF ${CPF}. [PREENCHER: resultado da votação]`)],
+        },
+      },
+      mapa,
+    );
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve({ blocos: [par('Item 1: correção de [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, condominio, 'ordem_do_dia', null, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Ana Souza — Proprietário(a) — presente');
+    expect(usuario).toContain('Bruno Lima — Locatário(a) — presente');
+    expect(usuario).toContain('[PREENCHER: resultado da votação]');
+    for (const vazado of [
+      CPF,
+      CPF_2,
+      UNIDADE,
+      FRACAO,
+      'Edifício Exemplo',
+      '11.222.333',
+      'Rua das Flores',
+      'Salão de festas',
+    ]) {
+      expect(usuario).not.toContain(vazado);
+    }
+    // Dados da reunião e participantes (antes do texto atual, que traz o CPF da transcrição).
+    const dadosEnviados = usuario.slice(0, usuario.indexOf('\nSeção: '));
+    expect(dadosEnviados).toContain('Participantes (nome — vínculo — presença)');
+    expect(dadosEnviados).not.toMatch(/\[CPF_\d+\]/);
+    expect(r.blocos).toEqual([par(`Item 1: correção de ${CPF}.`)]);
+  });
+});
+
+describe('regerarSecao: sócios de Ltda (extra de texto livre enviado à IA)', () => {
+  it('envia o procurador mascarado; participação, total de quotas e dados da sociedade nunca saem', async () => {
+    const d0: AtaDraft = {
+      ...rascunho(),
+      tipoId: sociosLtda.id,
+      dados: {
+        razao_social: 'Empresa Exemplo Ltda.',
+        cnpj: '11.222.333/0001-81',
+        nire: '35212345678',
+        sede: 'Rua das Flores, 100',
+        forma: 'reuniao',
+        data: '2026-10-14',
+        modalidade: 'presencial',
+        local: 'Sala de reuniões',
+        convocacao: 'contrato',
+        convocacao_detalhe: 'e-mail de 01/10/2026',
+        presidente: 'Ana Souza',
+        secretario: 'Bruno Lima',
+        modo_capital: 'quotas',
+        total_quotas: '8.000',
+      },
+      participantes: [
+        { ...ANA, papel: '', extras: { participacao: '4.375' } },
+        // Procurador digitado com o CPF: segue mascarado, como o resto do texto livre.
+        {
+          ...ANA,
+          id: 'p2',
+          nome: 'Bruno Lima',
+          papel: '',
+          extras: { participacao: '3.625', procurador: `Carla Dias, CPF ${CPF_2}` },
+        },
+      ],
+      transcricao: `Ana: o CPF ${CPF} foi corrigido no contrato.`,
+    };
+    const mapa = mask(d0.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      d0,
+      {
+        secoes: {
+          deliberacoes: [
+            par(`Item 1: correção do CPF ${CPF}. [PREENCHER: votos e quórum de aprovação]`),
+          ],
+        },
+      },
+      mapa,
+    );
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve({ blocos: [par('Item 1: correção de [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, sociosLtda, 'deliberacoes', null, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Participantes (nome — representado(a) por — presença)');
+    expect(usuario).toContain('Ana Souza — presente');
+    expect(usuario).toMatch(/Bruno Lima — Carla Dias, CPF \[CPF_\d+\] — presente/);
+    expect(usuario).toContain('[PREENCHER: votos e quórum de aprovação]');
+    for (const vazado of [
+      CPF,
+      CPF_2,
+      '4.375',
+      '3.625',
+      '8.000',
+      'Empresa Exemplo',
+      '11.222.333',
+      '35212345678',
+      'Rua das Flores',
+      'Sala de reuniões',
+      'e-mail de 01/10/2026',
+    ]) {
+      expect(usuario).not.toContain(vazado);
+    }
+    expect(r.blocos).toEqual([par(`Item 1: correção de ${CPF}.`)]);
   });
 });

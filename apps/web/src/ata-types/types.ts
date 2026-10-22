@@ -1,4 +1,4 @@
-import type { EntradaDoDocumento } from '../domain/draft';
+import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
 
 export type TipoCampo = 'texto' | 'data' | 'hora' | 'escolha' | 'textoLongo';
 
@@ -16,6 +16,14 @@ export interface CampoDef {
   rotuloPor?: (dados: Record<string, string>) => string;
   /** Obrigatoriedade que depende de outros campos; quando existe, vale no lugar de `obrigatorio`. */
   obrigatorioSe?: (dados: Record<string, string>) => boolean;
+  /** Erro de formato de um valor NÃO vazio; `null` = válido. */
+  validar?: (valor: string, dados: Record<string, string>) => string | null;
+  /** `inputMode` no celular. */
+  teclado?: 'numeric' | 'decimal';
+  /** Só campo de participante: o valor segue (mascarado) para a IA. Padrão: não segue (spec 5.2). */
+  enviarParaIA?: boolean;
+  /** Só campo de participante: peso da coluna nas tabelas do documento (padrão `PESOS_COLUNA.extra`). */
+  peso?: number;
 }
 
 export interface SecaoDef {
@@ -26,6 +34,33 @@ export interface SecaoDef {
   instrucao: string;
 }
 
+/** Uma pessoa na linha de assinatura. */
+export interface Assinatura {
+  nome: string;
+  papel: string;
+}
+
+/** Assinaturas sob um título opcional (ex.: "Mesa"); `null` = sem título. */
+export interface GrupoAssinaturas {
+  titulo: string | null;
+  pessoas: Assinatura[];
+}
+
+/**
+ * Substantivo de UMA pessoa da lista de participantes, em minúsculas (ex.: "condômino" /
+ * "condôminos"). Masculino ou comum de dois gêneros: concorda com "nenhum", "novo", "adicionado".
+ */
+export interface RotuloPessoa {
+  singular: string;
+  plural: string;
+}
+
+/** Resumo exibido sob a lista de participantes: uma linha de texto e alertas (só avisam). */
+export interface ResumoParticipantes {
+  texto: string | null;
+  alertas: string[];
+}
+
 export interface AtaTypeDefinition {
   id: string;
   rotulo: string;
@@ -33,29 +68,62 @@ export interface AtaTypeDefinition {
   campos: CampoDef[];
   /** Campos extras do participante, além de nome, papel e presença. */
   camposParticipante: CampoDef[];
-  /** Rótulo do papel do participante, ex.: "Cargo / empresa". */
-  rotuloPapel: string;
+  /**
+   * Exceção D2: na modalidade remota o campo `local` guarda a plataforma (nos demais tipos,
+   * `plataforma` é campo próprio). Na troca de tipo o texto passa de um campo para o outro
+   * (`dadosAoTrocarDeTipo`), para a plataforma não virar o local de uma reunião de outro tipo.
+   */
+  plataformaNoLocal?: true;
+  /** Rótulo do papel do participante, ex.: "Cargo / empresa"; `null` = sem coluna de papel. */
+  rotuloPapel: string | null;
+  /**
+   * Campo extra que recebe o complemento de "Nome — X" (colar e adicionar); sem ele, o papel.
+   * Precisa estar sempre visível (sem `visivelSe`).
+   */
+  campoComplemento?: string;
+  /**
+   * O complemento de "Nome — X" distingue pessoas de mesmo nome (unidade, cargo)? Se sim, o aviso
+   * de repetição compara nome E complemento; se não (ex.: a participação de um sócio), só o nome.
+   */
+  complementoIdentifica: boolean;
+  /**
+   * Títulos dos blocos de participantes e de pauta no formulário e no documento, e o substantivo
+   * de cada pessoa da lista (textos do bloco de participantes).
+   */
+  rotulos: { participantes: string; pauta: string; pessoa: RotuloPessoa };
   /** Seções geradas, na ordem do documento. */
   secoes: SecaoDef[];
   temEncaminhamentos: boolean;
   /**
-   * Campos do formulário enviados à IA como contexto (ex.: data, modalidade). Só metadados não
-   * sensíveis: os demais (organização, local, condução…) vão direto do formulário para o documento.
-   * A cópia enviada leva SÓ estes campos: o `visivelSe` deles só pode depender de campos daqui.
+   * Campos do formulário enviados à IA como contexto: metadados da reunião (data, natureza,
+   * modalidade…) e os nomes da mesa (presidente, secretário). Nunca identificador nem endereço
+   * (CNPJ, NIRE, sede, local…): esses vão direto do formulário para o documento.
+   * A cópia enviada leva SÓ estes campos: o `visivelSe` deles, e o dos extras de participante com
+   * `enviarParaIA`, só pode depender de campos daqui.
    */
   camposNoPrompt: string[];
   /** Regras de prompt específicas do tipo (as comuns ficam em `regras-comuns.ts`). */
   regrasPrompt: string[];
   titulo: (dados: Record<string, string>) => string;
-  /** Texto fixo de abertura; dado ausente vira `[PREENCHER: …]`. */
   /**
    * Linhas do cabeçalho da ata (organização, data, horário, modalidade, local…), só com o que já
    * foi informado: o que falta não aparece (as lacunas `[PREENCHER]` ficam no preâmbulo).
    */
   cabecalho: (d: EntradaDoDocumento) => string[];
+  /** Texto fixo de abertura; dado ausente vira `[PREENCHER: …]`. */
   preambulo: (d: EntradaDoDocumento) => string;
   fecho: (d: EntradaDoDocumento) => string;
-  assinaturas: (d: EntradaDoDocumento) => { nome: string; papel: string }[];
+  assinaturas: (d: EntradaDoDocumento) => GrupoAssinaturas[];
+  /** Frases impressas depois do aviso de minuta (um aviso por frase), no fim do documento. */
+  avisosFinais?: (d: EntradaDoDocumento) => string[];
+  resumoDosParticipantes?: (
+    d: Pick<AtaDraft, 'dados' | 'participantes'>,
+  ) => ResumoParticipantes | null;
+  /**
+   * Tipos formais: trechos fixos do template, por chave; cada chave tem linha em
+   * `docs/base-legal.md` (conferido por `verificarBaseLegal`).
+   */
+  textosFixos?: Readonly<Record<string, string>>;
 }
 
 export type BlocoFormulario = 'dados' | 'participantes' | 'transcricao';

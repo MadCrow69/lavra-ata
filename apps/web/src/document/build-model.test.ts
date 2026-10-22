@@ -11,6 +11,8 @@ import {
 } from '../domain/draft';
 import { criarRascunho } from '../domain/draft-reducer';
 import { modeloDeVolume } from '../test/documento-volume';
+import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
+import { largurasPorPeso } from './larguras';
 import {
   construirDocumento,
   contarPreencher,
@@ -188,9 +190,11 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
   });
 
   it('usa um traço para nome ou cargo em branco', () => {
-    const d = rascunho({ participantes: [participante(1, { nome: ' ', papel: '' })] });
+    const d = rascunho({
+      participantes: [participante(1, { nome: ' ', papel: '' }), participante(2)],
+    });
     const [tabela] = tabelas(construirDocumento(d, corporativa).blocos);
-    expect(tabela?.linhas).toEqual([['—', '—', ROTULO_PRESENCA.presente]]);
+    expect(tabela?.linhas[0]).toEqual(['—', '—', ROTULO_PRESENCA.presente]);
   });
 
   it('pede o cabeçalho ao tipo, sem depender dos campos do corporativo', () => {
@@ -221,7 +225,12 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
         { id: 'unidade', rotulo: 'Unidade', tipo: 'texto', obrigatorio: false },
       ],
     };
-    const d = rascunho({ participantes: [participante(1, { extras: { condicao: 'titular' } })] });
+    const d = rascunho({
+      participantes: [
+        participante(1, { extras: { condicao: 'titular' } }),
+        participante(2, { extras: { unidade: 'Apto 2' } }),
+      ],
+    });
     const [tabela] = tabelas(construirDocumento(d, tipo).blocos);
     expect(tabela?.colunas).toEqual(['Nome', 'Cargo / empresa', 'Condição', 'Unidade', 'Presença']);
     expect(tabela?.linhas[0]).toEqual([
@@ -232,6 +241,25 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
       ROTULO_PRESENCA.presente,
     ]);
     expect(tabela?.colunaPresenca).toBe(4);
+  });
+
+  it('omite a coluna opcional que ninguém preencheu (nunca uma coluna inteira de “—”)', () => {
+    const tipo: AtaTypeDefinition = {
+      ...corporativa,
+      camposParticipante: [
+        { id: 'unidade', rotulo: 'Unidade', tipo: 'texto', obrigatorio: false, peso: 1.5 },
+        { id: 'vinculo', rotulo: 'Vínculo', tipo: 'texto', obrigatorio: true, peso: 2 },
+      ],
+    };
+    const d = rascunho({
+      participantes: [participante(1, { papel: ' ' }), participante(2, { papel: '' })],
+    });
+    const [tabela] = tabelas(construirDocumento(d, tipo).blocos);
+    // Papel e unidade (opcionais) vazios em todos saem; o obrigatório fica, mesmo vazio.
+    expect(tabela?.colunas).toEqual(['Nome', 'Vínculo', 'Presença']);
+    expect(tabela?.linhas[0]).toEqual(['Pessoa 1', '—', ROTULO_PRESENCA.presente]);
+    expect(tabela?.colunaPresenca).toBe(2);
+    expect(tabela?.larguras).toEqual(largurasPorPeso([3, 2, 2]));
   });
 });
 
@@ -456,5 +484,145 @@ describe('textosDoDocumento', () => {
     // Uma lacuna no resumo; cabeçalhos de tabela, títulos de seção, aviso e rodapé não têm.
     expect(contarPreencher(modelo)).toBe(1);
     expect(contarPreencher(modeloDeVolume({ participantes: 200, encaminhamentos: 200 }))).toBe(1);
+  });
+});
+
+describe('construirDocumento com um tipo sem coluna de papel', () => {
+  const d = {
+    ...criarRascunho(TIPO_DE_TESTE.id),
+    dados: { data: '2026-10-14', presidente: 'Ana Souza' },
+    pauta: ['Item um'],
+    participantes: [
+      participante(1, { extras: { unidade: 'Apto 1', vinculo: 'procurador' } }),
+      participante(2, { extras: { unidade: 'Apto 2' } }),
+    ],
+  };
+  const modelo = construirDocumento({ ...d, resultado: resultado() }, TIPO_DE_TESTE);
+  const tabela = modelo.blocos.find((b): b is Tabela => b.tipo === 'tabela');
+
+  it('tabela com as colunas do tipo, larguras por peso e presença no índice real', () => {
+    // "Fração ideal" (opcional) ninguém preencheu: sai do documento.
+    expect(tabela?.colunas).toEqual(['Nome', 'Unidade', 'Vínculo', 'Presença']);
+    expect(tabela?.colunaPresenca).toBe(3);
+    expect(tabela?.larguras).toEqual(largurasPorPeso([3, 1.5, 2, 2]));
+    expect(tabela?.larguras?.reduce((a, b) => a + b, 0)).toBe(100);
+    expect(tabela?.linhas[0]).toEqual(['Pessoa 1', 'Apto 1', 'Procurador(a)', 'Presente']);
+    // Vínculo é obrigatório: fica, com o traço de quem não o tem.
+    expect(tabela?.linhas[1]).toEqual(['Pessoa 2', 'Apto 2', '—', 'Presente']);
+  });
+
+  it('a coluna opcional volta quando alguém a preenche', () => {
+    const comFracao = construirDocumento(
+      {
+        ...d,
+        participantes: [d.participantes[0], participante(2, { extras: { fracao: '0,5' } })].filter(
+          (p): p is Participante => p !== undefined,
+        ),
+        resultado: resultado(),
+      },
+      TIPO_DE_TESTE,
+    ).blocos.find((b): b is Tabela => b.tipo === 'tabela');
+    expect(comFracao?.colunas).toEqual(['Nome', 'Unidade', 'Vínculo', 'Fração ideal', 'Presença']);
+    expect(comFracao?.linhas[0]).toEqual(['Pessoa 1', 'Apto 1', 'Procurador(a)', '—', 'Presente']);
+    expect(comFracao?.larguras).toEqual([30, 15, 20, 15, 20]);
+  });
+
+  it('subtítulos vêm dos rótulos do tipo', () => {
+    const subtitulos = modelo.blocos.flatMap((b) => (b.tipo === 'subtitulo' ? [b.texto] : []));
+    expect(subtitulos).toEqual(['Membros', 'Ordem do dia', 'Mesa', 'Membros presentes']);
+  });
+
+  it('cada grupo de assinatura vira subtítulo + bloco com o título do grupo', () => {
+    const i = modelo.blocos.findIndex((b) => b.tipo === 'assinaturas');
+    expect(modelo.blocos.slice(i - 1, i + 3)).toEqual([
+      { tipo: 'subtitulo', texto: 'Mesa' },
+      { tipo: 'assinaturas', grupo: 'Mesa', pessoas: [{ nome: 'Ana Souza', papel: 'Presidente' }] },
+      { tipo: 'subtitulo', texto: 'Membros presentes' },
+      {
+        tipo: 'assinaturas',
+        grupo: 'Membros presentes',
+        pessoas: [
+          { nome: 'Pessoa 1', papel: 'Procurador(a)' },
+          { nome: 'Pessoa 2', papel: '' },
+        ],
+      },
+    ]);
+  });
+
+  it('grupo sem pessoas é omitido (nem subtítulo nem bloco)', () => {
+    const semMesa = construirDocumento(
+      { ...d, dados: { data: '2026-10-14' }, resultado: resultado() },
+      TIPO_DE_TESTE,
+    );
+    expect(semMesa.blocos.filter((b) => b.tipo === 'assinaturas')).toHaveLength(1);
+    const titulos = semMesa.blocos.flatMap((b) => (b.tipo === 'subtitulo' ? [b.texto] : []));
+    expect(titulos).not.toContain('Mesa');
+    expect(titulos).toContain('Membros presentes');
+
+    const ninguem = construirDocumento(
+      {
+        ...d,
+        dados: { data: '2026-10-14' },
+        participantes: [participante(1, { presenca: 'ausente' })],
+        resultado: resultado(),
+      },
+      TIPO_DE_TESTE,
+    );
+    expect(ninguem.blocos.some((b) => b.tipo === 'assinaturas')).toBe(false);
+  });
+
+  it('o aviso final do tipo vem logo depois do aviso de minuta', () => {
+    expect(modelo.blocos.slice(-2)).toEqual([
+      { tipo: 'aviso', texto: AVISO_MINUTA },
+      { tipo: 'aviso', texto: 'Aviso final de teste.' },
+    ]);
+  });
+
+  it('antes de gerar não há assinaturas nem avisos', () => {
+    const previa = construirDocumento(d, TIPO_DE_TESTE);
+    expect(previa.blocos.some((b) => b.tipo === 'assinaturas' || b.tipo === 'aviso')).toBe(false);
+  });
+
+  it('textosDoDocumento inclui os títulos de grupo e os avisos finais (e conta lacunas neles)', () => {
+    const textos = textosDoDocumento(modelo);
+    expect(textos).toEqual(
+      expect.arrayContaining(['Mesa', 'Membros presentes', 'Aviso final de teste.']),
+    );
+    const comLacuna = construirDocumento(
+      { ...d, resultado: resultado() },
+      { ...TIPO_DE_TESTE, avisosFinais: () => ['Falta [PREENCHER: a data da assembleia].'] },
+    );
+    expect(contarPreencher(comLacuna)).toBe(1 + contarPreencher(modelo));
+  });
+});
+
+describe('construirDocumento: a corporativa não muda (paridade)', () => {
+  const GOLDEN_SEM =
+    '{"titulo":"Ata de reunião — Reembolsos","cabecalho":{"logo":null,"linhas":["Cooperativa Fictícia","Data: 14/10/2026","Horário: 14h30 às 16h","Modalidade: Remota","Plataforma: Videoconferência"]},"blocos":[{"tipo":"subtitulo","texto":"Participantes"},{"tipo":"tabela","colunas":["Nome","Cargo / empresa","Presença"],"linhas":[["Pessoa 1","Cargo 1","Presente"],["Pessoa 2","Cargo 2","Ausente"]],"colunaPresenca":2,"presencas":["presente","ausente"]},{"tipo":"subtitulo","texto":"Pauta"},{"tipo":"lista","itens":[[{"texto":"Reembolsos"}],[{"texto":"Orçamento"}]]},{"tipo":"secao","chave":"pendente","titulo":"Seções da ata","blocos":[{"tipo":"paragrafo","partes":[{"texto":"As seções aparecem aqui depois de gerar a ata."}]}],"gerada":false}],"rodape":"Página {pagina} de {total}","rodapeInterno":null}';
+  const GOLDEN_COM =
+    '{"titulo":"Ata de reunião — Reembolsos","cabecalho":{"logo":null,"linhas":["Cooperativa Fictícia","Data: 14/10/2026","Horário: 14h30 às 16h","Modalidade: Remota","Plataforma: Videoconferência"]},"blocos":[{"tipo":"paragrafo","partes":[{"texto":"Aos catorze dias do mês de outubro de dois mil e vinte e seis, às 14h30, de forma remota, por meio de Videoconferência, realizou-se reunião de Cooperativa Fictícia, com o assunto “Reembolsos”. A reunião foi conduzida por Ana Souza. A ata foi redigida por Bruno Lima. Participaram as pessoas relacionadas a seguir."}]},{"tipo":"subtitulo","texto":"Participantes"},{"tipo":"tabela","colunas":["Nome","Cargo / empresa","Presença"],"linhas":[["Pessoa 1","Cargo 1","Presente"],["Pessoa 2","Cargo 2","Ausente"]],"colunaPresenca":2,"presencas":["presente","ausente"]},{"tipo":"subtitulo","texto":"Pauta"},{"tipo":"lista","itens":[[{"texto":"Reembolsos"}],[{"texto":"Orçamento"}]]},{"tipo":"secao","chave":"resumo","titulo":"Resumo","blocos":[{"tipo":"paragrafo","partes":[{"texto":"Foi tratado o reembolso."}]}],"gerada":true},{"tipo":"secao","chave":"decisoes","titulo":"Decisões","blocos":[{"tipo":"lista","itens":[[{"texto":"Aprovar o reembolso"}],[{"texto":"Revisar a política"}]]}],"gerada":true},{"tipo":"secao","chave":"encaminhamentos","titulo":"Encaminhamentos","blocos":[{"tipo":"tabela","colunas":["Ação","Responsável","Prazo","Status"],"linhas":[["Enviar a planilha","Ana Souza","30/10/2026","Em andamento"],["Rever o fluxo","A definir","próxima reunião","Pendente"],["Avisar o time","Bruno Lima","—","Concluído"]],"larguras":[50,20,15,15]}],"gerada":true},{"tipo":"paragrafo","partes":[{"texto":"Nada mais havendo a tratar, a reunião foi encerrada às 16h. E, para constar, foi lavrada a presente ata."}]},{"tipo":"assinaturas","pessoas":[{"nome":"Ana Souza","papel":"Condução"},{"nome":"Bruno Lima","papel":"Redação"}]},{"tipo":"aviso","texto":"Minuta elaborada com auxílio de inteligência artificial a partir de transcrição. Revise integralmente antes de assinar. Não substitui assessoria jurídica; a validade depende de convocação, quórum e assinaturas, que não foram verificados."}],"rodape":"Página {pagina} de {total}","rodapeInterno":null}';
+
+  /** Tira só `larguras` da tabela de participantes (a única mudança do Plano 05 na corporativa). */
+  function semLarguras(modelo: ReturnType<typeof construirDocumento>): string {
+    const blocos = modelo.blocos.map((b) => {
+      if (b.tipo !== 'tabela' || !b.colunas.includes('Presença')) return b;
+      const { larguras, ...resto } = b;
+      expect(larguras).toEqual([43, 29, 28]);
+      return resto;
+    });
+    return JSON.stringify({ ...modelo, blocos });
+  }
+
+  it('antes de gerar: idêntico ao modelo gravado antes da mudança', () => {
+    expect(semLarguras(construirDocumento(rascunho(), corporativa))).toBe(GOLDEN_SEM);
+  });
+
+  it('depois de gerar: idêntico, com assinaturas num bloco único sem título de grupo', () => {
+    const modelo = construirDocumento(rascunho({ resultado: resultado() }), corporativa);
+    expect(semLarguras(modelo)).toBe(GOLDEN_COM);
+    const bloco = modelo.blocos.find((b) => b.tipo === 'assinaturas');
+    expect(bloco).toBeDefined();
+    expect(bloco).not.toHaveProperty('grupo');
+    expect(modelo.blocos.at(-1)).toEqual({ tipo: 'aviso', texto: AVISO_MINUTA });
   });
 });

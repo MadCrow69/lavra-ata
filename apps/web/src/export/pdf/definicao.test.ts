@@ -9,7 +9,7 @@ import {
 } from '../../config/documento';
 import type { DocumentModel } from '../../document/model';
 import { LOGO_TESTE, modeloDeVolume } from '../../test/documento-volume';
-import { ID_NO_RODAPE, definicaoPdf } from './definicao';
+import { HIFEN_INTEIRO_ATE_CARACTERES, ID_NO_RODAPE, definicaoPdf } from './definicao';
 
 type Obj = Record<string, unknown>;
 
@@ -107,14 +107,23 @@ describe('definicaoPdf: tabelas', () => {
     expect(no.fontSize).toBe(TIPOGRAFIA_DOCUMENTO.tabelaPt);
   });
 
+  it('participantes: larguras por peso da coluna (corporativa 43% · 29% · 28%)', () => {
+    const { table } = tabelaComCabecalho(def, 'Presença');
+    expect(table.widths).toEqual(['43%', '29%', '28%']);
+    expect(table.body.map((linha) => achatar(linha[0]))).toContain('Łukasz Żółć');
+  });
+
   it('tabela sem larguras → "*" em cada coluna; cabeçalho em negrito', () => {
-    const { table, no } = tabelaComCabecalho(def, 'Presença');
+    const sintetico: DocumentModel = {
+      ...volume,
+      blocos: [{ tipo: 'tabela', colunas: ['Item', 'Valor', 'Nota'], linhas: [['a', 'b', 'c']] }],
+    };
+    const { table, no } = tabelaComCabecalho(definicaoPdf(sintetico), 'Valor');
     expect(table.widths).toEqual(['*', '*', '*']);
     expect(table.headerRows).toBe(1);
     expect(table.dontBreakRows).toBe(true);
     expect(table.body[0]?.every((celula) => ehObj(celula) && celula.bold === true)).toBe(true);
     expect(no.layout).toBe('lightHorizontalLines');
-    expect(table.body.map((linha) => achatar(linha[0]))).toContain('Łukasz Żółć');
   });
 });
 
@@ -179,6 +188,74 @@ describe('definicaoPdf: rodapés, lacunas, assinaturas e aviso', () => {
     expect(aviso?.fontSize).toBe(TIPOGRAFIA_DOCUMENTO.avisoPt);
     const caixa = tabelas(def).find(({ table }) => achatar(table.body[0]?.[0]) === AVISO_MINUTA);
     expect(caixa).toBeDefined();
+  });
+});
+
+/**
+ * F2: o pdfmake abre ponto de quebra depois do hífen seguido de letra, e o texto justificado ganha
+ * espaço extra em cada ponto de quebra ("realizou- se"). A palavra com hífen vai inteira (`noWrap`).
+ */
+describe('definicaoPdf: palavra com hífen não se parte no parágrafo justificado', () => {
+  const TEXTO =
+    'Aos quatorze dias, realizou-se a reunião; reuniram-se os sócios (art. 1.080-A), avisados por e-mail.';
+
+  function pecasDoParagrafo(partes: DocumentModel['blocos'][number]): Obj[] {
+    const no = [...objetos(definicaoPdf({ ...volume, blocos: [partes] }).content)].find(
+      (o) => o.alignment === 'justify',
+    );
+    if (!no || !Array.isArray(no.text)) throw new Error('parágrafo justificado não encontrado');
+    return no.text as Obj[];
+  }
+
+  it('cada palavra com hífen (e o espaço que a segue) é um trecho noWrap; o resto não', () => {
+    const pecas = pecasDoParagrafo({ tipo: 'paragrafo', partes: [{ texto: TEXTO }] });
+    expect(pecas.map(achatar).join('')).toBe(TEXTO);
+    expect(pecas.filter((p) => p.noWrap === true).map(achatar)).toEqual([
+      'realizou-se ',
+      'reuniram-se ',
+      '1.080-A), ',
+      'e-mail.',
+    ]);
+    for (const peca of pecas.filter((p) => p.noWrap !== true)) {
+      expect(achatar(peca)).not.toMatch(/\S-\S/);
+    }
+  });
+
+  it('a quebra de linha depois da palavra com hífen fica fora do trecho noWrap', () => {
+    const pecas = pecasDoParagrafo({
+      tipo: 'paragrafo',
+      partes: [{ texto: 'Avisados por e-mail.\nseguinte linha' }],
+    });
+    expect(pecas.map(achatar).join('')).toBe('Avisados por e-mail.\nseguinte linha');
+    const inteira = pecas.filter((p) => p.noWrap === true).map(achatar);
+    expect(inteira).toEqual(['e-mail.']);
+    expect(pecas.some((p) => p.noWrap !== true && achatar(p).startsWith('\n'))).toBe(true);
+  });
+
+  it('palavra com hífen comprida demais (ex.: endereço) continua quebrável', () => {
+    const longa = `https://reunioes.exemplo.com.br/sala-${'a-'.repeat(50)}fim`;
+    expect(longa.length).toBeGreaterThan(100);
+    const curta = 'x-'.repeat(HIFEN_INTEIRO_ATE_CARACTERES / 2 - 1) + 'xy';
+    expect(curta).toHaveLength(HIFEN_INTEIRO_ATE_CARACTERES);
+    const pecas = pecasDoParagrafo({
+      tipo: 'paragrafo',
+      partes: [{ texto: `Pela plataforma ${longa} e ${curta} fim.` }],
+    });
+    const inteiras = pecas.filter((p) => p.noWrap === true).map(achatar);
+    expect(inteiras).toEqual([`${curta} `]);
+    expect(pecas.map(achatar).join('')).toContain(longa);
+  });
+
+  it('a lacuna com hífen continua em negrito com fundo, e inteira', () => {
+    const pecas = pecasDoParagrafo({
+      tipo: 'paragrafo',
+      partes: [{ texto: 'Ficou ' }, { texto: '[PREENCHER: e-mail]', destaque: 'preencher' }],
+    });
+    expect(pecas.find((p) => achatar(p) === 'e-mail]')).toMatchObject({
+      noWrap: true,
+      bold: true,
+      background: COR_FUNDO_PREENCHER,
+    });
   });
 });
 

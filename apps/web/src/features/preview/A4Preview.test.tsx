@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AVISO_MINUTA, TEXTO_SECOES_PENDENTES } from '../../config/documento';
 import {
   ROTULO_PRESENCA,
@@ -11,6 +11,7 @@ import {
 } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { renderizarComProvedores } from '../../test/provedores';
+import { TIPO_DE_TESTE, registrarTipoDeTeste } from '../../test/tipo-de-teste';
 import { A4Preview } from './A4Preview';
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
@@ -347,5 +348,39 @@ describe('A4Preview barra de exportação', () => {
     ).toBeInTheDocument();
     // Nada foi baixado: o modal pede a decisão primeiro.
     expect(within(modal).getByRole('button', { name: 'Baixar mesmo assim' })).toBeInTheDocument();
+  });
+});
+
+describe('A4Preview: assinaturas por grupo', () => {
+  let limpar: () => void = () => undefined;
+  beforeEach(() => {
+    limpar = registrarTipoDeTeste();
+  });
+  afterEach(() => {
+    limpar();
+  });
+
+  it('cada grupo tem o nome acessível "Assinaturas — título"; o sem título, só "Assinaturas"', () => {
+    renderizar({
+      ...criarRascunho(TIPO_DE_TESTE.id),
+      dados: { data: '2026-10-14', presidente: 'Ana Souza' },
+      pauta: ['Item um'],
+      participantes: [participante(1, { extras: { unidade: 'Apto 1', vinculo: 'procurador' } })],
+      resultado: resultado(),
+    });
+    const mesa = screen.getByRole('group', { name: 'Assinaturas — Mesa' });
+    expect(within(mesa).getByText('Ana Souza')).toBeInTheDocument();
+    const membros = screen.getByRole('group', { name: 'Assinaturas — Membros presentes' });
+    expect(within(membros).getByText('Pessoa 1')).toBeInTheDocument();
+    expect(within(membros).getByText('Procurador(a)')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Assinaturas' })).not.toBeInTheDocument();
+    // Aviso final do tipo, depois do aviso de minuta.
+    expect(screen.getByText('Aviso final de teste.')).toBeInTheDocument();
+  });
+
+  it('a corporativa continua com um único grupo "Assinaturas"', () => {
+    renderizar(rascunho({ resultado: resultado() }));
+    expect(screen.getAllByRole('group', { name: /^Assinaturas/ })).toHaveLength(1);
+    expect(screen.getByRole('group', { name: 'Assinaturas' })).toBeInTheDocument();
   });
 });

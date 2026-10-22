@@ -1,20 +1,17 @@
 import type { EntradaDoDocumento } from '../domain/draft';
-import type { AtaTypeDefinition, CampoDef, SecaoDef } from './types';
 import {
-  dataOuNulo,
-  dataPorExtensoOuNulo,
-  horaOuNulo,
-  preencher,
-  textoLimpo,
-} from './texto-modelo';
+  CAMPO_DATA,
+  CAMPO_FIM,
+  CAMPO_INICIO,
+  cabecalhoDaReuniao,
+  campoModalidade,
+  campoTexto,
+  sufixoHora,
+} from './campos-comuns';
+import type { AtaTypeDefinition, CampoDef, GrupoAssinaturas, SecaoDef } from './types';
+import { dataPorExtensoOuNulo, horaOuNulo, preencher, textoLimpo } from './texto-modelo';
 
 type Dados = Record<string, string>;
-
-const MODALIDADES = [
-  { valor: 'presencial', rotulo: 'Presencial' },
-  { valor: 'remota', rotulo: 'Remota' },
-  { valor: 'hibrida', rotulo: 'Híbrida' },
-];
 
 function exigeLocal(dados: Dados): boolean {
   return dados.modalidade === 'presencial' || dados.modalidade === 'hibrida';
@@ -37,40 +34,18 @@ const CAMPOS: CampoDef[] = [
     erroObrigatorio: 'Informe o assunto da reunião.',
     ajuda: 'Vira o título da ata.',
   },
-  {
-    id: 'data',
-    rotulo: 'Data',
-    tipo: 'data',
-    obrigatorio: true,
-    erroObrigatorio: 'Informe a data da reunião.',
-  },
-  {
-    id: 'inicio',
-    rotulo: 'Início',
-    tipo: 'hora',
-    obrigatorio: true,
-    erroObrigatorio: 'Informe o horário de início.',
-  },
-  { id: 'fim', rotulo: 'Término', tipo: 'hora', obrigatorio: false },
-  {
-    id: 'modalidade',
-    rotulo: 'Modalidade',
-    tipo: 'escolha',
-    obrigatorio: true,
-    opcoes: MODALIDADES,
-    erroObrigatorio: 'Informe a modalidade da reunião.',
-  },
-  {
-    id: 'local',
-    rotulo: 'Local',
+  CAMPO_DATA,
+  CAMPO_INICIO,
+  CAMPO_FIM,
+  campoModalidade({ presencial: 'Presencial', remota: 'Remota', hibrida: 'Híbrida' }),
+  // Exceção conhecida (D2): aqui `local` guarda a plataforma na reunião remota.
+  campoTexto('local', 'Local', {
     rotuloPor: (dados) => (dados.modalidade === 'remota' ? 'Plataforma' : 'Local'),
-    tipo: 'texto',
-    obrigatorio: false,
     obrigatorioSe: exigeLocal,
     erroObrigatorio: 'Informe o local da reunião.',
     ajuda: 'Endereço ou sala; na reunião remota, a plataforma usada.',
     visivelSe: (dados) => dados.modalidade !== undefined && dados.modalidade !== '',
-  },
+  }),
   {
     id: 'conducao',
     rotulo: 'Condução',
@@ -149,36 +124,9 @@ function descreverLocalizacao(dados: Dados): string {
   }
 }
 
-/** Rótulo da opção escolhida (ex.: `remota` → "Remota"); `null` se não há escolha válida. */
-function rotuloDaOpcao(campoId: string, valor: string | undefined): string | null {
-  return (
-    CAMPOS.find((c) => c.id === campoId)?.opcoes?.find((o) => o.valor === valor)?.rotulo ?? null
-  );
-}
-
 function cabecalho(d: EntradaDoDocumento): string[] {
-  const dados = d.dados;
-  const linhas: string[] = [];
-
-  const organizacao = textoLimpo(dados.organizacao);
-  if (organizacao !== '') linhas.push(organizacao);
-
-  const data = dataOuNulo(dados.data);
-  if (data !== null) linhas.push(`Data: ${data}`);
-
-  const inicio = horaOuNulo(dados.inicio);
-  const fim = horaOuNulo(dados.fim);
-  if (inicio !== null) linhas.push(`Horário: ${fim === null ? inicio : `${inicio} às ${fim}`}`);
-  else if (fim !== null) linhas.push(`Término: ${fim}`);
-
-  const modalidade = rotuloDaOpcao('modalidade', textoLimpo(dados.modalidade));
-  if (modalidade !== null) linhas.push(`Modalidade: ${modalidade}`);
-
-  const local = textoLimpo(dados.local);
-  const campoLocal = CAMPOS.find((c) => c.id === 'local');
-  if (local !== '' && campoLocal)
-    linhas.push(`${campoLocal.rotuloPor?.(dados) ?? campoLocal.rotulo}: ${local}`);
-  return linhas;
+  const organizacao = textoLimpo(d.dados.organizacao);
+  return [...(organizacao === '' ? [] : [organizacao]), ...cabecalhoDaReuniao(d.dados, CAMPOS)];
 }
 
 function preambulo(d: EntradaDoDocumento): string {
@@ -200,20 +148,16 @@ function preambulo(d: EntradaDoDocumento): string {
 }
 
 function fecho(d: EntradaDoDocumento): string {
-  const fim = horaOuNulo(d.dados.fim);
-  const encerramento =
-    fim === null
-      ? 'Nada mais havendo a tratar, a reunião foi encerrada.'
-      : `Nada mais havendo a tratar, a reunião foi encerrada às ${fim}.`;
-  return `${encerramento} E, para constar, foi lavrada a presente ata.`;
+  return `Nada mais havendo a tratar, a reunião foi encerrada${sufixoHora(d.dados.fim)}. E, para constar, foi lavrada a presente ata.`;
 }
 
-function assinaturas(d: EntradaDoDocumento): { nome: string; papel: string }[] {
+function assinaturas(d: EntradaDoDocumento): GrupoAssinaturas[] {
   const candidatas = [
     { nome: textoLimpo(d.dados.conducao), papel: 'Condução' },
     { nome: textoLimpo(d.dados.redacao), papel: 'Redação' },
   ];
-  return candidatas.filter((a) => a.nome !== '');
+  const pessoas = candidatas.filter((a) => a.nome !== '');
+  return pessoas.length === 0 ? [] : [{ titulo: null, pessoas }];
 }
 
 export const corporativa: AtaTypeDefinition = {
@@ -222,7 +166,14 @@ export const corporativa: AtaTypeDefinition = {
   descricao: 'Reunião de trabalho de uma empresa, equipe ou comitê.',
   campos: CAMPOS,
   camposParticipante: [],
+  plataformaNoLocal: true,
   rotuloPapel: 'Cargo / empresa',
+  complementoIdentifica: true,
+  rotulos: {
+    participantes: 'Participantes',
+    pauta: 'Pauta',
+    pessoa: { singular: 'participante', plural: 'participantes' },
+  },
   secoes: SECOES,
   temEncaminhamentos: true,
   camposNoPrompt: ['data', 'modalidade'],

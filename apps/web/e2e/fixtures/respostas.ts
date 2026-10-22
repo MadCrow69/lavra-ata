@@ -21,33 +21,96 @@ function encaminhamentosDeVolume(quantos: number) {
   }));
 }
 
+/** Tipos de ata que o fixture sabe responder (as chaves de `secoes` são as do tipo correspondente). */
+export type TipoFixture = 'corporativa' | 'cipa' | 'condominio' | 'socios-ltda';
+
+interface BlocoJson {
+  tipo: 'paragrafo' | 'lista';
+  texto: string;
+  itens: string[];
+}
+
+const paragrafo = (texto: string): BlocoJson => ({ tipo: 'paragrafo', texto, itens: [] });
+const lista = (itens: string[]): BlocoJson => ({ tipo: 'lista', texto: '', itens });
+
+/** `secoes` de cada tipo, escritas do zero com as chaves de `SECOES` do tipo (seção vazia = `[]`). */
+const SECOES_POR_TIPO: Record<TipoFixture, Record<string, BlocoJson[]>> = {
+  corporativa: {
+    resumo: [
+      paragrafo(
+        'A equipe revisou o cronograma do projeto Horizonte e aprovou a migração do cadastro de fornecedores.',
+      ),
+    ],
+    discussao: [
+      paragrafo(
+        `Marcos Ferraz informou que o cadastro do fornecedor depende do documento ${MARCADOR_CPF} do sócio responsável.`,
+      ),
+      paragrafo('Joana Prado apresentou o orçamento e pediu a validação do jurídico.'),
+    ],
+    decisoes: [
+      lista(['Migrar o cadastro de fornecedores até 30/11.', 'Adiar a fase 3 para 2027.']),
+    ],
+    pendencias: [paragrafo('Falta confirmar o contrato de suporte com o fornecedor.')],
+    riscos: [paragrafo('Prazo curto para a homologação do fornecedor.')],
+    proxima_reuniao: [paragrafo('Nova reunião em 28/10/2026, às 14h, por videoconferência.')],
+  },
+  cipa: {
+    abertura: [
+      paragrafo(
+        'O presidente abriu os trabalhos e informou que a reunião foi convocada para tratar do acidente ocorrido no setor de expedição.',
+      ),
+    ],
+    ata_anterior: [],
+    pendencias_anteriores: [
+      paragrafo(
+        'A sinalização do corredor de carga, pendente desde a reunião anterior, segue em andamento.',
+      ),
+    ],
+    discussao: [
+      paragrafo(
+        `Marcos Ferraz relatou o acidente e citou o documento ${MARCADOR_CPF} da pessoa responsável pelo setor.`,
+      ),
+      paragrafo('Os membros analisaram as condições do corredor de carga e as medidas propostas.'),
+    ],
+    deliberacoes: [
+      paragrafo(
+        'Foi deliberada a instalação de sinalização de piso no corredor de carga. [PREENCHER: forma de deliberação]',
+      ),
+    ],
+    encerramento: [],
+  },
+  condominio: {
+    abertura_instalacao: [
+      paragrafo('O presidente da mesa abriu os trabalhos e declarou instalada a assembleia.'),
+    ],
+    eleicao_mesa: [],
+    ordem_do_dia: [
+      paragrafo(
+        'Prestação de contas do exercício: a síndica apresentou o relatório e a pauta foi colocada em votação. [PREENCHER: resultado da votação]',
+      ),
+      paragrafo('Reforma da portaria: os presentes debateram os orçamentos recebidos.'),
+    ],
+    encerramento: [],
+  },
+  'socios-ltda': {
+    instalacao: [paragrafo('O presidente abriu os trabalhos e declarou instalada a reunião.')],
+    deliberacoes: [
+      paragrafo('Os sócios deliberaram sobre a mudança do endereço da sede da sociedade.'),
+    ],
+    encerramento: [],
+  },
+};
+
 /**
- * Conteúdo da ata, já no schema de `src/generation/output-schema.ts` (todas as seções +
+ * Conteúdo da ata, já no schema de `src/generation/output-schema.ts` (todas as seções do `tipo` +
  * encaminhamentos). Sem `encaminhamentos`, os 2 de sempre; com, esse tanto (teste de volume).
  */
-export function ataGeradaJson({ encaminhamentos }: { encaminhamentos?: number } = {}): string {
-  const paragrafo = (texto: string) => ({ tipo: 'paragrafo', texto, itens: [] as string[] });
-  const lista = (itens: string[]) => ({ tipo: 'lista', texto: '', itens });
+export function ataGeradaJson({
+  encaminhamentos,
+  tipo = 'corporativa',
+}: { encaminhamentos?: number; tipo?: TipoFixture } = {}): string {
   return JSON.stringify({
-    secoes: {
-      resumo: [
-        paragrafo(
-          'A equipe revisou o cronograma do projeto Horizonte e aprovou a migração do cadastro de fornecedores.',
-        ),
-      ],
-      discussao: [
-        paragrafo(
-          `Marcos Ferraz informou que o cadastro do fornecedor depende do documento ${MARCADOR_CPF} do sócio responsável.`,
-        ),
-        paragrafo('Joana Prado apresentou o orçamento e pediu a validação do jurídico.'),
-      ],
-      decisoes: [
-        lista(['Migrar o cadastro de fornecedores até 30/11.', 'Adiar a fase 3 para 2027.']),
-      ],
-      pendencias: [paragrafo('Falta confirmar o contrato de suporte com o fornecedor.')],
-      riscos: [paragrafo('Prazo curto para a homologação do fornecedor.')],
-      proxima_reuniao: [paragrafo('Nova reunião em 28/10/2026, às 14h, por videoconferência.')],
-    },
+    secoes: SECOES_POR_TIPO[tipo],
     encaminhamentos:
       encaminhamentos === undefined
         ? [
