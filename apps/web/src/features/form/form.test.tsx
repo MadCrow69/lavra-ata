@@ -814,6 +814,14 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
       expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('Apto 101');
     });
 
+    it('a tabela declara quantas colunas de dados tem (limiar dos cartões no CSS)', () => {
+      renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(2));
+      const tabela = screen.getByRole('table');
+      const cabecalhos = within(tabela).getAllByRole('columnheader');
+      // Todas menos a da ação.
+      expect(tabela).toHaveAttribute('data-colunas', String(cabecalhos.length - 1));
+    });
+
     it('resumo do tipo: texto em status e alerta em nota', () => {
       renderizar(
         <ParticipantesBlock tipo={TIPO_DE_TESTE} />,

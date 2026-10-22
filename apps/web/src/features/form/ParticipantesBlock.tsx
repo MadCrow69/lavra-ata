@@ -12,7 +12,7 @@ import {
 import { textoLimpo } from '../../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
-import { ESPERA_ANUNCIO_RESUMO_MS, LARGURA_CARTOES_REM } from '../../config/ui';
+import { ESPERA_ANUNCIO_RESUMO_MS, LARGURA_TELA_ESTREITA_REM } from '../../config/ui';
 import { useDraft } from '../../domain/DraftContext';
 import { calcularAdicao } from '../../domain/participantes';
 import {
@@ -38,7 +38,7 @@ import {
 import { useTextoAdiado } from './useTextoAdiado';
 import styles from './form.module.css';
 
-const CONSULTA_CARTOES = `(max-width: ${String(LARGURA_CARTOES_REM)}rem)`;
+const CONSULTA_TELA_ESTREITA = `(max-width: ${String(LARGURA_TELA_ESTREITA_REM)}rem)`;
 
 interface LinhaProps {
   participante: Participante;
@@ -385,7 +385,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const [emEdicao, setEmEdicao] = useState<string | null>(null);
   const [listaAberta, setListaAberta] = useState(false);
   const listaId = useId();
-  const telaDeCartoes = useConsultaMidia(CONSULTA_CARTOES, false);
+  const telaEstreita = useConsultaMidia(CONSULTA_TELA_ESTREITA, false);
 
   const colunas = useMemo(() => colunasDeParticipantes(tipo, dados), [tipo, dados]);
   // Para onde vai o "X" de "Nome — X": o extra declarado pelo tipo ou, sem ele, o papel.
@@ -421,7 +421,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const termo = comRolagem ? normalizarBusca(busca) : '';
   // No celular a lista longa vira centenas de cartões e empurra a transcrição e "Gerar ata" para
   // longe: ela começa recolhida (sem busca), com o resumo, a busca e os controles de adição à vista.
-  const recolhivel = comRolagem && telaDeCartoes && termo === '';
+  const recolhivel = comRolagem && telaEstreita && termo === '';
   const recolhida = recolhivel && !listaAberta;
   const semNome = participantes.filter((p) => p.nome.trim() === '').length;
 
@@ -761,7 +761,8 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                 tabIndex={0}
                 data-rolagem={comRolagem}
               >
-                <table className={styles.tabela}>
+                {/* Quantas colunas de dados: decide quando a lista vira cartões (form.module.css). */}
+                <table className={styles.tabela} data-colunas={colunas.length}>
                   <thead>
                     <tr>
                       {colunas.map((coluna) => (

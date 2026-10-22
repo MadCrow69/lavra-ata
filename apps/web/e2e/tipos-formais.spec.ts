@@ -539,3 +539,77 @@ test.describe('celular (360×740) no build com CSP ativa', () => {
     await afirmarLimpo(page, rede);
   });
 });
+
+/**
+ * Desktop (F1): com 4 ou mais colunas, a lista de participantes não cabia na coluna do formulário
+ * e rolava na horizontal DENTRO do cartão, com "Presença" cortada e o botão de remover fora da
+ * vista. Os cartões agora dependem da largura do próprio bloco e do número de colunas.
+ */
+test.describe('desktop: lista de participantes cabe no bloco', () => {
+  test.use({ cenario: { openai: 'ok' } });
+
+  const LARGURAS = [1100, 1200, 1440];
+
+  /** A lista não rola na horizontal e todo botão de remover fica dentro da caixa visível. */
+  async function listaCabe(page: Page, largura: number) {
+    await page.setViewportSize({ width: largura, height: 900 });
+    const medidas = await page.getByRole('region', { name: /^Lista de / }).evaluate((el) => {
+      const caixa = el.getBoundingClientRect();
+      const botoes = Array.from(el.querySelectorAll('button')).map((b) =>
+        b.getBoundingClientRect(),
+      );
+      return {
+        rolagem: el.scrollWidth,
+        largura: el.clientWidth,
+        esquerda: caixa.left,
+        direita: caixa.right,
+        botoes: botoes.map((b) => ({ esquerda: b.left, direita: b.right })),
+      };
+    });
+    expect(medidas.rolagem, `rolagem interna a ${String(largura)} px`).toBeLessThanOrEqual(
+      medidas.largura,
+    );
+    expect(medidas.botoes.length).toBeGreaterThan(0);
+    for (const botao of medidas.botoes) {
+      expect(botao.direita, `botão de remover a ${String(largura)} px`).toBeLessThanOrEqual(
+        medidas.direita + 0.5,
+      );
+      expect(botao.esquerda).toBeGreaterThanOrEqual(medidas.esquerda - 0.5);
+    }
+    await semRolagemHorizontal(page);
+  }
+
+  test('CIPA (5 colunas e a ação)', async ({ app: page, rede }) => {
+    await escolherTipo(page, TIPO_CIPA);
+    await colarParticipantes(page, LINHAS_DA_CIPA, adicionados(LINHAS_DA_CIPA.length));
+    await preencherVazios(page, 'Representação', 'Representante da organização');
+    for (const largura of LARGURAS) await listaCabe(page, largura);
+    await afirmarLimpo(page, rede);
+  });
+
+  test('condomínio (5 colunas e a ação)', async ({ app: page, rede }) => {
+    await escolherTipo(page, TIPO_CONDOMINIO);
+    const linhas = listaDeLinhas(
+      (i) => `Condômino ${String(i + 1)} — Apto ${String(unidadeDe(i))}`,
+      5,
+    );
+    await colarParticipantes(page, linhas, adicionados(linhas.length));
+    await preencherVazios(page, 'Vínculo', 'Proprietário(a)');
+    for (const largura of LARGURAS) await listaCabe(page, largura);
+    await afirmarLimpo(page, rede);
+  });
+
+  test('Ltda (4 colunas e a ação)', async ({ app: page, rede }) => {
+    await escolherTipo(page, TIPO_LTDA);
+    await colarParticipantes(page, LINHAS_DA_LTDA, adicionados(LINHAS_DA_LTDA.length));
+    for (const largura of LARGURAS) await listaCabe(page, largura);
+    await afirmarLimpo(page, rede);
+  });
+
+  test('corporativa (3 colunas e a ação)', async ({ app: page, rede }) => {
+    await escolherTipo(page, TIPO_CORPORATIVA);
+    await colarParticipantes(page, LINHAS_DA_CIPA, adicionados(LINHAS_DA_CIPA.length));
+    for (const largura of LARGURAS) await listaCabe(page, largura);
+    await afirmarLimpo(page, rede);
+  });
+});
