@@ -6,7 +6,7 @@ import { ErroProvedor, erroProvedor } from '../../ai/errors';
 import { KeysProvider, useKeys } from '../../ai/KeysContext';
 import { criarKeyStore } from '../../ai/keys';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
-import { erroSemCredito } from '../../ai/providers/comum';
+import { erroSemCredito, erroSemWorkspace } from '../../ai/providers/comum';
 import { MODELOS, URL_CHAVE } from '../../config/models';
 import { CHAVES, PREFERENCIAS } from '../../config/storage-keys';
 import { storageFalso as storageComItens } from '../../test/storage-falso';
@@ -255,6 +255,27 @@ describe('KeysModal', () => {
     expect(within(cartao('Google Gemini')).queryByText('Chave válida')).not.toBeInTheDocument();
   });
 
+  it('chave da Anthropic sem workspace mostra causa e ação próprias, sem a chave', async () => {
+    const chaveAnthropic = 'sk-ant-ficticia-0001';
+    const { user, store } = await montar({
+      testar: { anthropic: () => Promise.reject(erroSemWorkspace(400)) },
+    });
+    await user.type(campoChave('Anthropic'), chaveAnthropic);
+    await user.click(screen.getByRole('button', { name: 'Testar chave de Anthropic' }));
+    const c = cartao('Anthropic');
+    expect(
+      await within(c).findByText(
+        'Essa chave da Anthropic não está ligada a um espaço de trabalho (workspace). No Console da Anthropic, crie uma chave escolhendo um workspace específico e cole a nova aqui.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(c).queryByText(/verifique se copiou/)).not.toBeInTheDocument();
+    expect(c).not.toHaveTextContent(chaveAnthropic);
+    expect(store.listar().find((k) => k.provedor === 'anthropic')).toMatchObject({
+      estado: 'invalida',
+      motivo: 'sem_workspace',
+    });
+  });
+
   it('conta sem crédito mostra a mensagem de saldo, não "verifique se copiou a chave inteira"', async () => {
     const { user } = await montar({
       testar: { openai: () => Promise.reject(erroSemCredito('openai', 429)) },
@@ -271,7 +292,7 @@ describe('KeysModal', () => {
     await user.type(campoChave('OpenAI'), CHAVE);
     // Como a geração faz ao receber 429 insufficient_quota (ver o teste do Workbench).
     act(() => {
-      store.definirEstado('openai', CHAVE, 'invalida', true);
+      store.definirEstado('openai', CHAVE, 'invalida', 'sem_credito');
     });
     const c = cartao('OpenAI');
     expect(within(c).getByText(/sem crédito ou saldo/)).toBeInTheDocument();
@@ -281,12 +302,12 @@ describe('KeysModal', () => {
       within(c).getByRole('option', { name: 'Outro modelo…' }),
     );
     await user.type(within(c).getByLabelText('Id do modelo'), 'modelo-digitado');
-    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-digitado', semCredito: true });
+    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-digitado', motivo: 'sem_credito' });
     expect(within(c).getByText(/sem crédito ou saldo/)).toBeInTheDocument();
 
     await user.type(campoChave('OpenAI'), '9');
     expect(within(c).queryByText(/sem crédito ou saldo/)).not.toBeInTheDocument();
-    expect(store.listar()[0]?.semCredito).toBeUndefined();
+    expect(store.listar()[0]?.motivo).toBeUndefined();
   });
 
   it('erro de rede/limite mostra a mensagem do provedor, não "chave inválida"; texto com a chave é limpo', async () => {

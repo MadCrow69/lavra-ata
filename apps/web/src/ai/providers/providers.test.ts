@@ -631,6 +631,7 @@ describe('429: cota esgotada x limite por minuto', () => {
       repetivel: false,
     });
     expect(e.message).toContain('sem crédito ou saldo');
+    expect(e.motivo).toBe('sem_credito');
   });
 
   it('429 de cota por minuto do Gemini continua limite', async () => {
@@ -704,5 +705,52 @@ describe('sanitização de trechos do provedor', () => {
     const e = await erroDe(anthropicAdapter.gerar(cfgAnthropic, req()));
     expect(e.tipo).toBe('chave_invalida');
     expect(e.message).toMatch(/saldo|crédito/);
+  });
+});
+
+describe('Anthropic: chave sem workspace (escopo "Organização") vem como HTTP 400', () => {
+  const MENSAGEM_SEM_WORKSPACE =
+    'Essa chave da Anthropic não está ligada a um espaço de trabalho (workspace). No Console da Anthropic, crie uma chave escolhendo um workspace específico e cole a nova aqui.';
+  const corpo = (mensagem: string) => ({
+    type: 'error',
+    error: { type: 'invalid_request_error', message: mensagem },
+  });
+
+  it.each([
+    `This API key (${CHAVE_ANTHROPIC}) is not scoped to a workspace.`,
+    'Missing required header: anthropic-workspace-id',
+  ])('"%s" vira chave recusada com causa e ação, sem a chave e sem retry', async (texto) => {
+    fetchFalso.mockImplementation(() => Promise.resolve(json(corpo(texto), 400)));
+    const e1 = await erroDe(anthropicAdapter.gerar(cfgAnthropic, req()));
+    const e2 = await erroDe(
+      anthropicAdapter.testarChave(
+        { id: 'anthropic', chave: CHAVE_ANTHROPIC },
+        new AbortController().signal,
+      ),
+    );
+    for (const e of [e1, e2]) {
+      expect(e).toMatchObject({
+        tipo: 'chave_invalida',
+        provedor: 'anthropic',
+        status: 400,
+        repetivel: false,
+        motivo: 'sem_workspace',
+      });
+      expect(e.message).toBe(MENSAGEM_SEM_WORKSPACE);
+      expect(e.message).not.toContain(CHAVE_ANTHROPIC);
+    }
+  });
+
+  it('o mesmo texto vindo de outro provedor não é tratado como workspace da Anthropic', async () => {
+    fetchFalso.mockResolvedValueOnce(json(corpo('key is not scoped to a workspace'), 400));
+    const e = await erroDe(openaiAdapter.gerar(cfgOpenai, req()));
+    expect(e.motivo).toBeUndefined();
+    expect(e.message).not.toBe(MENSAGEM_SEM_WORKSPACE);
+  });
+
+  it('outro status com o mesmo texto não é o caso do workspace', async () => {
+    fetchFalso.mockResolvedValueOnce(json(corpo('not scoped to a workspace'), 401));
+    const e = await erroDe(anthropicAdapter.gerar(cfgAnthropic, req()));
+    expect(e.motivo).toBeUndefined();
   });
 });

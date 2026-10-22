@@ -45,6 +45,12 @@ export const ERRO_TIPOS = [
 ] as const;
 export type ErroTipo = (typeof ERRO_TIPOS)[number];
 
+/**
+ * Por que o provedor recusou uma chave que pode estar bem copiada: conta sem crédito/saldo ou chave
+ * da Anthropic sem workspace. Ausente = a chave em si foi recusada.
+ */
+export type MotivoRecusa = 'sem_credito' | 'sem_workspace';
+
 export interface ProviderAdapter {
   id: ProviderId;
   rotulo: string;

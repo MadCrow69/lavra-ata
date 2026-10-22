@@ -1,7 +1,7 @@
 import { MODELOS } from '../config/models';
 import { CHAVES } from '../config/storage-keys';
 import { storageOuNulo } from '../domain/storage-ou-nulo';
-import { PROVEDORES, type ProviderConfig, type ProviderId } from './types';
+import { PROVEDORES, type MotivoRecusa, type ProviderConfig, type ProviderId } from './types';
 
 export interface ChaveProvedor {
   provedor: ProviderId;
@@ -9,10 +9,10 @@ export interface ChaveProvedor {
   modelo: string;
   estado: 'nao_testada' | 'ok' | 'invalida';
   /**
-   * Só na memória (como `estado`): a chave foi recusada por falta de crédito, não por estar errada.
-   * Só vale com `estado === 'invalida'`.
+   * Só na memória (como `estado`): por que a chave foi recusada, quando não é por estar errada
+   * (sem crédito, sem workspace). Só vale com `estado === 'invalida'`.
    */
-  semCredito?: boolean;
+  motivo?: MotivoRecusa;
 }
 
 export interface KeyStore {
@@ -30,7 +30,7 @@ export interface KeyStore {
     p: ProviderId,
     chave: string,
     estado: ChaveProvedor['estado'],
-    semCredito?: boolean,
+    motivo?: MotivoRecusa,
   ) => void;
   remover: (p: ProviderId) => void;
   reordenar: (ordem: ProviderId[]) => void;
@@ -200,18 +200,18 @@ export function criarKeyStore(storage?: Storage | null, ordemInicial?: OrdemInic
         chave,
         modelo: modeloOuPadrao(c.provedor, c.modelo),
         estado: c.estado,
-        ...(c.estado === 'invalida' && c.semCredito === true ? { semCredito: true } : {}),
+        ...(c.estado === 'invalida' && c.motivo !== undefined ? { motivo: c.motivo } : {}),
       });
       mudou();
     },
-    definirEstado(p, chave, estado, semCredito = false) {
+    definirEstado(p, chave, estado, motivo) {
       const c = chaves.get(p);
-      const semCreditoNovo = estado === 'invalida' && semCredito;
+      const motivoNovo = estado === 'invalida' ? motivo : undefined;
       if (c?.chave !== chave.trim()) return;
-      if (c.estado === estado && (c.semCredito ?? false) === semCreditoNovo) return;
+      if (c.estado === estado && c.motivo === motivoNovo) return;
       c.estado = estado;
-      if (semCreditoNovo) c.semCredito = true;
-      else delete c.semCredito;
+      if (motivoNovo !== undefined) c.motivo = motivoNovo;
+      else delete c.motivo;
       mudou();
     },
     remover,

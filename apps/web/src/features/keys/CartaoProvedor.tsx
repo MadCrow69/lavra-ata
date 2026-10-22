@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ErroProvedor, mensagemSemCredito } from '../../ai/errors';
+import { ErroProvedor, mensagemDaRecusa } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
-import type { ProviderAdapter, ProviderId } from '../../ai/types';
+import type { MotivoRecusa, ProviderAdapter, ProviderId } from '../../ai/types';
 import { MODELOS, ROTULO_PROVEDOR, URL_CHAVE, erroDoIdDeModeloComChave } from '../../config/models';
 import { usePreferenciasStore } from '../../preferencias/PreferenciasContext';
 import { Button } from '../../ui/Button';
@@ -81,10 +81,17 @@ export function CartaoProvedor({
     novaChave: string,
     novoModelo: string,
     estado: 'nao_testada' | 'ok' | 'invalida',
-    semCredito = false,
+    motivo?: MotivoRecusa,
   ) => {
     if (novaChave.trim() === '') keys.remover(provedor);
-    else keys.definir({ provedor, chave: novaChave, modelo: novoModelo, estado, semCredito });
+    else
+      keys.definir({
+        provedor,
+        chave: novaChave,
+        modelo: novoModelo,
+        estado,
+        ...(motivo === undefined ? {} : { motivo }),
+      });
   };
 
   const aoDigitarChave = (valor: string): void => {
@@ -108,7 +115,7 @@ export function CartaoProvedor({
       setModo('outro');
       setModelo('');
       setModeloGravado('');
-      gravar(chave, '', atual?.estado ?? 'nao_testada', atual?.semCredito);
+      gravar(chave, '', atual?.estado ?? 'nao_testada', atual?.motivo);
       // O campo nasce vazio (= o padrão): o modelo lembrado sai junto, como ao apagar o campo.
       preferencias.definir({ modelos: { [provedor]: '' } });
       return;
@@ -116,7 +123,7 @@ export function CartaoProvedor({
     setModo('lista');
     setModelo(valor);
     setModeloGravado(valor);
-    gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
+    gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.motivo);
     preferencias.definir({ modelos: { [provedor]: valor } });
   };
 
@@ -128,7 +135,7 @@ export function CartaoProvedor({
     setErroModelo(erro);
     if (erro !== null) return;
     setModeloGravado(valor);
-    gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
+    gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.motivo);
     // Em branco apaga o modelo lembrado (volta o padrão); o store ignora o que não é um id.
     preferencias.definir({ modelos: { [provedor]: valor } });
   };
@@ -150,9 +157,9 @@ export function CartaoProvedor({
     testeRef.current = controle;
     setTestando(true);
     setFalha(null);
-    const registrar = (estado: 'ok' | 'invalida', semCredito = false): void => {
+    const registrar = (estado: 'ok' | 'invalida', motivo?: MotivoRecusa): void => {
       // Só o veredito: o modelo pode ter mudado enquanto o teste rodava.
-      keys.definirEstado(provedor, testada, estado, semCredito);
+      keys.definirEstado(provedor, testada, estado, motivo);
     };
     try {
       await adaptador.testarChave({ id: provedor, chave: testada }, controle.signal);
@@ -162,7 +169,7 @@ export function CartaoProvedor({
       if (controle.signal.aborted) return;
       if (e instanceof ErroProvedor && e.tipo === 'cancelado') return;
       if (e instanceof ErroProvedor && e.tipo === 'chave_invalida') {
-        registrar('invalida', e.semCredito);
+        registrar('invalida', e.motivo);
       } else if (e instanceof ErroProvedor) {
         // A mensagem já vem sem a chave dos adaptadores; a troca abaixo é a segunda barreira.
         setFalha(e.message.split(testada).join('[chave removida]'));
@@ -190,7 +197,8 @@ export function CartaoProvedor({
     estadoTexto = 'Chave válida';
     estadoClasse = styles.estadoOk ?? '';
   } else if (temChave && atual?.estado === 'invalida') {
-    estadoTexto = atual.semCredito === true ? mensagemSemCredito(provedor) : MSG_CHAVE_INVALIDA;
+    estadoTexto =
+      atual.motivo === undefined ? MSG_CHAVE_INVALIDA : mensagemDaRecusa(provedor, atual.motivo);
     estadoClasse = styles.estadoErro ?? '';
   }
   const icone = falha || atual?.estado === 'invalida' ? '✕' : '✓';

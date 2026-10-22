@@ -1,5 +1,5 @@
 import { ROTULO_PROVEDOR } from '../config/models';
-import type { ErroTipo, FalhaProvedor, ProviderId } from './types';
+import type { ErroTipo, FalhaProvedor, MotivoRecusa, ProviderId } from './types';
 
 /** Erro de uma chamada a um provedor. `message` é pt-BR e NUNCA contém a chave de API. */
 export class ErroProvedor extends Error {
@@ -12,22 +12,22 @@ export class ErroProvedor extends Error {
    * não é repetível — o padrão é `tipo` ser `limite` ou `instavel`, e os adaptadores desligam.
    */
   readonly repetivel: boolean;
-  /** A conta do provedor está sem crédito ou saldo (a chave em si pode estar correta). */
-  readonly semCredito: boolean;
+  /** Chave recusada por um motivo que não é a chave mal copiada (ver `MotivoRecusa`). */
+  readonly motivo?: MotivoRecusa;
 
   constructor(
     tipo: ErroTipo,
     provedor: ProviderId,
     mensagem: string,
     status?: number,
-    opcoes: { repetivel?: boolean; semCredito?: boolean } = {},
+    opcoes: { repetivel?: boolean; motivo?: MotivoRecusa } = {},
   ) {
     super(mensagem);
     this.name = 'ErroProvedor';
     this.tipo = tipo;
     this.provedor = provedor;
     this.repetivel = opcoes.repetivel ?? (tipo === 'limite' || tipo === 'instavel');
-    this.semCredito = opcoes.semCredito ?? false;
+    if (opcoes.motivo !== undefined) this.motivo = opcoes.motivo;
     if (status !== undefined) this.status = status;
   }
 }
@@ -128,9 +128,23 @@ export function mensagemSemCredito(provedor: ProviderId): string {
   return `A conta de ${ROTULO_PROVEDOR[provedor]} está sem crédito ou saldo. Confira o saldo e a cobrança no painel do provedor.`;
 }
 
+/**
+ * Chave da Anthropic de escopo "Organização": a API exige o cabeçalho `anthropic-workspace-id`,
+ * que o app não envia. Fonte única do texto (erro do provedor e cartão da chave).
+ */
+export function mensagemSemWorkspace(): string {
+  const rot = ROTULO_PROVEDOR.anthropic;
+  return `Essa chave da ${rot} não está ligada a um espaço de trabalho (workspace). No Console da ${rot}, crie uma chave escolhendo um workspace específico e cole a nova aqui.`;
+}
+
+/** Texto do motivo de uma chave recusada (cartão da chave e mensagem do erro). */
+export function mensagemDaRecusa(provedor: ProviderId, motivo: MotivoRecusa): string {
+  return motivo === 'sem_credito' ? mensagemSemCredito(provedor) : mensagemSemWorkspace();
+}
+
 /** Causa curta de cada erro, para listas compactas (ex.: "OpenAI falhou (limite de uso)"). */
 const RESUMO_DO_ERRO: Record<ErroTipo, string> = {
-  chave_invalida: 'chave recusada ou sem crédito',
+  chave_invalida: 'chave recusada, sem crédito ou sem workspace',
   limite: 'limite de uso',
   instavel: 'instabilidade no provedor',
   cortado: 'resposta cortada',
