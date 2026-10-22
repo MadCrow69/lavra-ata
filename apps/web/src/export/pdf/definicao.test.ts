@@ -9,7 +9,7 @@ import {
 } from '../../config/documento';
 import type { DocumentModel } from '../../document/model';
 import { LOGO_TESTE, modeloDeVolume } from '../../test/documento-volume';
-import { ID_NO_RODAPE, definicaoPdf } from './definicao';
+import { HIFEN_INTEIRO_ATE_CARACTERES, ID_NO_RODAPE, definicaoPdf } from './definicao';
 
 type Obj = Record<string, unknown>;
 
@@ -219,6 +219,31 @@ describe('definicaoPdf: palavra com hífen não se parte no parágrafo justifica
     for (const peca of pecas.filter((p) => p.noWrap !== true)) {
       expect(achatar(peca)).not.toMatch(/\S-\S/);
     }
+  });
+
+  it('a quebra de linha depois da palavra com hífen fica fora do trecho noWrap', () => {
+    const pecas = pecasDoParagrafo({
+      tipo: 'paragrafo',
+      partes: [{ texto: 'Avisados por e-mail.\nseguinte linha' }],
+    });
+    expect(pecas.map(achatar).join('')).toBe('Avisados por e-mail.\nseguinte linha');
+    const inteira = pecas.filter((p) => p.noWrap === true).map(achatar);
+    expect(inteira).toEqual(['e-mail.']);
+    expect(pecas.some((p) => p.noWrap !== true && achatar(p).startsWith('\n'))).toBe(true);
+  });
+
+  it('palavra com hífen comprida demais (ex.: endereço) continua quebrável', () => {
+    const longa = `https://reunioes.exemplo.com.br/sala-${'a-'.repeat(50)}fim`;
+    expect(longa.length).toBeGreaterThan(100);
+    const curta = 'x-'.repeat(HIFEN_INTEIRO_ATE_CARACTERES / 2 - 1) + 'xy';
+    expect(curta).toHaveLength(HIFEN_INTEIRO_ATE_CARACTERES);
+    const pecas = pecasDoParagrafo({
+      tipo: 'paragrafo',
+      partes: [{ texto: `Pela plataforma ${longa} e ${curta} fim.` }],
+    });
+    const inteiras = pecas.filter((p) => p.noWrap === true).map(achatar);
+    expect(inteiras).toEqual([`${curta} `]);
+    expect(pecas.map(achatar).join('')).toContain(longa);
   });
 
   it('a lacuna com hífen continua em negrito com fundo, e inteira', () => {

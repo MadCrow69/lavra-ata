@@ -36,10 +36,18 @@ interface Trecho {
 }
 
 /**
- * Palavra com hífen interno ("realizou-se", "1.080-A", "e-mail"), com o espaço que a segue: o
- * espaço fica no mesmo trecho para não abrir mais um ponto em que a justificação põe espaço extra.
+ * Palavra com hífen interno ("realizou-se", "1.080-A", "e-mail"), com o espaço ou a tabulação que
+ * a segue: ficam no mesmo trecho para não abrir mais um ponto em que a justificação põe espaço
+ * extra. Quebra de linha NÃO entra (sairia do trecho e a linha se perderia).
  */
-const PALAVRA_COM_HIFEN = /\S+-\S+\s*/g;
+const PALAVRA_COM_HIFEN = /\S+-\S+[ \t]*/g;
+
+/**
+ * Até quantos caracteres a palavra com hífen vai inteira (`noWrap`). O pdfmake nunca quebra um
+ * trecho `noWrap` mais largo que a linha: um endereço comprido com hífens (plataforma, sistema)
+ * passaria da margem. Acima disso, a palavra segue quebrável, como antes.
+ */
+export const HIFEN_INTEIRO_ATE_CARACTERES = 40;
 
 /**
  * Separa as palavras com hífen do resto do texto. No texto justificado, o pdfmake abre ponto de
@@ -54,7 +62,10 @@ function semQuebraNoHifen(texto: string): { texto: string; inteira: boolean }[] 
   for (const achado of texto.matchAll(PALAVRA_COM_HIFEN)) {
     if (achado.index > inicio)
       pedacos.push({ texto: texto.slice(inicio, achado.index), inteira: false });
-    pedacos.push({ texto: achado[0], inteira: true });
+    pedacos.push({
+      texto: achado[0],
+      inteira: achado[0].trimEnd().length <= HIFEN_INTEIRO_ATE_CARACTERES,
+    });
     inicio = achado.index + achado[0].length;
   }
   if (inicio < texto.length) pedacos.push({ texto: texto.slice(inicio), inteira: false });

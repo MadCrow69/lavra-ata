@@ -17,15 +17,22 @@ const CSS = readFileSync(new URL('./form.module.css', import.meta.url), 'utf8');
 /** Largura mínima da tabela (rem): N × (campo de 8rem + 1rem de respiro) + ação + folga. */
 const limiarRem = (colunas: number) => colunas * 9 + 4;
 
-/** `data-colunas` → limiar (rem) de cada bloco `@container lista-participantes (width < Xrem)`. */
-function blocosDoCss(): Map<number, number> {
-  const blocos = new Map<number, number>();
+interface Bloco {
+  limiarRem: number;
+  /** Variáveis `--cartao-*` que o bloco liga, em ordem alfabética. */
+  variaveis: string[];
+}
+
+/** `data-colunas` → limiar e variáveis de cada bloco `@container lista-participantes (width < Xrem)`. */
+function blocosDoCss(): Map<number, Bloco> {
+  const blocos = new Map<number, Bloco>();
   const padrao =
-    /@container lista-participantes \(width < ([\d.]+)rem\) \{\s*\.tabela\[data-colunas='(\d+)'\]/g;
-  for (const [, limiar, colunas] of CSS.matchAll(padrao)) {
+    /@container lista-participantes \(width < ([\d.]+)rem\) \{\s*\.tabelaRolagem\[data-colunas='(\d+)'\] \{([^}]*)\}/g;
+  for (const [, limiar, colunas, corpo] of CSS.matchAll(padrao)) {
     const n = Number(colunas);
     expect(blocos.has(n), `bloco repetido para ${String(n)} colunas`).toBe(false);
-    blocos.set(n, Number(limiar));
+    const variaveis = [...(corpo ?? '').matchAll(/(--cartao-[\w-]+)\s*:/g)].map((m) => m[1] ?? '');
+    blocos.set(n, { limiarRem: Number(limiar), variaveis: variaveis.sort() });
   }
   return blocos;
 }
@@ -58,6 +65,18 @@ describe('cartões da lista de participantes por largura do bloco', () => {
   );
 
   it('o limiar de cada bloco segue a largura mínima da tabela (N × 9rem + 4rem)', () => {
-    for (const [n, limiar] of blocos) expect(limiar, `${String(n)} colunas`).toBe(limiarRem(n));
+    for (const [n, { limiarRem: limiar }] of blocos) {
+      expect(limiar, `${String(n)} colunas`).toBe(limiarRem(n));
+    }
+  });
+
+  it('todo bloco liga o mesmo conjunto de variáveis --cartao-* (inclusive o teto da rolagem)', () => {
+    const conjuntos = [...blocos.values()].map((b) => b.variaveis.join(' '));
+    expect(new Set(conjuntos).size).toBe(1);
+    const variaveis = [...blocos.values()][0]?.variaveis ?? [];
+    expect(variaveis).toContain('--cartao-altura-maxima');
+    expect(variaveis.length).toBeGreaterThanOrEqual(9);
+    // Toda variável ligada é consumida fora dos blocos (nenhuma solta).
+    for (const v of variaveis) expect(CSS, v).toContain(`var(${v},`);
   });
 });

@@ -608,6 +608,48 @@ test.describe('desktop: lista de participantes cabe no bloco', () => {
     await afirmarLimpo(page, rede);
   });
 
+  /** Altura visível da região da lista, a altura do conteúdo e a do primeiro cartão/linha. */
+  async function alturasDaLista(page: Page) {
+    return page.getByRole('region', { name: /^Lista de / }).evaluate((el) => ({
+      visivel: el.clientHeight,
+      conteudo: el.scrollHeight,
+      primeiraLinha: el.querySelector('tbody tr')?.getBoundingClientRect().height ?? 0,
+      tetoPx: parseFloat(getComputedStyle(document.documentElement).fontSize) * 24,
+    }));
+  }
+
+  /** Mais que `PARTICIPANTES_ATE_ROLAGEM` (20): a lista ganha busca e, na tabela, rolagem própria. */
+  const MUITOS = 25;
+
+  test('CIPA com muitos participantes a 1440: cartões sem rolagem interna (a página rola)', async ({
+    app: page,
+    rede,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await escolherTipo(page, TIPO_CIPA);
+    const linhas = listaDeLinhas((i) => `Membro ${String(i + 1)} — Operador`, MUITOS);
+    await colarParticipantes(page, linhas, adicionados(MUITOS));
+    const alturas = await alturasDaLista(page);
+    // Cada cartão cabe inteiro na área visível da lista, e a lista não tem rolagem própria.
+    expect(alturas.visivel).toBeGreaterThanOrEqual(alturas.primeiraLinha);
+    expect(alturas.conteudo).toBeLessThanOrEqual(alturas.visivel + 1);
+    await afirmarLimpo(page, rede);
+  });
+
+  test('Ltda com muitos sócios a 1440: a tabela mantém a rolagem própria de 24rem', async ({
+    app: page,
+    rede,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await escolherTipo(page, TIPO_LTDA);
+    const linhas = listaDeLinhas((i) => `Sócio ${String(i + 1)} — 4`, MUITOS);
+    await colarParticipantes(page, linhas, adicionados(MUITOS, 'sócios'));
+    const alturas = await alturasDaLista(page);
+    expect(alturas.visivel).toBeLessThanOrEqual(alturas.tetoPx);
+    expect(alturas.conteudo).toBeGreaterThan(alturas.visivel);
+    await afirmarLimpo(page, rede);
+  });
+
   test('corporativa (3 colunas e a ação)', async ({ app: page, rede }) => {
     await escolherTipo(page, TIPO_CORPORATIVA);
     await colarParticipantes(page, LINHAS_DA_CIPA, adicionados(LINHAS_DA_CIPA.length));

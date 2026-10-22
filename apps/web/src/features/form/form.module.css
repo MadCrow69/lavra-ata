@@ -192,9 +192,12 @@
   max-width: 24rem;
 }
 
-.tabelaRolagem {
+.listaConteiner {
   /* Os cartões dependem da largura deste bloco, não da tela (ver "Cartões" abaixo). */
   container: lista-participantes / inline-size;
+}
+
+.tabelaRolagem {
   overflow-x: auto;
   border: 1px solid var(--cor-borda);
   border-radius: var(--raio);
@@ -204,10 +207,14 @@
   overflow-y: auto;
 }
 
-/* Rolagem própria só fora do celular; nele a página rola, sem rolagem dentro de rolagem. */
+/*
+ * Rolagem própria só na TABELA fora do celular; no celular a página rola, sem rolagem dentro de
+ * rolagem. Nos cartões (que também aparecem no desktop) o teto sai (`--cartao-altura-maxima`):
+ * 24rem é menos que um cartão.
+ */
 @media (min-width: 40.01rem) {
   .tabelaRolagem[data-rolagem='true'] {
-    max-height: 24rem;
+    max-height: var(--cartao-altura-maxima, 24rem);
   }
 }
 
@@ -363,14 +370,15 @@
 /*
  * Cartões: cada participante vira um cartão, com o rótulo de cada campo à vista, quando a tabela
  * não cabe no PRÓPRIO bloco (contêiner `lista-participantes`), em qualquer tela. O limiar depende
- * do número de colunas de dados (`data-colunas`, sem a da ação): a tabela precisa de N × 9rem (campo
- * de 8rem + 1rem de respiro) + 3,75rem da ação (botão de 44 px + respiro); com folga, N × 9rem + 4rem.
+ * do número de colunas de dados (`data-colunas` da região, sem a da ação): a tabela precisa de
+ * N × 9rem (campo de 8rem + 1rem de respiro) + 3,75rem da ação (botão de 44 px + respiro) + a borda
+ * da região (2 px); com folga, N × 9rem + 4rem.
  * Cada bloco só liga as variáveis `--cartao-*`, que as regras acima consomem (aparência em um lugar
  * só). Toda quantidade de colunas que um tipo registrado pode ter precisa do seu bloco: guarda em
  * `participantes-cartoes.test.ts`.
  */
 @container lista-participantes (width < 22rem) {
-  .tabela[data-colunas='2'] {
+  .tabelaRolagem[data-colunas='2'] {
     --cartao-bloco: block;
     --cartao-cabecalho: none;
     --cartao-rotulo: block;
@@ -379,11 +387,12 @@
     --cartao-divisa-celula: 0;
     --cartao-campo-minimo: 0;
     --cartao-largura-acao: auto;
+    --cartao-altura-maxima: none;
   }
 }
 
 @container lista-participantes (width < 31rem) {
-  .tabela[data-colunas='3'] {
+  .tabelaRolagem[data-colunas='3'] {
     --cartao-bloco: block;
     --cartao-cabecalho: none;
     --cartao-rotulo: block;
@@ -392,11 +401,12 @@
     --cartao-divisa-celula: 0;
     --cartao-campo-minimo: 0;
     --cartao-largura-acao: auto;
+    --cartao-altura-maxima: none;
   }
 }
 
 @container lista-participantes (width < 40rem) {
-  .tabela[data-colunas='4'] {
+  .tabelaRolagem[data-colunas='4'] {
     --cartao-bloco: block;
     --cartao-cabecalho: none;
     --cartao-rotulo: block;
@@ -405,11 +415,12 @@
     --cartao-divisa-celula: 0;
     --cartao-campo-minimo: 0;
     --cartao-largura-acao: auto;
+    --cartao-altura-maxima: none;
   }
 }
 
 @container lista-participantes (width < 49rem) {
-  .tabela[data-colunas='5'] {
+  .tabelaRolagem[data-colunas='5'] {
     --cartao-bloco: block;
     --cartao-cabecalho: none;
     --cartao-rotulo: block;
@@ -418,11 +429,12 @@
     --cartao-divisa-celula: 0;
     --cartao-campo-minimo: 0;
     --cartao-largura-acao: auto;
+    --cartao-altura-maxima: none;
   }
 }
 
 @container lista-participantes (width < 58rem) {
-  .tabela[data-colunas='6'] {
+  .tabelaRolagem[data-colunas='6'] {
     --cartao-bloco: block;
     --cartao-cabecalho: none;
     --cartao-rotulo: block;
@@ -431,6 +443,7 @@
     --cartao-divisa-celula: 0;
     --cartao-campo-minimo: 0;
     --cartao-largura-acao: auto;
+    --cartao-altura-maxima: none;
   }
 }
 

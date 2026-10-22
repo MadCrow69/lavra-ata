@@ -767,7 +767,8 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
               ) : null}
             </div>
           ) : null}
-          <div id={listaId}>
+          {/* Contêiner das consultas `@container` dos cartões (form.module.css). */}
+          <div id={listaId} className={styles.listaConteiner}>
             {visiveis.length === 0 ? (
               termo === '' ? null : (
                 <p className={styles.vazio}>
@@ -788,9 +789,10 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
                 aria-label={`Lista de ${pessoa.plural}`}
                 tabIndex={0}
                 data-rolagem={comRolagem}
+                // Quantas colunas de dados: decide quando a lista vira cartões (form.module.css).
+                data-colunas={colunas.length}
               >
-                {/* Quantas colunas de dados: decide quando a lista vira cartões (form.module.css). */}
-                <table className={styles.tabela} data-colunas={colunas.length}>
+                <table className={styles.tabela}>
                   <thead>
                     <tr>
                       {colunas.map((coluna) => (
