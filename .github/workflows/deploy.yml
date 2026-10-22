@@ -66,6 +66,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      # Como no exemplo oficial do deploy-pages; o job não faz checkout, só lê o artefato.
       contents: read
       pages: write
       id-token: write
