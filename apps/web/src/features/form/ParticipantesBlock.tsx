@@ -406,9 +406,13 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     [tipo, dados, participantes],
   );
 
-  // O resumo fica à vista sempre; o leitor de tela ouve o texto VIGENTE, mas só depois de a pessoa
-  // parar de mexer (o texto de alguns tipos muda a cada tecla, ex.: somas).
-  const resumoAnunciado = useTextoAdiado(resumo?.texto, ESPERA_ANUNCIO_RESUMO_MS);
+  // O resumo (texto e alertas) fica à vista sempre, fora da árvore de acessibilidade; o leitor de
+  // tela o ouve uma vez só, pela região `status`: o texto VIGENTE, depois de a pessoa parar de
+  // mexer (o texto de alguns tipos muda a cada tecla, ex.: somas). Os alertas vão junto: a soma
+  // acima do total não tem texto de resumo e, sem eles, nada seria anunciado.
+  const resumoFalado =
+    resumo === null ? null : [resumo.texto, ...resumo.alertas].filter(Boolean).join(' ');
+  const resumoAnunciado = useTextoAdiado(resumoFalado, ESPERA_ANUNCIO_RESUMO_MS);
 
   if (aviso) {
     if (aviso.base === null) setAviso({ ...aviso, base: participantes });
@@ -568,16 +572,19 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
         </div>
       </div>
 
-      {resumo?.texto ? <p className={styles.resumoTexto}>{resumo.texto}</p> : null}
+      {resumo?.texto ? (
+        <p aria-hidden="true" className={styles.resumoTexto}>
+          {resumo.texto}
+        </p>
+      ) : null}
       {resumo !== null ? (
         <p role="status" className={styles.somenteLeitor}>
           {resumoAnunciado}
         </p>
       ) : null}
       {resumo?.alertas.map((alerta) => (
-        <p key={alerta} role="note" className={styles.alertaResumo}>
-          <span aria-hidden="true">⚠ </span>
-          {alerta}
+        <p key={alerta} aria-hidden="true" className={styles.alertaResumo}>
+          ⚠ {alerta}
         </p>
       ))}
 

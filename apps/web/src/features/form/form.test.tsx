@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
 import type { AtaTypeDefinition } from '../../ata-types/types';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
+import { ESPERA_ANUNCIO_RESUMO_MS } from '../../config/ui';
 import type { AtaDraft, Participante } from '../../domain/draft';
 import { criarRascunho } from '../../domain/draft-reducer';
 import { TIPO_DE_TESTE } from '../../test/tipo-de-teste';
@@ -12,6 +13,12 @@ import { ParticipantesBlock } from './ParticipantesBlock';
 import { TipoBlock } from './TipoBlock';
 import { renderizarComProvedores } from '../../test/provedores';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
+
+/**
+ * Teto da espera pelo anúncio adiado do resumo: bem acima da espera do próprio anúncio, porque a
+ * máquina é compartilhada e o `waitFor` padrão (1 s) deixava só 400 ms de folga.
+ */
+const ATE_O_ANUNCIO = { timeout: ESPERA_ANUNCIO_RESUMO_MS + 5_000 };
 
 function participante(i: number, parcial: Partial<Participante> = {}): Participante {
   return {
@@ -822,16 +829,47 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
       expect(tabela).toHaveAttribute('data-colunas', String(cabecalhos.length - 1));
     });
 
-    it('resumo do tipo: texto em status e alerta em nota', () => {
+    it('resumo do tipo: texto e alertas à vista, lidos UMA vez (pela região status)', () => {
       renderizar(
         <ParticipantesBlock tipo={TIPO_DE_TESTE} />,
         membros(3, (i) => (i > 1 ? { presenca: 'ausente' } : {})),
       );
-      // O texto fica à vista e, em outra região, é anunciado só ao adicionar/remover.
-      const copias = screen.getAllByText('3 unidades informadas');
-      expect(copias).toHaveLength(2);
-      expect(copias.some((el) => el.getAttribute('role') === 'status')).toBe(true);
-      expect(screen.getByRole('note')).toHaveTextContent('Menos de dois membros presentes.');
+      // À vista, mas fora da árvore de acessibilidade: o leitor de tela ouve a região status.
+      const texto = screen.getByText('3 unidades informadas', { selector: 'p:not([role])' });
+      expect(texto).toHaveAttribute('aria-hidden', 'true');
+      const alerta = screen.getByText(/Menos de dois membros presentes\./, {
+        selector: 'p:not([role])',
+      });
+      expect(alerta).toHaveAttribute('aria-hidden', 'true');
+      const anunciados = screen
+        .getAllByRole('status')
+        .filter((el) => el.textContent.includes('unidades informadas'));
+      expect(anunciados.map((el) => el.textContent)).toEqual([
+        '3 unidades informadas Menos de dois membros presentes.',
+      ]);
+      expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    });
+
+    it('alerta sem texto de resumo (ex.: soma acima do total) também é anunciado', async () => {
+      const user = userEvent.setup();
+      const tipo: AtaTypeDefinition = {
+        ...TIPO_DE_TESTE,
+        resumoDosParticipantes: ({ participantes }) =>
+          participantes.some((p) => (p.extras.unidade ?? '').endsWith('0'))
+            ? { texto: null, alertas: ['Soma acima do total.'] }
+            : { texto: 'Soma conferida.', alertas: [] },
+      };
+      renderizar(<ParticipantesBlock tipo={tipo} />, membros(1));
+      const anunciado = () =>
+        screen
+          .getAllByRole('status')
+          .map((el) => el.textContent)
+          .filter((t) => t.startsWith('Soma'));
+      expect(anunciado()).toEqual(['Soma conferida.']);
+      await user.type(screen.getByLabelText('Unidade do participante 1'), '0');
+      await waitFor(() => {
+        expect(anunciado()).toEqual(['Soma acima do total.']);
+      }, ATE_O_ANUNCIO);
     });
 
     it('o resumo anunciado acompanha o texto vigente, mas só depois de parar de digitar', async () => {
@@ -859,18 +897,18 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
       expect(anunciado()).toEqual(['Unidades: Apto 101 · Presentes: 1']);
       await waitFor(() => {
         expect(anunciado()).toEqual(['Unidades: Apto 1010 · Presentes: 1']);
-      });
+      }, ATE_O_ANUNCIO);
 
       // Mudar a presença também (a quantidade continua a mesma).
       await user.selectOptions(screen.getByLabelText('Presença de Pessoa 1'), 'ausente');
       await waitFor(() => {
         expect(anunciado()).toEqual(['Unidades: Apto 1010 · Presentes: 0']);
-      });
+      }, ATE_O_ANUNCIO);
 
       await user.type(screen.getByLabelText(/^Nome do novo participante/), 'Bia{Enter}');
       await waitFor(() => {
         expect(anunciado()).toEqual(['Unidades: Apto 1010 /  · Presentes: 1']);
-      });
+      }, ATE_O_ANUNCIO);
     });
 
     it('tipo sem coluna de papel e sem campo de complemento mantém “Nome — X” no nome', async () => {
@@ -890,9 +928,13 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
       expect(screen.getByLabelText('Unidade do participante 1')).toHaveValue('');
     });
 
-    it('sem alerta, nenhuma nota aparece', () => {
+    it('sem alerta, só o texto do resumo fica à vista e é anunciado', () => {
       renderizar(<ParticipantesBlock tipo={TIPO_DE_TESTE} />, membros(3));
-      expect(screen.queryByRole('note')).not.toBeInTheDocument();
+      expect(screen.queryByText(/⚠/, { selector: 'p[aria-hidden]' })).not.toBeInTheDocument();
+      const anunciados = screen
+        .getAllByRole('status')
+        .filter((el) => el.textContent.includes('unidades informadas'));
+      expect(anunciados.map((el) => el.textContent)).toEqual(['3 unidades informadas']);
     });
   });
 });

@@ -52,6 +52,8 @@ const LINHAS_DA_CIPA = [
   'Rafael Moura — Almoxarife',
 ];
 const LINHAS_DA_LTDA = ['Ana Souza — 50', 'Bruno Lima — 37,5', 'Carla Dias — 12,5'];
+const ALERTA_SOMA_110 =
+  'As participações informadas somam 110%, acima de 100%. Corrija: a ata sai com [PREENCHER] no capital presente.';
 
 const adicionados = (quantos: number) => `${String(quantos)} participantes adicionados.`;
 
@@ -66,24 +68,28 @@ function corpoDaGeracao(rede: Rede): string {
 const unidadeDe = (i: number) => PRIMEIRA_UNIDADE + i;
 
 /**
- * O resumo do capital da Ltda aparece duas vezes: à vista e na região `status` (leitor de tela).
- * Os dois têm de mostrar o MESMO texto vigente (o anúncio sai depois de uma pequena espera).
+ * O resumo do capital da Ltda fica à vista (fora da árvore de acessibilidade) e é lido UMA vez,
+ * pela região `status` (depois de uma pequena espera), junto com os alertas: com a soma acima do
+ * total não há texto de capital, e o anúncio é só o do alerta.
  */
-async function afirmarResumoDoCapital(page: Page, texto: string | null) {
-  const anunciado = page.getByRole('status').filter({ hasText: 'Capital presente informado' });
-  const visivel = page.locator('p:not([role])').filter({ hasText: 'Capital presente informado' });
-  if (texto === null) {
-    await expect(visivel).toHaveCount(0);
-    await expect(
-      page
-        .locator('section[data-bloco="participantes"]')
-        .getByRole('status')
-        .filter({ hasText: /\S/ }),
-    ).toHaveCount(0);
-    return;
-  }
-  await expect(visivel).toHaveText(texto);
-  await expect(anunciado).toHaveText(texto);
+async function afirmarResumoDoCapital(page: Page, texto: string | null, alertas: string[] = []) {
+  const bloco = page.locator('section[data-bloco="participantes"]');
+  const visivel = bloco
+    .locator('p[aria-hidden="true"]')
+    .filter({ hasText: 'Capital presente informado' });
+  const anunciado = bloco.getByRole('status').filter({ hasText: /\S/ });
+  const falado = [texto, ...alertas].filter((t) => t !== null).join(' ');
+  if (texto === null) await expect(visivel).toHaveCount(0);
+  else await expect(visivel).toHaveText(texto);
+  if (falado === '') await expect(anunciado).toHaveCount(0);
+  else await expect(anunciado.filter({ hasText: falado })).toHaveText(falado);
+}
+
+/** Alerta do resumo dos participantes, à vista (o leitor de tela o ouve pela região `status`). */
+function alertaDoResumo(page: Page, texto: string): Locator {
+  return page
+    .locator('section[data-bloco="participantes"] p[aria-hidden="true"]')
+    .filter({ hasText: texto });
 }
 
 function listaDeLinhas(modelo: (i: number) => string, quantos: number): string[] {
@@ -329,17 +335,13 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
       exact: true,
     });
     await participacaoDoPrimeiro.fill('60');
-    await expect(
-      page.getByRole('note').filter({ hasText: 'As participações informadas somam 110%' }),
-    ).toBeVisible();
-    await afirmarResumoDoCapital(page, null);
+    await expect(alertaDoResumo(page, ALERTA_SOMA_110)).toBeVisible();
+    await afirmarResumoDoCapital(page, null, [ALERTA_SOMA_110]);
     await expect(documento).toContainText(
       '[PREENCHER: capital social representado pelos presentes]',
     );
     await participacaoDoPrimeiro.fill('50');
-    await expect(
-      page.getByRole('note').filter({ hasText: 'As participações informadas somam' }),
-    ).toHaveCount(0);
+    await expect(alertaDoResumo(page, 'As participações informadas somam')).toHaveCount(0);
     await afirmarResumoDoCapital(page, 'Capital presente informado: 87,5%');
     await expect(documento).not.toContainText(
       '[PREENCHER: capital social representado pelos presentes]',
@@ -348,10 +350,10 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
     // "Todos presentes" com um ausente: só alerta, não bloqueia.
     await preencherCampos(page, { Convocação: 'Dispensada: todos os sócios presentes' });
     await expect(
-      page.getByRole('note').filter({
-        hasText:
-          'Você indicou que todos os sócios compareceram, mas 1 sócio está marcado como ausente.',
-      }),
+      alertaDoResumo(
+        page,
+        'Você indicou que todos os sócios compareceram, mas 1 sócio está marcado como ausente.',
+      ),
     ).toBeVisible();
     await expect(botaoGerar(page)).toBeEnabled();
 
@@ -531,10 +533,8 @@ test.describe('celular (360×740) no build com CSP ativa', () => {
 
     // O alerta de soma acima de 100% (texto comprido) também cabe na largura.
     await page.getByLabel('Participação (%) do participante 1', { exact: true }).fill('60');
-    await expect(
-      page.getByRole('note').filter({ hasText: 'As participações informadas somam 110%' }),
-    ).toBeVisible();
-    await afirmarResumoDoCapital(page, null);
+    await expect(alertaDoResumo(page, ALERTA_SOMA_110)).toBeVisible();
+    await afirmarResumoDoCapital(page, null, [ALERTA_SOMA_110]);
     await semRolagemHorizontal(page);
     await afirmarLimpo(page, rede);
   });
