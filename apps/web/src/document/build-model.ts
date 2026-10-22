@@ -1,4 +1,8 @@
-import { colunasDeParticipantes } from '../ata-types/registry';
+import {
+  colunasDeParticipantes,
+  ehObrigatorio,
+  type ColunaParticipante,
+} from '../ata-types/registry';
 import { prazoOuNulo, rotuloDaOpcao, textoLimpo } from '../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import {
@@ -116,8 +120,28 @@ function celulaExtra(campo: CampoDef, p: Participante): string {
   return (campo.tipo === 'escolha' ? rotuloDaOpcao(campo, valor) : null) ?? valor;
 }
 
+/**
+ * Colunas da tabela de participantes no documento (folha, PDF e DOCX): as do formulário, menos a
+ * OPCIONAL (papel ou extra não obrigatório) que nenhum participante da lista preencheu — uma coluna
+ * inteira de "—" só tira largura das outras. Nome, presença e extra obrigatório ficam sempre.
+ */
+export function colunasDoDocumento(
+  tipo: AtaTypeDefinition,
+  dados: Record<string, string>,
+  participantes: readonly Participante[],
+): ColunaParticipante[] {
+  const alguemPreencheu = (valor: (p: Participante) => string | undefined): boolean =>
+    participantes.some((p) => textoLimpo(valor(p)) !== '');
+  return colunasDeParticipantes(tipo, dados).filter((coluna) => {
+    if (coluna.id === 'nome' || coluna.id === 'presenca') return true;
+    if (coluna.id === 'papel') return alguemPreencheu((p) => p.papel);
+    if (coluna.campo !== null && ehObrigatorio(coluna.campo, dados)) return true;
+    return alguemPreencheu((p) => p.extras[coluna.id]);
+  });
+}
+
 function tabelaDeParticipantes(d: EntradaDoDocumento, tipo: AtaTypeDefinition): DocBloco {
-  const colunas = colunasDeParticipantes(tipo, d.dados);
+  const colunas = colunasDoDocumento(tipo, d.dados, d.participantes);
   const celula = (p: Participante, id: string, campo: CampoDef | null): string => {
     if (id === 'nome') return textoLimpo(p.nome) || CELULA_VAZIA;
     if (id === 'papel') return textoLimpo(p.papel) || CELULA_VAZIA;

@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { cipa } from '../ata-types/cipa';
 import { corporativa } from '../ata-types/corporativa';
-import { ATA_TYPES, colunasDeParticipantes } from '../ata-types/registry';
+import { condominio } from '../ata-types/condominio';
+import {
+  ATA_TYPES,
+  colunasDeParticipantes,
+  ehObrigatorio,
+  type ColunaParticipante,
+} from '../ata-types/registry';
 import { sociosLtda } from '../ata-types/socios-ltda';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import { LARGURA_UTIL_PT, RESPIRO_CELULA_PT, TIPOGRAFIA_DOCUMENTO } from '../config/documento';
+import { colunasDoDocumento } from '../document/build-model';
 import { largurasPorPeso } from '../document/larguras';
-import { ROTULO_PRESENCA } from '../domain/draft';
+import { ROTULO_PRESENCA, type Participante } from '../domain/draft';
 import { larguraPt } from '../test/medir-texto';
 import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { larguraUtilDxa, largurasDxa } from './docx/medidas-docx';
@@ -64,6 +71,39 @@ function variacoesDeDados(tipo: AtaTypeDefinition): Dados[] {
   }
 }
 
+/** Todos os subconjuntos de `itens` (inclusive o vazio e o completo). */
+function subconjuntos<T>(itens: readonly T[]): T[][] {
+  return itens.reduce<T[][]>((todos, item) => [...todos, ...todos.map((s) => [...s, item])], [[]]);
+}
+
+/**
+ * Colunas que o DOCUMENTO pode ter com esses `dados`: o documento omite a coluna opcional (papel
+ * ou extra não obrigatório) que ninguém preencheu (`colunasDoDocumento`), e as larguras se
+ * redistribuem. Uma variação por subconjunto de opcionais preenchidas, pela função real.
+ */
+function colunasPossiveisNoDocumento(
+  tipo: AtaTypeDefinition,
+  dados: Dados,
+): ColunaParticipante[][] {
+  const opcionais = colunasDeParticipantes(tipo, dados).filter(
+    (c) => c.id === 'papel' || (c.campo !== null && !ehObrigatorio(c.campo, dados)),
+  );
+  return subconjuntos(opcionais).map((preenchidas) => {
+    const ids = new Set(preenchidas.map((c) => c.id));
+    const pessoa: Participante = {
+      id: 'p1',
+      nome: 'Pessoa',
+      papel: ids.has('papel') ? 'Valor' : '',
+      presenca: 'presente',
+      justificativa: '',
+      extras: Object.fromEntries(
+        [...ids].filter((id) => id !== 'papel').map((id) => [id, 'Valor']),
+      ),
+    };
+    return colunasDoDocumento(tipo, dados, [pessoa]);
+  });
+}
+
 interface Resultado {
   colunasVerificadas: number;
   violacoes: string[];
@@ -77,34 +117,36 @@ interface Resultado {
 function conferirTipo(tipo: AtaTypeDefinition): Resultado {
   const violacoes: string[] = [];
   let colunasVerificadas = 0;
-  for (const dados of variacoesDeDados(tipo)) {
-    const colunas = colunasDeParticipantes(tipo, dados);
-    const larguras = largurasPorPeso(colunas.map((c) => c.peso));
-    const dxa = largurasDxa(larguras, larguras.length);
-    if (dxa.reduce((a, b) => a + b, 0) !== larguraUtilDxa()) {
-      violacoes.push(`${tipo.id} ${JSON.stringify(dados)}: grade do DOCX não soma a largura útil`);
-    }
-    colunas.forEach((coluna, i) => {
-      colunasVerificadas += 1;
-      const util = ((larguras[i] ?? 0) / 100) * LARGURA_UTIL_PT - RESPIRO_CELULA_PT;
-      const conteudo = [
-        ...(coluna.id === 'presenca' ? Object.values(ROTULO_PRESENCA) : []),
-        ...(coluna.campo?.opcoes ?? []).map((o) => o.rotulo),
-      ];
-      const medidas = [
-        ...palavras(coluna.rotulo).map((p) => ({ p, negrito: true })),
-        ...conteudo.flatMap(palavras).map((p) => ({ p, negrito: false })),
-      ];
-      for (const { p, negrito } of medidas) {
-        const largura = larguraPt(p, TIPOGRAFIA_DOCUMENTO.tabelaPt, negrito);
-        if (largura > util) {
-          violacoes.push(
-            `${tipo.id} ${JSON.stringify(dados)}: “${p}” (${largura.toFixed(1)} pt) não cabe na coluna “${coluna.rotulo}” (${util.toFixed(1)} pt)`,
-          );
-        }
+  for (const dados of variacoesDeDados(tipo))
+    for (const colunas of colunasPossiveisNoDocumento(tipo, dados)) {
+      const larguras = largurasPorPeso(colunas.map((c) => c.peso));
+      const dxa = largurasDxa(larguras, larguras.length);
+      if (dxa.reduce((a, b) => a + b, 0) !== larguraUtilDxa()) {
+        violacoes.push(
+          `${tipo.id} ${JSON.stringify(dados)}: grade do DOCX não soma a largura útil`,
+        );
       }
-    });
-  }
+      colunas.forEach((coluna, i) => {
+        colunasVerificadas += 1;
+        const util = ((larguras[i] ?? 0) / 100) * LARGURA_UTIL_PT - RESPIRO_CELULA_PT;
+        const conteudo = [
+          ...(coluna.id === 'presenca' ? Object.values(ROTULO_PRESENCA) : []),
+          ...(coluna.campo?.opcoes ?? []).map((o) => o.rotulo),
+        ];
+        const medidas = [
+          ...palavras(coluna.rotulo).map((p) => ({ p, negrito: true })),
+          ...conteudo.flatMap(palavras).map((p) => ({ p, negrito: false })),
+        ];
+        for (const { p, negrito } of medidas) {
+          const largura = larguraPt(p, TIPOGRAFIA_DOCUMENTO.tabelaPt, negrito);
+          if (largura > util) {
+            violacoes.push(
+              `${tipo.id} ${JSON.stringify(dados)}: “${p}” (${largura.toFixed(1)} pt) não cabe na coluna “${coluna.rotulo}” (${util.toFixed(1)} pt)`,
+            );
+          }
+        }
+      });
+    }
   return { colunasVerificadas, violacoes };
 }
 
@@ -171,6 +213,16 @@ describe('colunas de participantes cabem no A4 (PDF e DOCX)', () => {
       expect(rotulos.has(rotulo), rotulo).toBe(true);
     }
     expect(conferirTipo(sociosLtda).violacoes).toEqual([]);
+  });
+
+  it('cobre as colunas que o documento omite: condomínio com e sem “Fração ideal”', () => {
+    const conjuntos = colunasPossiveisNoDocumento(condominio, {}).map((cs) =>
+      cs.map((c) => c.rotulo).join(' | '),
+    );
+    expect(conjuntos.sort()).toEqual([
+      'Nome | Unidade | Vínculo | Fração ideal | Presença',
+      'Nome | Unidade | Vínculo | Presença',
+    ]);
   });
 
   it('limite do produto: tipo cujas colunas não dependem dos dados tem uma variação só', () => {

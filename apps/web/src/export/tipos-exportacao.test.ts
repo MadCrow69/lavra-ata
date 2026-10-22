@@ -75,7 +75,12 @@ const CASOS: Caso[] = [
   {
     tipo: condominio,
     dados: DADOS_CONDOMINIO,
-    extras: (i) => ({ unidade: `Apto ${String(100 + i)}`, vinculo: 'proprietario' }),
+    // A fração (opcional) só de alguns: sem nenhuma, a coluna sairia do documento.
+    extras: (i) => ({
+      unidade: `Apto ${String(100 + i)}`,
+      vinculo: 'proprietario',
+      ...(i % 4 === 0 ? { fracao: '1/48' } : {}),
+    }),
     noPdf: ['Assembleia Geral Ordinária', 'Unidade', 'Vínculo', 'Fração ideal', 'Mesa'],
     aviso: condominio.textosFixos?.avisoConvencao ?? 'aviso ausente',
   },

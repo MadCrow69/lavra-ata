@@ -190,9 +190,11 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
   });
 
   it('usa um traço para nome ou cargo em branco', () => {
-    const d = rascunho({ participantes: [participante(1, { nome: ' ', papel: '' })] });
+    const d = rascunho({
+      participantes: [participante(1, { nome: ' ', papel: '' }), participante(2)],
+    });
     const [tabela] = tabelas(construirDocumento(d, corporativa).blocos);
-    expect(tabela?.linhas).toEqual([['—', '—', ROTULO_PRESENCA.presente]]);
+    expect(tabela?.linhas[0]).toEqual(['—', '—', ROTULO_PRESENCA.presente]);
   });
 
   it('pede o cabeçalho ao tipo, sem depender dos campos do corporativo', () => {
@@ -223,7 +225,12 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
         { id: 'unidade', rotulo: 'Unidade', tipo: 'texto', obrigatorio: false },
       ],
     };
-    const d = rascunho({ participantes: [participante(1, { extras: { condicao: 'titular' } })] });
+    const d = rascunho({
+      participantes: [
+        participante(1, { extras: { condicao: 'titular' } }),
+        participante(2, { extras: { unidade: 'Apto 2' } }),
+      ],
+    });
     const [tabela] = tabelas(construirDocumento(d, tipo).blocos);
     expect(tabela?.colunas).toEqual(['Nome', 'Cargo / empresa', 'Condição', 'Unidade', 'Presença']);
     expect(tabela?.linhas[0]).toEqual([
@@ -234,6 +241,25 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
       ROTULO_PRESENCA.presente,
     ]);
     expect(tabela?.colunaPresenca).toBe(4);
+  });
+
+  it('omite a coluna opcional que ninguém preencheu (nunca uma coluna inteira de “—”)', () => {
+    const tipo: AtaTypeDefinition = {
+      ...corporativa,
+      camposParticipante: [
+        { id: 'unidade', rotulo: 'Unidade', tipo: 'texto', obrigatorio: false, peso: 1.5 },
+        { id: 'vinculo', rotulo: 'Vínculo', tipo: 'texto', obrigatorio: true, peso: 2 },
+      ],
+    };
+    const d = rascunho({
+      participantes: [participante(1, { papel: ' ' }), participante(2, { papel: '' })],
+    });
+    const [tabela] = tabelas(construirDocumento(d, tipo).blocos);
+    // Papel e unidade (opcionais) vazios em todos saem; o obrigatório fica, mesmo vazio.
+    expect(tabela?.colunas).toEqual(['Nome', 'Vínculo', 'Presença']);
+    expect(tabela?.linhas[0]).toEqual(['Pessoa 1', '—', ROTULO_PRESENCA.presente]);
+    expect(tabela?.colunaPresenca).toBe(2);
+    expect(tabela?.larguras).toEqual(largurasPorPeso([3, 2, 2]));
   });
 });
 
@@ -475,12 +501,30 @@ describe('construirDocumento com um tipo sem coluna de papel', () => {
   const tabela = modelo.blocos.find((b): b is Tabela => b.tipo === 'tabela');
 
   it('tabela com as colunas do tipo, larguras por peso e presença no índice real', () => {
-    expect(tabela?.colunas).toEqual(['Nome', 'Unidade', 'Vínculo', 'Fração ideal', 'Presença']);
-    expect(tabela?.colunaPresenca).toBe(4);
-    expect(tabela?.larguras).toEqual(largurasPorPeso([3, 1.5, 2, 1.5, 2]));
-    expect(tabela?.larguras).toEqual([30, 15, 20, 15, 20]);
+    // "Fração ideal" (opcional) ninguém preencheu: sai do documento.
+    expect(tabela?.colunas).toEqual(['Nome', 'Unidade', 'Vínculo', 'Presença']);
+    expect(tabela?.colunaPresenca).toBe(3);
+    expect(tabela?.larguras).toEqual(largurasPorPeso([3, 1.5, 2, 2]));
     expect(tabela?.larguras?.reduce((a, b) => a + b, 0)).toBe(100);
-    expect(tabela?.linhas[0]).toEqual(['Pessoa 1', 'Apto 1', 'Procurador(a)', '—', 'Presente']);
+    expect(tabela?.linhas[0]).toEqual(['Pessoa 1', 'Apto 1', 'Procurador(a)', 'Presente']);
+    // Vínculo é obrigatório: fica, com o traço de quem não o tem.
+    expect(tabela?.linhas[1]).toEqual(['Pessoa 2', 'Apto 2', '—', 'Presente']);
+  });
+
+  it('a coluna opcional volta quando alguém a preenche', () => {
+    const comFracao = construirDocumento(
+      {
+        ...d,
+        participantes: [d.participantes[0], participante(2, { extras: { fracao: '0,5' } })].filter(
+          (p): p is Participante => p !== undefined,
+        ),
+        resultado: resultado(),
+      },
+      TIPO_DE_TESTE,
+    ).blocos.find((b): b is Tabela => b.tipo === 'tabela');
+    expect(comFracao?.colunas).toEqual(['Nome', 'Unidade', 'Vínculo', 'Fração ideal', 'Presença']);
+    expect(comFracao?.linhas[0]).toEqual(['Pessoa 1', 'Apto 1', 'Procurador(a)', '—', 'Presente']);
+    expect(comFracao?.larguras).toEqual([30, 15, 20, 15, 20]);
   });
 
   it('subtítulos vêm dos rótulos do tipo', () => {
