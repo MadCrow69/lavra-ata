@@ -5,7 +5,7 @@ import {
   INICIO_PRIMEIRO_CUE_MS,
   vttFicticio,
 } from '../../test/vtt-ficticio';
-import { falantesDoTexto, lerVtt, vttParaTexto } from './vtt';
+import { falantesDoTexto, lerVtt, pareceVtt, vttParaTexto } from './vtt';
 
 describe('vttParaTexto', () => {
   it('converte cues com <v Nome> e timestamps em "Nome: fala"', () => {
@@ -218,6 +218,20 @@ describe('lerVtt: duração', () => {
   it('sem cue com tempo, a duração é null', () => {
     expect(lerVtt('').duracaoMs).toBeNull();
     expect(lerVtt('WEBVTT\n\nNOTE só uma nota\n').duracaoMs).toBeNull();
+  });
+});
+
+describe('pareceVtt', () => {
+  it('começa por WEBVTT, ignorando espaços, linhas em branco e o BOM no início', () => {
+    expect(pareceVtt('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\noi')).toBe(true);
+    expect(pareceVtt(`${String.fromCharCode(0xfeff)}WEBVTT`)).toBe(true);
+    expect(pareceVtt('\n  WEBVTT - reunião')).toBe(true);
+  });
+
+  it('texto comum, ou WEBVTT no meio, não é .vtt', () => {
+    expect(pareceVtt('Ana: WEBVTT')).toBe(false);
+    expect(pareceVtt('webvtt')).toBe(false);
+    expect(pareceVtt('')).toBe(false);
   });
 });
 

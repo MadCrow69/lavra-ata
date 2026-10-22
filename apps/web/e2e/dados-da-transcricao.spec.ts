@@ -1,4 +1,4 @@
-import { afirmarLimpo, campo, expect, semRolagemHorizontal, test } from './apoio';
+import { afirmarLimpo, campo, colarComoPessoa, expect, semRolagemHorizontal, test } from './apoio';
 import { DURACAO_VTT_MIN, FALANTES_VTT, VTT_REUNIAO } from './fixtures/vtt';
 
 /**
@@ -82,6 +82,33 @@ test.describe('dados tirados da transcrição', () => {
     // Nenhuma chamada a provedor e nenhum arquivo novo do app: tudo foi local.
     expect(rede.chamadas).toEqual([]);
     expect(rede.arquivosDoApp.slice(arquivosAntes)).toEqual([]);
+    await afirmarLimpo(page, rede);
+  });
+
+  test('conteúdo cru de .vtt colado (Ctrl+V) é convertido como o arquivo', async ({
+    app: page,
+    rede,
+  }) => {
+    const transcricao = campo(page, 'Transcrição da reunião');
+    expect(await colarComoPessoa(page, transcricao, VTT_REUNIAO)).toBe('clipboard');
+
+    await expect(transcricao).toHaveValue(/^Marina Teles: Bom dia/);
+    await expect(transcricao).not.toHaveValue(/-->|WEBVTT|<v /);
+    const bloco4 = page.getByRole('region', { name: 'Transcrição' });
+    await expect(
+      bloco4.getByText(
+        'Transcrição .vtt colada convertida: 5 falas e 3 pessoas que falaram — veja a sugestão abaixo.',
+      ),
+    ).toBeVisible();
+    await expect(bloco4.getByText(/^Encontramos 3 pessoas que falaram:/)).toBeVisible();
+    await expect(
+      page
+        .getByRole('region', { name: 'Dados da reunião' })
+        .getByText(`A transcrição dura ${String(DURACAO_VTT_MIN)} min — preencha o início`, {
+          exact: false,
+        }),
+    ).toBeVisible();
+    expect(rede.chamadas).toEqual([]);
     await afirmarLimpo(page, rede);
   });
 });

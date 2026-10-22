@@ -11,8 +11,9 @@ import type { DadosDoVtt } from '../../domain/draft';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
+import { plural } from '../../ui/plural';
 import { PrivacyPreview } from '../privacy/PrivacyPreview';
-import { lerVtt } from '../transcript/vtt';
+import { lerVtt, pareceVtt } from '../transcript/vtt';
 import { pessoasQueFalaram, sugerirFalantes } from './falantes-da-transcricao';
 import { minutosDaDuracao } from './fim-pela-duracao';
 import { marcarCampo } from './focar-campo';
@@ -47,6 +48,12 @@ interface Conteudo {
   vtt: DadosDoVtt | null;
 }
 
+/** O que o navegador põe no lugar de um byte que não é UTF-8. */
+const CARACTERE_ILEGIVEL = String.fromCharCode(0xfffd);
+
+/** De onde veio o conteúdo aplicado: arquivo enviado ou .vtt colado no campo. */
+type Origem = { tipo: 'arquivo'; nome: string } | { tipo: 'colagem' };
+
 interface Status {
   texto: string;
   /** O que havia antes da ação, para "Desfazer". */
@@ -58,7 +65,9 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   const texto = state.transcricao;
   const [erro, setErro] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
-  /** A colagem em curso substitui o campo inteiro (o `change` que vem depois a lê). */
+  /** Há uma colagem em curso (o `change` que vem depois a lê). */
+  const colandoRef = useRef(false);
+  /** A colagem em curso substitui o campo inteiro. */
   const colagemSubstituiRef = useRef(false);
 
   const nivel = nivelDoContador(texto);
@@ -77,27 +86,71 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   // não valem. Colar num trecho é edição do mesmo texto e os mantém.
   const aoColar = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const campo = e.currentTarget;
+    colandoRef.current = true;
     colagemSubstituiRef.current =
       campo.value !== '' && campo.selectionStart === 0 && campo.selectionEnd === campo.value.length;
     // O `change` da colagem chega na mesma tarefa. Se não chegar (texto colado igual ao que havia,
-    // colagem cancelada), a marca cai no próximo ciclo: uma tecla depois nunca apaga o .vtt.
-    setTimeout(() => {
-      colagemSubstituiRef.current = false;
-    }, 0);
+    // colagem cancelada), as marcas caem no próximo ciclo: uma tecla depois nunca apaga o .vtt.
+    setTimeout(zerarMarcasDeColagem, 0);
   };
 
-  /** Segunda barreira: tecla nova (inclusive o Ctrl+V, que vem antes do `paste`) zera a marca. */
-  const aoTeclar = () => {
+  /** Também é a segunda barreira: tecla nova (inclusive o Ctrl+V, que vem antes do `paste`). */
+  const zerarMarcasDeColagem = () => {
+    colandoRef.current = false;
     colagemSubstituiRef.current = false;
   };
 
   const aoDigitar = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    const colou = colandoRef.current;
     const substituiu = colagemSubstituiRef.current;
-    colagemSubstituiRef.current = false;
-    definir(e.target.value, substituiu ? null : undefined);
+    zerarMarcasDeColagem();
+    const valor = e.target.value;
     // Qualquer edição à mão torna o "Desfazer" e os avisos antigos obsoletos.
     setErro(null);
     setStatus(null);
+    // Só a colagem converte: colar o conteúdo cru de um .vtt vale como enviar o arquivo.
+    if (colou && pareceVtt(valor)) {
+      if (aplicarConteudo(valor.trimStart(), true, { tipo: 'colagem' })) return;
+      definir(valor, substituiu ? null : undefined);
+      setErro(
+        'O texto colado começa com WEBVTT, mas não encontrei falas nele, então ficou como foi colado. Confira se copiou a transcrição .vtt inteira ou envie o arquivo .vtt.',
+      );
+      return;
+    }
+    definir(valor, substituiu ? null : undefined);
+  };
+
+  /**
+   * Caminho único do arquivo e do .vtt colado: converte (só o .vtt), grava o texto e os dados do
+   * .vtt e diz o que mudou. Devolve `false` (sem gravar nada) se não sobrou texto.
+   */
+  const aplicarConteudo = (conteudo: string, ehVtt: boolean, origem: Origem): boolean => {
+    // Só o .vtt tem tempos (relativos ao começo da gravação): dão a duração, nunca o início.
+    const lido = ehVtt ? lerVtt(conteudo) : null;
+    const novo = lido?.texto ?? conteudo;
+    if (novo.trim() === '') return false;
+
+    const anterior = texto.trim() === '' ? null : atual;
+    const duracaoMin = minutosDaDuracao(lido?.duracaoMs ?? null);
+    const vtt: DadosDoVtt | null = lido
+      ? { ...(duracaoMin === null ? {} : { duracaoMin }), falantes: lido.falantesDasTags }
+      : null;
+    definir(novo, vtt);
+    const falaram = sugerirFalantes(novo, state.participantes, vtt?.falantes).falantes.length;
+    const comFalantes =
+      falaram > 0 ? ` e ${pessoasQueFalaram(falaram)} — veja a sugestão abaixo.` : '.';
+    const falas = novo.split('\n').length;
+    const partes = [
+      origem.tipo === 'arquivo'
+        ? `Arquivo “${origem.nome}” carregado: ${NUMERO.format(novo.length)} caracteres${comFalantes}`
+        : `Transcrição .vtt colada convertida: ${NUMERO.format(falas)} ${plural(falas, 'fala', 'falas')}${comFalantes}`,
+      anterior === null ? '' : 'O texto anterior foi substituído.',
+      origem.tipo === 'arquivo' && novo.includes(CARACTERE_ILEGIVEL)
+        ? 'Atenção: há caracteres ilegíveis, então o arquivo provavelmente não está em UTF-8. Salve-o como UTF-8 e envie de novo.'
+        : '',
+    ].filter(Boolean);
+    setStatus({ texto: partes.join(' '), anterior });
+    return true;
   };
 
   const aoEscolherArquivo = async (arquivo: File) => {
@@ -129,35 +182,13 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       return;
     }
 
-    // Só o .vtt tem tempos (relativos ao começo da gravação): dão a duração, nunca o início.
-    const lido = ehVtt ? lerVtt(conteudo) : null;
-    const novo = lido?.texto ?? conteudo;
-    if (novo.trim() === '') {
+    if (!aplicarConteudo(conteudo, ehVtt, { tipo: 'arquivo', nome })) {
       setErro(
         ehVtt
           ? `Não encontrei falas em “${nome}”. Confira se é uma transcrição WebVTT e envie de novo.`
           : `O arquivo “${nome}” está vazio. Escolha outro arquivo ou cole o texto no campo.`,
       );
-      return;
     }
-
-    const anterior = texto.trim() === '' ? null : atual;
-    const duracaoMin = minutosDaDuracao(lido?.duracaoMs ?? null);
-    const vtt: DadosDoVtt | null = lido
-      ? { ...(duracaoMin === null ? {} : { duracaoMin }), falantes: lido.falantesDasTags }
-      : null;
-    definir(novo, vtt);
-    const falaram = sugerirFalantes(novo, state.participantes, vtt?.falantes).falantes.length;
-    const partes = [
-      `Arquivo “${nome}” carregado: ${NUMERO.format(novo.length)} caracteres${
-        falaram > 0 ? ` e ${pessoasQueFalaram(falaram)} — veja a sugestão abaixo.` : '.'
-      }`,
-      anterior === null ? '' : 'O texto anterior foi substituído.',
-      novo.includes('�')
-        ? 'Atenção: há caracteres ilegíveis, então o arquivo provavelmente não está em UTF-8. Salve-o como UTF-8 e envie de novo.'
-        : '',
-    ].filter(Boolean);
-    setStatus({ texto: partes.join(' '), anterior });
   };
 
   const limpar = () => {
@@ -221,7 +252,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             spellCheck={false}
             value={texto}
             onPaste={aoColar}
-            onKeyDown={aoTeclar}
+            onKeyDown={zerarMarcasDeColagem}
             onChange={aoDigitar}
           />
         )}

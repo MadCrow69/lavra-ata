@@ -134,6 +134,14 @@ export function vttParaTexto(vtt: string): string {
   return lerVtt(vtt).texto;
 }
 
+/**
+ * O texto é o conteúdo cru de um .vtt: começa por `WEBVTT`, sem contar espaços iniciais nem o BOM
+ * (U+FEFF, que o `trimStart` do JavaScript também remove).
+ */
+export function pareceVtt(texto: string): boolean {
+  return texto.trimStart().startsWith('WEBVTT');
+}
+
 /** O texto de `vttParaTexto`, a duração da gravação e os nomes das marcas `<v>`, numa só leitura. */
 export function lerVtt(vtt: string): VttLido {
   const semBom = vtt.startsWith(String.fromCharCode(0xfeff)) ? vtt.slice(1) : vtt;

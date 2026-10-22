@@ -224,6 +224,81 @@ describe('participantes a partir de quem falou', () => {
   });
 });
 
+describe('conteúdo cru de .vtt colado no campo vale como enviar o arquivo', () => {
+  function campoTranscricao(): HTMLTextAreaElement {
+    return within(blocoTranscricao()).getByLabelText<HTMLTextAreaElement>(
+      /^Transcrição da reunião/,
+    );
+  }
+
+  it('converte em "Nome: fala", sugere quem falou e a duração, e diz o que fez', async () => {
+    const { user } = montar({ dados: { inicio: '14:00' } });
+    await user.click(campoTranscricao());
+    await user.paste(vttFicticio(36));
+
+    const valor = campoTranscricao().value;
+    expect(valor.startsWith('Ana Souza: Bom dia a todos')).toBe(true);
+    expect(valor).not.toMatch(/-->|0f3c2a9e|WEBVTT|<\/?v/);
+    const transcricao = within(blocoTranscricao());
+    expect(transcricao.getByRole('status')).toHaveTextContent(
+      'Transcrição .vtt colada convertida: 36 falas e 4 pessoas que falaram — veja a sugestão abaixo.',
+    );
+    expect(transcricao.getByText(/^Encontramos 4 pessoas que falaram:/)).toBeInTheDocument();
+    expect(within(blocoDados()).getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+  });
+
+  it('BOM e linhas em branco antes do WEBVTT não impedem a conversão', async () => {
+    const { user } = montar();
+    await user.click(campoTranscricao());
+    await user.paste(`${String.fromCharCode(0xfeff)}\n  ${vttFicticio(8)}`);
+    expect(campoTranscricao().value.startsWith('Ana Souza:')).toBe(true);
+  });
+
+  it('texto comum colado não é convertido nem gera aviso', async () => {
+    const { user } = montar();
+    await user.click(campoTranscricao());
+    await user.paste('Ana Souza: 00:00:01.000 --> não é vtt');
+    expect(campoTranscricao()).toHaveValue('Ana Souza: 00:00:01.000 --> não é vtt');
+    expect(within(blocoTranscricao()).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('digitar (sem colar) nunca converte', () => {
+    montar();
+    fireEvent.change(campoTranscricao(), { target: { value: vttFicticio(4) } });
+    expect(campoTranscricao().value.startsWith('WEBVTT')).toBe(true);
+    expect(within(blocoDados()).queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+  });
+
+  it('WEBVTT sem falas: o texto fica como colado e o erro diz causa e ação', async () => {
+    const { user } = montar();
+    await user.click(campoTranscricao());
+    await user.paste('WEBVTT\n\nNOTE só uma nota');
+    expect(campoTranscricao()).toHaveValue('WEBVTT\n\nNOTE só uma nota');
+    expect(within(blocoTranscricao()).getByRole('alert')).toHaveTextContent(
+      'O texto colado começa com WEBVTT, mas não encontrei falas nele, então ficou como foi colado. Confira se copiou a transcrição .vtt inteira ou envie o arquivo .vtt.',
+    );
+  });
+
+  it('colar outro .vtt por cima de tudo troca os dados do .vtt; Desfazer devolve o anterior', async () => {
+    const { user } = montar({ dados: { inicio: '14:00' } });
+    await user.click(campoTranscricao());
+    await user.paste(vttFicticio(36));
+    const novo = [
+      'WEBVTT',
+      '',
+      '00:00:00.000 --> 00:10:00.000',
+      '<v Iva Reis>Outra reunião.</v>',
+    ].join('\n');
+    campoTranscricao().setSelectionRange(0, campoTranscricao().value.length);
+    await user.paste(novo);
+    expect(campoTranscricao()).toHaveValue('Iva Reis: Outra reunião.');
+    expect(within(blocoDados()).getByText('A transcrição dura 10 min.')).toBeInTheDocument();
+    await user.click(within(blocoTranscricao()).getByRole('button', { name: 'Desfazer' }));
+    expect(campoTranscricao().value.startsWith('Ana Souza:')).toBe(true);
+    expect(within(blocoDados()).getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+  });
+});
+
 describe('colagem que não muda o texto não deixa marca para depois', () => {
   it('uma edição posterior (sem tecla ou com tecla) mantém a duração do .vtt', async () => {
     const { user, container } = montar({ dados: { inicio: '14:00' } });

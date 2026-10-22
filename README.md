@@ -10,7 +10,7 @@ Gerador de atas de reunião brasileiras a partir da transcrição, direto no nav
 
 ## Como funciona
 
-1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição. Se a transcrição traz quem falou (falas "Nome: fala" ou as marcas `<v Nome>` do `.vtt`), o app sugere essas pessoas como participantes (nome todo em maiúsculas ou minúsculas entra com a caixa padrão: "MARIA DE ALMEIDA" vira "Maria de Almeida"; a transcrição não muda); com o `.vtt`, sugere também o término a partir do início e da duração da gravação. Nada entra sem o seu clique.
+1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição (ou envia o `.txt`/`.vtt`; o conteúdo de um `.vtt` colado no campo é convertido como o arquivo). Se a transcrição traz quem falou (falas "Nome: fala" ou as marcas `<v Nome>` do `.vtt`), o app sugere essas pessoas como participantes (nome todo em maiúsculas ou minúsculas entra com a caixa padrão: "MARIA DE ALMEIDA" vira "Maria de Almeida"; a transcrição não muda); com o `.vtt`, sugere também o término a partir do início e da duração da gravação. Nada entra sem o seu clique.
 2. O app **mascara os identificadores pessoais** (CPF, CNPJ, telefone, e-mail, cartão etc.) com [`@lavra/pii-br`](packages/pii-br/README.md) e mostra, antes do envio, o que vai para a IA ("Original" × "Enviado à IA").
 3. A chamada vai **direto do navegador ao provedor**, sem passar por servidor do Lavra. Se um provedor falhar, o app tenta o próximo da sua lista de prioridade e registra a troca na seção (ex.: "Gerado por Gemini · gemini-3.8-flash — OpenAI falhou (limite de uso)").
 4. A IA devolve JSON validado por schema; o app põe os dados originais de volta **neste navegador** e monta a ata em uma folha A4, em texto puro (nunca HTML vindo da IA). Você revisa seção por seção: edita à mão, regera ou ajusta com uma instrução.
@@ -105,7 +105,7 @@ formulário (dados, participantes) ───────────────
 - **Sem backend:** o site é estático (GitHub Pages) e as únicas conexões são as do navegador aos três provedores.
 - **CSP em `<meta>`** (o GitHub Pages não permite cabeçalhos próprios), gerada de uma fonte única e conferida no build; o E2E roda contra o build com a CSP ativa e reprova qualquer requisição a outro host ou violação da política.
 - **Exportação local:** PDF e DOCX são montados no navegador, a partir do mesmo modelo da folha.
-- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.172 testes unitários (Vitest) e 43 testes E2E (Playwright).
+- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.180 testes unitários (Vitest) e 44 testes E2E (Playwright).
 
 ## Limitações
 
