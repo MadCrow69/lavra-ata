@@ -14,6 +14,11 @@ import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
 import type { LogoDoc } from '../../document/model';
 import { criarLogoStore, type LogoStore } from '../../logo/logo-store';
+import { PreferenciasProvider } from '../../preferencias/PreferenciasContext';
+import {
+  criarPreferenciasStore,
+  type PreferenciasStore,
+} from '../../preferencias/preferencias-store';
 import { registrarTipoDeTeste } from '../../test/tipo-de-teste';
 import { ToastProvider } from '../../ui/Toast';
 import { Workbench } from './Workbench';
@@ -55,6 +60,7 @@ interface Opcoes {
   gerar?: Gerar;
   store?: KeyStore;
   logo?: { store?: LogoStore; processar?: (arquivo: File) => Promise<LogoDoc> };
+  preferencias?: PreferenciasStore;
 }
 
 const LOGO_FICTICIA: LogoDoc = {
@@ -63,18 +69,25 @@ const LOGO_FICTICIA: LogoDoc = {
   altura: 100,
 };
 
-function renderizar({ gerar = () => Promise.resolve(resposta()), store, logo }: Opcoes = {}) {
+function renderizar({
+  gerar = () => Promise.resolve(resposta()),
+  store,
+  logo,
+  preferencias,
+}: Opcoes = {}) {
   const espiao = vi.fn<Gerar>(gerar);
   const keyStore = store ?? criarKeyStore(null);
   const utils = render(
-    <KeysProvider store={keyStore}>
-      <ToastProvider>
-        <Workbench
-          opcoesCadeia={{ adaptadores: adaptadores(espiao), esperaRetryMs: 0 }}
-          {...(logo ? { logo } : {})}
-        />
-      </ToastProvider>
-    </KeysProvider>,
+    <PreferenciasProvider store={preferencias ?? criarPreferenciasStore(null, null)}>
+      <KeysProvider store={keyStore}>
+        <ToastProvider>
+          <Workbench
+            opcoesCadeia={{ adaptadores: adaptadores(espiao), esperaRetryMs: 0 }}
+            {...(logo ? { logo } : {})}
+          />
+        </ToastProvider>
+      </KeysProvider>
+    </PreferenciasProvider>,
   );
   return { ...utils, gerar: espiao, store: keyStore, user: userEvent.setup() };
 }

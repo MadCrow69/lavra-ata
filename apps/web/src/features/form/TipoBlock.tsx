@@ -4,11 +4,14 @@ import type { AtaTypeDefinition } from '../../ata-types/types';
 import { useDraft } from '../../domain/DraftContext';
 import { TONS, type Tom } from '../../domain/draft';
 import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
+import { usePreferencias } from '../../preferencias/PreferenciasContext';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
+import { DestaqueField } from './DestaqueField';
 import { FormBlock } from './FormBlock';
+import { LembrarPreferencias } from './LembrarPreferencias';
 import { LogoField } from './LogoField';
 import styles from './form.module.css';
 
@@ -25,6 +28,7 @@ export function TipoBlock() {
   const motivoId = useId();
   const { operacao } = useOperacaoIA();
   const { mostrar } = useToast();
+  const preferencias = usePreferencias();
   const atual = obterTipo(state.tipoId);
   const iaOcupada = operacao !== null;
   /** Tipo escolhido que espera a confirmação de descartar a ata gerada. */
@@ -33,6 +37,7 @@ export function TipoBlock() {
 
   const trocar = (tipo: AtaTypeDefinition, descartou: boolean) => {
     dispatch({ type: 'definirTipo', tipoId: tipo.id });
+    preferencias.definir({ tipoId: tipo.id });
     mostrar({
       titulo: descartou
         ? `Tipo de ata: ${tipo.rotulo}. A ata gerada foi descartada; confira os campos marcados em “falta”.`
@@ -83,7 +88,9 @@ export function TipoBlock() {
               value={state.tom}
               onChange={(e) => {
                 const tom = TONS.find((t) => t === e.target.value);
-                if (tom) dispatch({ type: 'definirTom', tom });
+                if (!tom) return;
+                dispatch({ type: 'definirTom', tom });
+                preferencias.definir({ tom });
               }}
             >
               {TONS.map((tom) => (
@@ -95,6 +102,8 @@ export function TipoBlock() {
           )}
         </Field>
       </div>
+      <DestaqueField />
+      <LembrarPreferencias />
       <LogoField />
       <Modal
         aberto={pendente !== null}

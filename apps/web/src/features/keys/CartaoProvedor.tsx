@@ -3,6 +3,7 @@ import { ErroProvedor, mensagemSemCredito } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
 import { MODELOS, ROTULO_PROVEDOR, URL_CHAVE } from '../../config/models';
+import { usePreferencias } from '../../preferencias/PreferenciasContext';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import styles from './keys.module.css';
@@ -35,17 +36,22 @@ export function CartaoProvedor({
   registrarSeta,
 }: CartaoProps) {
   const keys = useKeys();
+  const preferencias = usePreferencias();
   const rotulo = ROTULO_PROVEDOR[provedor];
   const tituloId = useId();
   const opcoes = MODELOS[provedor].opcoes;
   const atual = keys.listar().find((c) => c.provedor === provedor);
 
   const [chave, setChave] = useState(atual?.chave ?? '');
+  // Modelo de partida: o da chave guardada, senão o lembrado nas preferências, senão o padrão.
+  const [modeloInicial] = useState(
+    () => atual?.modelo ?? preferencias.atual().modelos?.[provedor] ?? MODELOS[provedor].padrao,
+  );
   const [modo, setModo] = useState<'lista' | 'outro'>(
-    atual && !opcoes.some((o) => o.id === atual.modelo) ? 'outro' : 'lista',
+    opcoes.some((o) => o.id === modeloInicial) ? 'lista' : 'outro',
   );
   // Em modo "lista" é o id escolhido; em modo "outro", o que a pessoa digitou.
-  const [modelo, setModelo] = useState(atual?.modelo ?? MODELOS[provedor].padrao);
+  const [modelo, setModelo] = useState(modeloInicial);
   const [visivel, setVisivel] = useState(false);
   const [testando, setTestando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
@@ -93,11 +99,14 @@ export function CartaoProvedor({
     setModo('lista');
     setModelo(valor);
     gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
+    preferencias.definir({ modelos: { [provedor]: valor } });
   };
 
   const aoDigitarModelo = (valor: string): void => {
     setModelo(valor);
     gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
+    // Em branco não é uma escolha (vale o padrão): o store ignora e mantém o modelo lembrado.
+    preferencias.definir({ modelos: { [provedor]: valor } });
   };
 
   const apagar = (): void => {

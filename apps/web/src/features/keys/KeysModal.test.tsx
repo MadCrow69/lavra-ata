@@ -9,6 +9,11 @@ import type { ProviderAdapter, ProviderId } from '../../ai/types';
 import { erroSemCredito } from '../../ai/providers/comum';
 import { MODELOS, URL_CHAVE } from '../../config/models';
 import { CHAVES } from '../../config/storage-keys';
+import { PreferenciasProvider } from '../../preferencias/PreferenciasContext';
+import {
+  criarPreferenciasStore,
+  type PreferenciasStore,
+} from '../../preferencias/preferencias-store';
 import { KeysModal } from './KeysModal';
 
 const CHAVE = 'sk-teste-ficticia-9f3a7c21';
@@ -103,6 +108,7 @@ async function montar(
     testar?: Partial<Record<ProviderId, Testar>>;
     onFechar?: () => void;
     storage?: Storage;
+    preferencias?: PreferenciasStore;
   } = {},
 ) {
   const user = userEvent.setup();
@@ -110,9 +116,14 @@ async function montar(
   const store = criarKeyStore(opcoes.storage ?? fake.storage);
   const adaptadores = adaptadoresCom(opcoes.testar);
   render(
-    <KeysProvider store={store}>
-      <Host adaptadores={adaptadores} {...(opcoes.onFechar ? { onFechar: opcoes.onFechar } : {})} />
-    </KeysProvider>,
+    <PreferenciasProvider store={opcoes.preferencias ?? criarPreferenciasStore(null, null)}>
+      <KeysProvider store={store}>
+        <Host
+          adaptadores={adaptadores}
+          {...(opcoes.onFechar ? { onFechar: opcoes.onFechar } : {})}
+        />
+      </KeysProvider>
+    </PreferenciasProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Abrir chaves' }));
   return { user, store, adaptadores, ...fake };
@@ -550,14 +561,81 @@ describe('KeysModal', () => {
     });
     const store = criarKeyStore(fake.storage);
     render(
-      <KeysProvider store={store}>
-        <Host adaptadores={adaptadoresCom()} />
-      </KeysProvider>,
+      <PreferenciasProvider store={criarPreferenciasStore(null, null)}>
+        <KeysProvider store={store}>
+          <Host adaptadores={adaptadoresCom()} />
+        </KeysProvider>
+      </PreferenciasProvider>,
     );
     await user.click(screen.getByRole('button', { name: 'Abrir chaves' }));
     expect(campoChave('OpenAI')).toHaveValue(CHAVE);
     expect(within(cartao('OpenAI')).getByLabelText('Id do modelo')).toHaveValue('modelo-livre-1');
     expect(screen.getByRole('checkbox', { name: 'Lembrar neste navegador' })).toBeChecked();
+  });
+
+  describe('preferências lembradas', () => {
+    it('mover Anthropic para cima grava a ordem nas preferências', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.click(screen.getByRole('button', { name: 'Mover Anthropic para cima' }));
+      expect(preferencias.atual().ordem).toEqual(['openai', 'anthropic', 'gemini']);
+    });
+
+    it('trocar o modelo grava modelos.openai (e só ele)', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      const escolha = MODELOS.openai.opcoes.find((o) => o.id !== MODELOS.openai.padrao);
+      expect(escolha).toBeDefined();
+      await user.selectOptions(
+        within(cartao('OpenAI')).getByLabelText('Modelo'),
+        escolha?.id ?? '',
+      );
+      expect(preferencias.atual().modelos).toEqual({ openai: escolha?.id });
+    });
+
+    it('id livre digitado também é lembrado, aparado', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      await user.type(within(cartao('OpenAI')).getByLabelText('Id do modelo'), ' meu-modelo ');
+      expect(preferencias.atual().modelos).toEqual({ openai: 'meu-modelo' });
+    });
+
+    it('cartão sem chave abre com o modelo lembrado', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const lembrado = MODELOS.openai.opcoes.find((o) => o.id !== MODELOS.openai.padrao);
+      preferencias.definir({ modelos: { openai: lembrado?.id ?? '' } });
+      await montar({ preferencias });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveValue(lembrado?.id);
+      // Digitar a chave grava com o modelo lembrado, não com o padrão.
+      const user = userEvent.setup();
+      await user.type(campoChave('OpenAI'), CHAVE);
+      expect(screen.getByTestId('cadeia')).toHaveTextContent(`openai:${lembrado?.id ?? ''}`);
+    });
+
+    it('modelo lembrado fora da lista abre em "Outro modelo…" com o id no campo', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      preferencias.definir({ modelos: { openai: 'modelo-livre-9' } });
+      await montar({ preferencias });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveDisplayValue('Outro modelo…');
+      expect(within(cartao('OpenAI')).getByLabelText('Id do modelo')).toHaveValue('modelo-livre-9');
+    });
+
+    it('a chave guardada vence o modelo lembrado', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      preferencias.definir({ modelos: { openai: 'modelo-livre-9' } });
+      const fake = storageFalso();
+      const antes = criarKeyStore(fake.storage);
+      antes.definirLembrar(true);
+      antes.definir({
+        provedor: 'openai',
+        chave: CHAVE,
+        modelo: MODELOS.openai.padrao,
+        estado: 'nao_testada',
+      });
+      await montar({ preferencias, storage: fake.storage });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveValue(MODELOS.openai.padrao);
+    });
   });
 
   it('link "Onde conseguir a chave" abre a página oficial em nova aba, com aviso para leitor de tela', async () => {

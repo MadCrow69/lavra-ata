@@ -70,7 +70,7 @@ function ehProvedor(v: unknown): v is ProviderId {
 }
 
 /** Ordem válida: ids conhecidos, sem repetição; o que faltar entra no fim na ordem padrão. */
-function normalizarOrdem(ordem: readonly unknown[]): ProviderId[] {
+export function normalizarOrdem(ordem: readonly unknown[]): ProviderId[] {
   const vistos = new Set<ProviderId>();
   for (const p of ordem) if (ehProvedor(p)) vistos.add(p);
   for (const p of PROVEDORES) vistos.add(p);
@@ -109,12 +109,19 @@ function lerPersistido(bruto: string | null): Persistido | null {
 /**
  * Guarda as chaves de API na memória da página. Só vão para `storage` (por padrão
  * `localStorage`) quando a pessoa marca "Lembrar neste navegador". `null` = nunca persiste.
+ * `ordemInicial` (preferência lembrada) define a ordem de partida quando não há chaves lembradas.
  * Nunca registra a chave em log nem lança por falha de armazenamento.
  */
-export function criarKeyStore(storage?: Storage | null): KeyStore {
+export function criarKeyStore(
+  storage?: Storage | null,
+  ordemInicial?: readonly ProviderId[],
+): KeyStore {
   const alvo = storage === undefined ? storageOuNulo('local') : storage;
   const chaves = new Map<ProviderId, ChaveProvedor>();
-  let ordem: ProviderId[] = [...PROVEDORES];
+  // Preferência lembrada de ordem: só vale sem chaves lembradas (a ordem gravada com elas vence).
+  const ordemBase = (): ProviderId[] =>
+    ordemInicial ? normalizarOrdem(ordemInicial) : [...PROVEDORES];
+  let ordem: ProviderId[] = ordemBase();
   let lembrar = false;
   let bloqueado = false;
   let revisao = 0;
@@ -238,7 +245,7 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
         .map((c) => ({ id: c.provedor, modelo: c.modelo, chave: c.chave })),
     apagarTudo() {
       chaves.clear();
-      ordem = [...PROVEDORES];
+      ordem = ordemBase();
       lembrar = false;
       bloqueado = false;
       apagarGravado();

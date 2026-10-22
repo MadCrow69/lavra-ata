@@ -307,6 +307,20 @@ export async function violacoesDeCsp(page: Page): Promise<string[]> {
   return page.evaluate(() => window.__violacoes ?? []);
 }
 
+/** Toda a memória do navegador desta página (chaves e valores), para procurar a chave de API. */
+export async function conteudoDosStorages(
+  page: Page,
+): Promise<{ local: string[]; sessao: string[] }> {
+  return page.evaluate(() => {
+    const ler = (storage: Storage) =>
+      Array.from({ length: storage.length }, (_, i) => {
+        const chave = storage.key(i) ?? '';
+        return `${chave}=${storage.getItem(chave) ?? ''}`;
+      });
+    return { local: ler(localStorage), sessao: ler(sessionStorage) };
+  });
+}
+
 export function folha(page: Page): Locator {
   return page.getByRole('article', { name: 'Prévia da ata' });
 }

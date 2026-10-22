@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 import {
   CHAVE_GEMINI,
   CHAVE_OPENAI,
@@ -8,6 +7,7 @@ import {
   TRANSCRICAO_BASICA,
   colarComoPessoa,
   colarParticipantes,
+  conteudoDosStorages,
   configurarChaves,
   errosInesperados,
   expect,
@@ -33,18 +33,6 @@ function transcricaoGrande(tamanho: number): string {
     total += fala.length + 1;
   }
   return falas.join('\n').slice(0, tamanho);
-}
-
-/** Toda a memória do navegador desta página (chaves e valores), para procurar a chave de API. */
-async function conteudoDosStorages(page: Page): Promise<{ local: string[]; sessao: string[] }> {
-  return page.evaluate(() => {
-    const ler = (storage: Storage) =>
-      Array.from({ length: storage.length }, (_, i) => {
-        const chave = storage.key(i) ?? '';
-        return `${chave}=${storage.getItem(chave) ?? ''}`;
-      });
-    return { local: ler(localStorage), sessao: ler(sessionStorage) };
-  });
 }
 
 test.describe('fluxo da ata no build com CSP ativa', () => {

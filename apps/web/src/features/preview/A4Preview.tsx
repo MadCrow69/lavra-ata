@@ -11,6 +11,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { DESTAQUE_PADRAO } from '../../config/destaque';
 import { LOGO_ACCEPT } from '../../config/logo';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
@@ -26,6 +27,7 @@ import type { Atribuicao, Presenca } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 import { textoDeGeracao } from '../../generation/atribuicao';
 import { useLogo } from '../../logo/LogoContext';
+import { usePreferencias } from '../../preferencias/PreferenciasContext';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { plural } from '../../ui/plural';
 import { useToast } from '../../ui/Toast';
@@ -471,9 +473,10 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
   // Só o que o documento lê: digitar na transcrição não recompõe a folha.
   const { logo, processando, erro, aviso, enviar } = useLogo();
   const { mostrar } = useToast();
+  const destaque = usePreferencias().atual().destaque ?? DESTAQUE_PADRAO;
   const modelo = useMemo(
-    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo, logo),
-    [dados, pauta, participantes, resultado, tipo, logo],
+    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo, logo, destaque),
+    [dados, pauta, participantes, resultado, tipo, logo, destaque],
   );
   // O envio feito aqui mostra o erro num aviso (toast): no celular o bloco de formulário, que também
   // mostra o erro, está em outra aba. Só avisa pelo que ESTE botão enviou.

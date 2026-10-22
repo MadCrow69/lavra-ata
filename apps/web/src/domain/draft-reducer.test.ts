@@ -49,6 +49,12 @@ describe('criarRascunho', () => {
   it('aceita o tipo', () => {
     expect(criarRascunho('assembleia').tipoId).toBe('assembleia');
   });
+
+  it('aceita o tipo e o tom (preferências lembradas)', () => {
+    const d = criarRascunho('cipa', 'conciso');
+    expect(d.tipoId).toBe('cipa');
+    expect(d.tom).toBe('conciso');
+  });
 });
 
 describe('draftReducer', () => {

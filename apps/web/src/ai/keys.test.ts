@@ -353,4 +353,32 @@ describe('criarKeyStore', () => {
     store.remover('openai');
     expect(ouvinte).toHaveBeenCalledTimes(1);
   });
+
+  describe('ordem inicial (preferências)', () => {
+    it('sem chaves lembradas, a ordem inicial vale e completa o que faltar', () => {
+      const { storage } = storageFalso();
+      expect(criarKeyStore(storage, ['anthropic', 'openai']).ordem()).toEqual([
+        'anthropic',
+        'openai',
+        'gemini',
+      ]);
+    });
+
+    it('com chaves lembradas, a ordem gravada vence a ordem inicial', () => {
+      const { storage } = storageFalso();
+      const primeira = criarKeyStore(storage);
+      primeira.definirLembrar(true);
+      primeira.definir(chave());
+      primeira.reordenar(['gemini', 'openai', 'anthropic']);
+      const nova = criarKeyStore(storage, ['anthropic', 'openai']);
+      expect(nova.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
+    });
+
+    it('apagar tudo volta à ordem inicial, não à de fábrica', () => {
+      const store = criarKeyStore(null, ['anthropic']);
+      store.reordenar(['openai', 'gemini', 'anthropic']);
+      store.apagarTudo();
+      expect(store.ordem()).toEqual(['anthropic', 'openai', 'gemini']);
+    });
+  });
 });

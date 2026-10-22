@@ -4,10 +4,12 @@ import type { OpcoesCadeia } from '../../ai/chain';
 import { ESPERA_SALVAR_RASCUNHO_MS } from '../../config/ui';
 import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
+import { criarRascunho } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
 import { OperacaoIAProvider, useOperacaoIA } from '../../generation/OperacaoIA';
 import { LogoProvider, useLogo } from '../../logo/LogoContext';
 import type { LogoStore } from '../../logo/logo-store';
+import { usePreferencias } from '../../preferencias/PreferenciasContext';
 import type { LogoDoc } from '../../document/model';
 import { AppShell } from '../../shell/AppShell';
 import type { AbaId } from '../../shell/MobileTabs';
@@ -275,12 +277,19 @@ export interface WorkbenchProps {
 export function Workbench({ opcoesCadeia, logo }: WorkbenchProps) {
   // Lido uma vez, na abertura: o que esta aba guardou antes de recarregar.
   const [recuperado] = useState(() => carregarRascunho());
+  // Sem rascunho na sessão, a ata nova parte do tipo e do tom lembrados (se houver).
+  const preferencias = usePreferencias();
+  const [inicial] = useState(
+    () =>
+      recuperado ??
+      criarRascunho(obterTipo(preferencias.atual().tipoId ?? '').id, preferencias.atual().tom),
+  );
   return (
     <LogoProvider
       {...(logo?.store ? { store: logo.store } : {})}
       {...(logo?.processar ? { processar: logo.processar } : {})}
     >
-      <DraftProvider {...(recuperado ? { inicial: recuperado } : {})}>
+      <DraftProvider inicial={inicial}>
         <OperacaoIAProvider>
           <Bancada
             recuperou={recuperado !== null && temConteudo(recuperado)}

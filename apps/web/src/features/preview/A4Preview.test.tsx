@@ -10,6 +10,8 @@ import {
   type ResultadoAta,
 } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
+import { corDoDestaque } from '../../config/destaque';
+import { criarPreferenciasStore } from '../../preferencias/preferencias-store';
 import { renderizarComProvedores } from '../../test/provedores';
 import { TIPO_DE_TESTE, registrarTipoDeTeste } from '../../test/tipo-de-teste';
 import { A4Preview } from './A4Preview';
@@ -78,6 +80,14 @@ function renderizar(inicial: AtaDraft) {
 }
 
 describe('A4Preview: cor de destaque', () => {
+  it('usa a cor de destaque das preferências', () => {
+    const preferenciasStore = criarPreferenciasStore(null, null);
+    preferenciasStore.definir({ destaque: 'vinho' });
+    renderizarComProvedores(<A4Preview />, { inicial: rascunho(), preferenciasStore });
+    const folha = screen.getByRole('article', { name: 'Prévia da ata' });
+    expect(folha.style.getPropertyValue('--cor-folha-destaque')).toBe(corDoDestaque('vinho'));
+  });
+
   it('a folha declara a cor de destaque (padrão: a tinta do documento)', () => {
     renderizar(rascunho());
     const folha = screen.getByRole('article', { name: 'Prévia da ata' });

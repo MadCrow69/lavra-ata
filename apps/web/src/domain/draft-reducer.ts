@@ -1,7 +1,7 @@
 import { TIPO_PADRAO_ID, dadosAoTrocarDeTipo, obterTipo } from '../ata-types/registry';
 import { textoLimpo } from '../ata-types/texto-modelo';
 import { calcularAdicao } from './participantes';
-import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta } from './draft';
+import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta, Tom } from './draft';
 
 /** Chave de seção usada para `avisos`, `atribuicao` e `editadas` dos encaminhamentos. */
 export const CHAVE_ENCAMINHAMENTOS = 'encaminhamentos';
@@ -13,11 +13,11 @@ export const CHAVE_ENCAMINHAMENTOS = 'encaminhamentos';
  */
 export const CHAVE_AVISOS_GERAIS = '_geral';
 
-export function criarRascunho(tipoId: string = TIPO_PADRAO_ID): AtaDraft {
+export function criarRascunho(tipoId: string = TIPO_PADRAO_ID, tom: Tom = 'formal'): AtaDraft {
   return {
     versao: 1,
     tipoId,
-    tom: 'formal',
+    tom,
     dados: {},
     pauta: [],
     participantes: [],
@@ -156,6 +156,6 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
       };
     }
     case 'novaAta':
-      return { ...criarRascunho(state.tipoId), tom: state.tom };
+      return criarRascunho(state.tipoId, state.tom);
   }
 }
