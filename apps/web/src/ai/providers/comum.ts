@@ -1,4 +1,4 @@
-import { ErroProvedor, erroProvedor, mensagemSemCredito, sanitizar } from '../errors';
+import { ErroProvedor, erroProvedor, mensagemDaRecusa, sanitizar } from '../errors';
 import { validarSchema } from '../json-schema';
 import type { JsonSchema, ProviderId } from '../types';
 
@@ -30,6 +30,8 @@ const PADRAO_SEM_CREDITO = /credit balance|insufficient|billing|quota/i;
  */
 const PADRAO_COTA_ESGOTADA = /insufficient_quota/i;
 const PADRAO_CHAVE_INVALIDA = /API key not valid|API_KEY_INVALID/i;
+/** Anthropic, HTTP 400: chave de escopo "Organização", que exige o cabeçalho do workspace. */
+const PADRAO_SEM_WORKSPACE = /not scoped to a workspace|anthropic-workspace-id/i;
 const PADRAO_MUITO_LONGO =
   /context[_ ]length|prompt is too long|maximum context|exceeds the maximum number of (input )?tokens|input token count|too many tokens|request too large/i;
 const PADRAO_PARAMETRO =
@@ -73,10 +75,24 @@ function lerCorpoDeErro(texto: string): CorpoDeErro {
 
 /** Conta sem crédito ou saldo: a chave não adianta até a pessoa recarregar; sem retry. */
 export function erroSemCredito(provedor: ProviderId, status: number): ErroProvedor {
-  return new ErroProvedor('chave_invalida', provedor, mensagemSemCredito(provedor), status, {
-    repetivel: false,
-    semCredito: true,
-  });
+  return new ErroProvedor(
+    'chave_invalida',
+    provedor,
+    mensagemDaRecusa(provedor, 'sem_credito'),
+    status,
+    { repetivel: false, motivo: 'sem_credito' },
+  );
+}
+
+/** Chave da Anthropic sem workspace: só uma chave nova resolve; sem retry. */
+export function erroSemWorkspace(status: number): ErroProvedor {
+  return new ErroProvedor(
+    'chave_invalida',
+    'anthropic',
+    mensagemDaRecusa('anthropic', 'sem_workspace'),
+    status,
+    { repetivel: false, motivo: 'sem_workspace' },
+  );
 }
 
 async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProvedor> {
@@ -99,6 +115,9 @@ async function erroDeResposta(resp: Response, c: ChamadaHttp): Promise<ErroProve
   }
   if (status >= 500 || status === 408) {
     return erroProvedor('instavel', provedor, { status, detalhe, repetivel: true });
+  }
+  if (provedor === 'anthropic' && status === 400 && PADRAO_SEM_WORKSPACE.test(corpo.pistas)) {
+    return erroSemWorkspace(status);
   }
   // O Gemini devolve chave inválida como 400 INVALID_ARGUMENT, não como 401/403.
   if (PADRAO_CHAVE_INVALIDA.test(corpo.pistas)) {

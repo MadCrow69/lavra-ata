@@ -1,7 +1,15 @@
 import { TIPO_PADRAO_ID, dadosAoTrocarDeTipo, obterTipo } from '../ata-types/registry';
 import { textoLimpo } from '../ata-types/texto-modelo';
 import { calcularAdicao } from './participantes';
-import type { AtaDraft, Atribuicao, DraftAction, Participante, ResultadoAta, Tom } from './draft';
+import {
+  dadosDoVttValidos,
+  type AtaDraft,
+  type Atribuicao,
+  type DraftAction,
+  type Participante,
+  type ResultadoAta,
+  type Tom,
+} from './draft';
 
 /** Chave de seção usada para `avisos`, `atribuicao` e `editadas` dos encaminhamentos. */
 export const CHAVE_ENCAMINHAMENTOS = 'encaminhamentos';
@@ -139,8 +147,13 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
       };
     case 'removerParticipante':
       return { ...state, participantes: state.participantes.filter((p) => p.id !== action.id) };
-    case 'definirTranscricao':
-      return { ...state, transcricao: action.texto };
+    case 'definirTranscricao': {
+      const { vtt: anterior, ...resto } = state;
+      const vtt = dadosDoVttValidos(
+        action.texto.trim() === '' ? null : action.vtt === undefined ? anterior : action.vtt,
+      );
+      return { ...resto, transcricao: action.texto, ...(vtt === null ? {} : { vtt }) };
+    }
     case 'registrarResultado':
       return { ...state, resultado: action.resultado, mapa: action.mapa };
     case 'substituirSecao': {

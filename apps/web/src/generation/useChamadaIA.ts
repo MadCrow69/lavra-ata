@@ -99,7 +99,7 @@ export function useChamadaIA(
       const r = await chamar(controle.signal, {
         ...opcoesCadeia,
         aoRecusarChave: (cfg, erro) => {
-          keys.definirEstado(cfg.id, cfg.chave, 'invalida', erro.semCredito);
+          keys.definirEstado(cfg.id, cfg.chave, 'invalida', erro.motivo);
         },
       });
       // Cancelada ou interrompida ("Nova ata") enquanto esperava: o resultado tardio é descartado.

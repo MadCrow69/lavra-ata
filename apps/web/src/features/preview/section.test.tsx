@@ -139,6 +139,8 @@ function EdicaoPorFora() {
 interface Opcoes {
   inicial?: AtaDraft;
   chaves?: ChaveProvedor[];
+  /** Ordem escolhida pela pessoa; ausente = a ordem padrão (Gemini primeiro). */
+  ordem?: ProviderId[];
   impl?: Partial<Record<ProviderId, Gerar>>;
   comBarra?: boolean;
   comEdicaoPorFora?: boolean;
@@ -149,6 +151,7 @@ interface Opcoes {
 function renderizar({
   inicial = rascunho(),
   chaves = [GEMINI],
+  ordem,
   impl = {},
   comBarra,
   comEdicaoPorFora,
@@ -156,6 +159,7 @@ function renderizar({
 }: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
+  if (ordem) store.reordenar(ordem);
   const { a, gerar } = adaptadores(impl);
   const opcoesCadeia = { adaptadores: a, esperaRetryMs: 0 };
   const conteudo = (
@@ -448,6 +452,8 @@ describe('revisão por seção: regerar e ajustar', () => {
         { provedor: 'openai', chave: 'sk-teste-ficticia-1', modelo: 'gpt-6-luna', estado: 'ok' },
         GEMINI,
       ],
+      // A pessoa pôs a OpenAI na frente (a escolha dela vence a ordem padrão).
+      ordem: ['openai', 'gemini', 'anthropic'],
       impl: {
         openai: () => Promise.reject(erroProvedor('limite', 'openai')),
         gemini: () => Promise.resolve(respostaBlocos('Resumo do segundo provedor.')),

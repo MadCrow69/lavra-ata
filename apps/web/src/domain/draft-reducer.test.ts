@@ -176,6 +176,59 @@ describe('draftReducer', () => {
     expect(d.transcricao).toBe('fala');
   });
 
+  describe('dados do .vtt (duração e nomes das marcas <v>)', () => {
+    const VTT = { duracaoMin: 72, falantes: ['Souza, Ana', 'Rui Matos (Convidado)'] };
+
+    it('definirTranscricao com vtt grava; null apaga', () => {
+      let d = draftReducer(criarRascunho(), {
+        type: 'definirTranscricao',
+        texto: 'Ana: oi',
+        vtt: VTT,
+      });
+      expect(d.vtt).toEqual(VTT);
+      d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi', vtt: null });
+      expect(d).not.toHaveProperty('vtt');
+    });
+
+    it('editar o texto à mão mantém os dados; esvaziar o texto os apaga', () => {
+      let d = draftReducer(criarRascunho(), {
+        type: 'definirTranscricao',
+        texto: 'Ana: oi',
+        vtt: VTT,
+      });
+      d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi, gente' });
+      expect(d.vtt).toEqual(VTT);
+      d = draftReducer(d, { type: 'definirTranscricao', texto: '   ' });
+      expect(d).not.toHaveProperty('vtt');
+    });
+
+    it('duração inválida (zero, negativa, fracionada) cai; os nomes ficam', () => {
+      for (const ruim of [0, -3, 1.5, Number.NaN]) {
+        const d = draftReducer(criarRascunho(), {
+          type: 'definirTranscricao',
+          texto: 'x',
+          vtt: { duracaoMin: ruim, falantes: ['Ana'] },
+        });
+        expect(d.vtt).toEqual({ falantes: ['Ana'] });
+      }
+    });
+
+    it('sem duração válida nem nomes, nada é gravado', () => {
+      const d = draftReducer(criarRascunho(), {
+        type: 'definirTranscricao',
+        texto: 'x',
+        vtt: { duracaoMin: 0, falantes: ['', '  '] },
+      });
+      expect(d).not.toHaveProperty('vtt');
+    });
+
+    it('novaAta apaga os dados do .vtt', () => {
+      let d = draftReducer(criarRascunho(), { type: 'definirTranscricao', texto: 'x', vtt: VTT });
+      d = draftReducer(d, { type: 'novaAta' });
+      expect(d).not.toHaveProperty('vtt');
+    });
+  });
+
   describe('participantes', () => {
     it('adiciona com id único e valores padrão, ignorando linhas vazias', () => {
       const d = draftReducer(criarRascunho(), {

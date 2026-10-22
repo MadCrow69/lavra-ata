@@ -1,10 +1,12 @@
 import { RASCUNHO } from '../config/storage-keys';
-import { ERRO_TIPOS, PROVEDORES, type ProviderId } from '../ai/types';
+import { ERRO_TIPOS, MOTIVOS_RECUSA, PROVEDORES, type ProviderId } from '../ai/types';
 import {
   PRESENCAS,
   STATUS_ENCAMINHAMENTO,
   TIPOS_BLOCO,
   TONS,
+  dadosDoVttValidos,
+  ehDuracaoValida,
   type AtaDraft,
   type Atribuicao,
 } from './draft';
@@ -65,7 +67,8 @@ function ehFalhaAnterior(v: unknown): boolean {
   return (
     ehObjeto(v) &&
     ehUm(PROVEDORES, v.provedor) &&
-    (v.erro === undefined || ehUm(ERRO_TIPOS, v.erro))
+    (v.erro === undefined || ehUm(ERRO_TIPOS, v.erro)) &&
+    (v.motivo === undefined || ehUm(MOTIVOS_RECUSA, v.motivo))
   );
 }
 
@@ -123,6 +126,16 @@ function ehMapa(v: unknown): boolean {
   );
 }
 
+/** Dados do .vtt salvos: lista de nomes, duração válida se houver e ao menos um dos dois. */
+function ehVttSalvo(v: unknown): boolean {
+  return (
+    ehObjeto(v) &&
+    ehListaDeTexto(v.falantes) &&
+    (v.duracaoMin === undefined || ehDuracaoValida(v.duracaoMin)) &&
+    dadosDoVttValidos(v) !== null
+  );
+}
+
 /**
  * Valida o formato completo do rascunho recuperado: o que está no storage pode vir de
  * outra versão do app ou estar corrompido, e os renderers confiam no tipo.
@@ -138,6 +151,7 @@ function ehRascunho(v: unknown): v is AtaDraft {
     Array.isArray(v.participantes) &&
     v.participantes.every(ehParticipante) &&
     ehTexto(v.transcricao) &&
+    (v.vtt === undefined || ehVttSalvo(v.vtt)) &&
     (v.mapa === null || ehMapa(v.mapa)) &&
     (v.resultado === null || ehResultado(v.resultado))
   );

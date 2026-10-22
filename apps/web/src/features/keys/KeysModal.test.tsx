@@ -6,7 +6,7 @@ import { ErroProvedor, erroProvedor } from '../../ai/errors';
 import { KeysProvider, useKeys } from '../../ai/KeysContext';
 import { criarKeyStore } from '../../ai/keys';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
-import { erroSemCredito } from '../../ai/providers/comum';
+import { erroSemCredito, erroSemWorkspace } from '../../ai/providers/comum';
 import { MODELOS, URL_CHAVE } from '../../config/models';
 import { CHAVES, PREFERENCIAS } from '../../config/storage-keys';
 import { storageFalso as storageComItens } from '../../test/storage-falso';
@@ -179,7 +179,8 @@ describe('KeysModal', () => {
     await user.click(screen.getByRole('button', { name: 'Mostrar chave de OpenAI' }));
     await user.type(campoChave('Google Gemini'), CHAVE_2);
 
-    expect(store.cadeia().map((c) => c.chave)).toEqual([CHAVE, CHAVE_2]);
+    // Ordem padrão: Gemini primeiro.
+    expect(store.cadeia().map((c) => c.chave)).toEqual([CHAVE_2, CHAVE]);
     expect(dados.size).toBe(0);
 
     // Testar (com falha) e trocar a ordem também não podem vazar a chave.
@@ -255,6 +256,27 @@ describe('KeysModal', () => {
     expect(within(cartao('Google Gemini')).queryByText('Chave válida')).not.toBeInTheDocument();
   });
 
+  it('chave da Anthropic sem workspace mostra causa e ação próprias, sem a chave', async () => {
+    const chaveAnthropic = 'sk-ant-ficticia-0001';
+    const { user, store } = await montar({
+      testar: { anthropic: () => Promise.reject(erroSemWorkspace(400)) },
+    });
+    await user.type(campoChave('Anthropic'), chaveAnthropic);
+    await user.click(screen.getByRole('button', { name: 'Testar chave de Anthropic' }));
+    const c = cartao('Anthropic');
+    expect(
+      await within(c).findByText(
+        'Essa chave da Anthropic não está ligada a um espaço de trabalho (workspace). No Console da Anthropic, crie uma chave escolhendo um workspace específico e cole a nova aqui.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(c).queryByText(/verifique se copiou/)).not.toBeInTheDocument();
+    expect(c).not.toHaveTextContent(chaveAnthropic);
+    expect(store.listar().find((k) => k.provedor === 'anthropic')).toMatchObject({
+      estado: 'invalida',
+      motivo: 'sem_workspace',
+    });
+  });
+
   it('conta sem crédito mostra a mensagem de saldo, não "verifique se copiou a chave inteira"', async () => {
     const { user } = await montar({
       testar: { openai: () => Promise.reject(erroSemCredito('openai', 429)) },
@@ -271,7 +293,7 @@ describe('KeysModal', () => {
     await user.type(campoChave('OpenAI'), CHAVE);
     // Como a geração faz ao receber 429 insufficient_quota (ver o teste do Workbench).
     act(() => {
-      store.definirEstado('openai', CHAVE, 'invalida', true);
+      store.definirEstado('openai', CHAVE, 'invalida', 'sem_credito');
     });
     const c = cartao('OpenAI');
     expect(within(c).getByText(/sem crédito ou saldo/)).toBeInTheDocument();
@@ -281,12 +303,12 @@ describe('KeysModal', () => {
       within(c).getByRole('option', { name: 'Outro modelo…' }),
     );
     await user.type(within(c).getByLabelText('Id do modelo'), 'modelo-digitado');
-    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-digitado', semCredito: true });
+    expect(store.listar()[0]).toMatchObject({ modelo: 'modelo-digitado', motivo: 'sem_credito' });
     expect(within(c).getByText(/sem crédito ou saldo/)).toBeInTheDocument();
 
     await user.type(campoChave('OpenAI'), '9');
     expect(within(c).queryByText(/sem crédito ou saldo/)).not.toBeInTheDocument();
-    expect(store.listar()[0]?.semCredito).toBeUndefined();
+    expect(store.listar()[0]?.motivo).toBeUndefined();
   });
 
   it('erro de rede/limite mostra a mensagem do provedor, não "chave inválida"; texto com a chave é limpo', async () => {
@@ -371,7 +393,7 @@ describe('KeysModal', () => {
     });
     await user.type(campoChave('OpenAI'), CHAVE);
     await user.type(campoChave('Google Gemini'), CHAVE_2);
-    expect(store.cadeia().map((c) => c.id)).toEqual(['openai', 'gemini']);
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini', 'openai']);
 
     await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
     expect(
@@ -385,7 +407,7 @@ describe('KeysModal', () => {
 
     await user.type(campoChave('OpenAI'), '9');
     expect(within(cartao('OpenAI')).queryByText(/Chave inválida/)).not.toBeInTheDocument();
-    expect(store.cadeia().map((c) => c.id)).toEqual(['openai', 'gemini']);
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini', 'openai']);
   });
 
   it('navegador que bloqueia o armazenamento: "Lembrar" não liga e o aviso aparece', async () => {
@@ -484,28 +506,30 @@ describe('KeysModal', () => {
     await user.type(campoChave('OpenAI'), CHAVE);
     await user.type(campoChave('Google Gemini'), CHAVE_2);
 
-    await user.click(screen.getByRole('button', { name: 'Mover Google Gemini para cima' }));
+    // Ordem padrão: Gemini primeiro; a pessoa põe a OpenAI na frente.
     expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
-    expect(screen.getByRole('button', { name: 'Mover Google Gemini para cima' })).toHaveFocus();
-    expect(screen.getByTestId('cadeia')).toHaveTextContent(/^gemini:.*\|openai:/);
+    await user.click(screen.getByRole('button', { name: 'Mover OpenAI para cima' }));
+    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
+    expect(screen.getByRole('button', { name: 'Mover OpenAI para cima' })).toHaveFocus();
+    expect(screen.getByTestId('cadeia')).toHaveTextContent(/^openai:.*\|gemini:/);
     expect(
-      screen.getByText('Nova ordem de preferência: Google Gemini, OpenAI, Anthropic.'),
+      screen.getByText('Nova ordem de preferência: OpenAI, Google Gemini, Anthropic.'),
     ).toBeInTheDocument();
     // Na ponta, o botão não faz nada e continua focável.
-    await user.click(screen.getByRole('button', { name: 'Mover Google Gemini para cima' }));
-    expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
+    await user.click(screen.getByRole('button', { name: 'Mover OpenAI para cima' }));
+    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
 
     // Teclado: Enter e Espaço.
-    const baixo = screen.getByRole('button', { name: 'Mover Google Gemini para baixo' });
+    const baixo = screen.getByRole('button', { name: 'Mover OpenAI para baixo' });
     baixo.focus();
     await user.keyboard('{Enter}');
-    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
-    expect(screen.getByRole('button', { name: 'Mover Google Gemini para baixo' })).toHaveFocus();
+    expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
+    expect(screen.getByRole('button', { name: 'Mover OpenAI para baixo' })).toHaveFocus();
     await user.keyboard(' ');
-    expect(store.ordem()).toEqual(['openai', 'anthropic', 'gemini']);
-    expect(screen.getByRole('button', { name: 'Mover Google Gemini para baixo' })).toHaveFocus();
+    expect(store.ordem()).toEqual(['gemini', 'anthropic', 'openai']);
+    expect(screen.getByRole('button', { name: 'Mover OpenAI para baixo' })).toHaveFocus();
     expect(
-      screen.getByText('Nova ordem de preferência: OpenAI, Anthropic, Google Gemini.'),
+      screen.getByText('Nova ordem de preferência: Google Gemini, Anthropic, OpenAI.'),
     ).toBeInTheDocument();
   });
 
@@ -580,7 +604,7 @@ describe('KeysModal', () => {
       const preferencias = criarPreferenciasStore(null, null);
       const { user } = await montar({ preferencias });
       await user.click(screen.getByRole('button', { name: 'Mover Anthropic para cima' }));
-      expect(preferencias.atual().ordem).toEqual(['openai', 'anthropic', 'gemini']);
+      expect(preferencias.atual().ordem).toEqual(['gemini', 'anthropic', 'openai']);
     });
 
     it('trocar o modelo grava modelos.openai (e só ele)', async () => {

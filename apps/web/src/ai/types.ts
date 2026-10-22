@@ -45,6 +45,13 @@ export const ERRO_TIPOS = [
 ] as const;
 export type ErroTipo = (typeof ERRO_TIPOS)[number];
 
+/**
+ * Por que o provedor recusou uma chave que pode estar bem copiada: conta sem crédito/saldo ou chave
+ * da Anthropic sem workspace. Ausente = a chave em si foi recusada.
+ */
+export const MOTIVOS_RECUSA = ['sem_credito', 'sem_workspace'] as const;
+export type MotivoRecusa = (typeof MOTIVOS_RECUSA)[number];
+
 export interface ProviderAdapter {
   id: ProviderId;
   rotulo: string;
@@ -55,6 +62,8 @@ export interface ProviderAdapter {
 export interface FalhaProvedor {
   provedor: ProviderId;
   erro: ErroTipo;
+  /** Só em `chave_invalida` com motivo conhecido (sem crédito, sem workspace). */
+  motivo?: MotivoRecusa;
   mensagem: string;
 }
 

@@ -1,5 +1,11 @@
-/** Linha de tempo de um cue: `00:00:01.000 --> 00:00:04.000` (horas opcionais) + configurações. */
-const LINHA_TEMPO = /^(?:\d+:)?\d{1,2}:\d{2}[.,]\d{3}\s*-->\s*(?:\d+:)?\d{1,2}:\d{2}[.,]\d{3}/;
+/** Um instante do cue: `HH:MM:SS.mmm`, horas opcionais; o separador dos milissegundos pode ser vírgula. */
+const INSTANTE = String.raw`(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{3})`;
+
+/**
+ * Linha de tempo de um cue: `00:00:01.000 --> 00:00:04.000` + configurações. Os tempos são
+ * RELATIVOS ao começo da gravação: não dizem a data nem a hora da reunião.
+ */
+const LINHA_TEMPO = new RegExp(String.raw`^${INSTANTE}\s*-->\s*${INSTANTE}`);
 
 /** `<v Nome>fala` — o fechamento `</v>` é opcional na especificação. */
 const FALANTE_TAG = /^\s*<v(?:\.[^\s.>]+)*\s+([^>\s][^>]*)>/;
@@ -58,22 +64,65 @@ function separarLinha(
   linha: string,
   falanteAtual: string | null,
   permitirPrefixo: boolean,
-): { falante: string | null; texto: string } {
+): { falante: string | null; texto: string; daTag: boolean } {
   const tag = FALANTE_TAG.exec(linha);
   if (tag?.[1] !== undefined) {
     const nome = limparMarcacao(tag[1]);
     return {
       falante: nome === '' ? null : nome,
       texto: limparMarcacao(linha.slice(tag[0].length)),
+      daTag: true,
     };
   }
   const limpa = limparMarcacao(linha);
-  const prefixo = permitirPrefixo ? FALANTE_PREFIXO.exec(limpa) : null;
-  if (prefixo?.[1] !== undefined && prefixo[2] !== undefined) {
-    const nome = prefixo[1].trim();
-    if (nome.split(/\s+/).length <= MAX_PALAVRAS_NOME) return { falante: nome, texto: prefixo[2] };
+  const prefixo = permitirPrefixo ? falanteDoPrefixo(limpa) : null;
+  return { ...(prefixo ?? { falante: falanteAtual, texto: limpa }), daTag: false };
+}
+
+/**
+ * Regra ÚNICA do "Nome: fala": a linha já sem marcação → falante e fala, ou `null` se a linha não
+ * começa por um nome (frase com dois-pontos no meio, nome com mais de `MAX_PALAVRAS_NOME` palavras).
+ */
+function falanteDoPrefixo(linha: string): { falante: string; texto: string } | null {
+  const prefixo = FALANTE_PREFIXO.exec(linha);
+  if (prefixo?.[1] === undefined || prefixo[2] === undefined) return null;
+  const nome = prefixo[1].trim();
+  return nome.split(/\s+/).length <= MAX_PALAVRAS_NOME
+    ? { falante: nome, texto: prefixo[2] }
+    : null;
+}
+
+/**
+ * Quem fala em cada linha "Nome: fala" do texto da transcrição (o colado, o do .txt ou o que o .vtt
+ * virou), na ordem e com repetições, pela mesma regra da conversão do .vtt.
+ */
+export function falantesDoTexto(texto: string): string[] {
+  const falantes: string[] = [];
+  for (const linha of texto.split(/\r\n|\r|\n/)) {
+    const achado = falanteDoPrefixo(linha.trim());
+    if (achado) falantes.push(achado.falante);
   }
-  return { falante: falanteAtual, texto: limpa };
+  return falantes;
+}
+
+/** `HH`, `MM`, `SS`, `mmm` capturados de um `INSTANTE` → milissegundos. */
+function instanteEmMs(h: string | undefined, m: string, s: string, ms: string): number {
+  return ((Number(h ?? '0') * 60 + Number(m)) * 60 + Number(s)) * 1000 + Number(ms);
+}
+
+export interface VttLido {
+  /** "Nome: fala" por linha (ver `vttParaTexto`). */
+  texto: string;
+  /**
+   * Do menor início ao maior fim dos cues, em ms; `null` sem cue com tempo. É só a duração da
+   * gravação: o .vtt não diz a data nem a hora em que a reunião começou.
+   */
+  duracaoMs: number | null;
+  /**
+   * Nomes das marcas `<v Nome>`, como escritos (sem marcação), distintos e na ordem da primeira
+   * fala. Guardam o que a regra "Nome: fala" do texto recusa ("Souza, Ana", "Ana (Convidada)").
+   */
+  falantesDasTags: string[];
 }
 
 /**
@@ -82,9 +131,25 @@ function separarLinha(
  * uma só linha; cues sem falante são unidas numa única linha.
  */
 export function vttParaTexto(vtt: string): string {
+  return lerVtt(vtt).texto;
+}
+
+/**
+ * O texto é o conteúdo cru de um .vtt: começa por `WEBVTT`, sem contar espaços iniciais nem o BOM
+ * (U+FEFF, que o `trimStart` do JavaScript também remove).
+ */
+export function pareceVtt(texto: string): boolean {
+  return texto.trimStart().startsWith('WEBVTT');
+}
+
+/** O texto de `vttParaTexto`, a duração da gravação e os nomes das marcas `<v>`, numa só leitura. */
+export function lerVtt(vtt: string): VttLido {
   const semBom = vtt.startsWith(String.fromCharCode(0xfeff)) ? vtt.slice(1) : vtt;
   const linhas = semBom.split(/\r\n|\r|\n/);
   const falas: Fala[] = [];
+  const falantesDasTags = new Set<string>();
+  let primeiroInicio = Infinity;
+  let ultimoFim = -Infinity;
   let i = 0;
 
   // Cabeçalho "WEBVTT ..." e tudo até a primeira linha em branco.
@@ -102,13 +167,18 @@ export function vttParaTexto(vtt: string): string {
     while (i < linhas.length && (linhas[i] ?? '').trim() === '') i++;
 
     const indiceTempo = bloco.findIndex((l) => LINHA_TEMPO.test(l));
-    if (indiceTempo === -1) continue; // NOTE, STYLE, REGION ou lixo: não é fala.
+    const tempo = LINHA_TEMPO.exec(bloco[indiceTempo] ?? '');
+    if (tempo === null) continue; // NOTE, STYLE, REGION ou lixo: não é fala.
+    const [, h1, m1 = '', s1 = '', ms1 = '', h2, m2 = '', s2 = '', ms2 = ''] = tempo;
+    primeiroInicio = Math.min(primeiroInicio, instanteEmMs(h1, m1, s1, ms1));
+    ultimoFim = Math.max(ultimoFim, instanteEmMs(h2, m2, s2, ms2));
 
     let falanteDoCue: string | null = null;
     for (const [k, linha] of bloco.slice(indiceTempo + 1).entries()) {
       // "Nome:" só vale na primeira linha do cue; nas seguintes é parte da fala.
-      const { falante, texto } = separarLinha(linha, falanteDoCue, k === 0);
+      const { falante, texto, daTag } = separarLinha(linha, falanteDoCue, k === 0);
       falanteDoCue = falante;
+      if (daTag && falante !== null) falantesDasTags.add(falante);
       if (texto !== '') falas.push({ falante, texto });
     }
   }
@@ -119,5 +189,9 @@ export function vttParaTexto(vtt: string): string {
     if (ultima?.falante === fala.falante) ultima.texto += ` ${fala.texto}`;
     else saida.push({ ...fala });
   }
-  return saida.map((f) => (f.falante ? `${f.falante}: ${f.texto}` : f.texto)).join('\n');
+  return {
+    texto: saida.map((f) => (f.falante ? `${f.falante}: ${f.texto}` : f.texto)).join('\n'),
+    duracaoMs: ultimoFim >= primeiroInicio ? ultimoFim - primeiroInicio : null,
+    falantesDasTags: [...falantesDasTags],
+  };
 }

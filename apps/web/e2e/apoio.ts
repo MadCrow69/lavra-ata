@@ -146,7 +146,10 @@ async function auditarRede(context: BrowserContext, cenario: Cenario): Promise<R
 }
 
 interface Fixtures {
-  /** Cenário da rede deste teste; o padrão força o fallback OpenAI → Gemini. */
+  /**
+   * Cenário da rede deste teste; o padrão faz a OpenAI responder 429 (com ela na frente da fila,
+   * força o fallback OpenAI → Gemini).
+   */
   cenario: Cenario;
   rede: Rede;
   /** Página já aberta no app, com a auditoria de CSP e de erros instalada. */
@@ -190,7 +193,7 @@ export const test = base.extend<Fixtures>({
   },
 });
 
-/** Abre o modal de chaves pelo cabeçalho, digita as chaves (OpenAI antes do Gemini) e conclui. */
+/** Abre o modal de chaves pelo cabeçalho, digita as chaves e conclui (a ordem da fila não muda). */
 export async function configurarChaves(
   page: Page,
   chaves: Partial<Record<'OpenAI' | 'Google Gemini', string>>,

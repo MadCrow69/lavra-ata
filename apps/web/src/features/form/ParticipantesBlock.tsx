@@ -27,6 +27,7 @@ import { plural } from '../../ui/plural';
 import { useConsultaMidia } from '../../ui/useConsultaMidia';
 import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
+import { NUMERO_BLOCO } from './numero-bloco';
 import {
   analisarLista,
   contarRepetidos,
@@ -569,7 +570,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
 
   return (
     <FormBlock
-      numero={3}
+      numero={NUMERO_BLOCO.participantes}
       titulo={tipo.rotulos.participantes}
       bloco="participantes"
       faltando={faltando}

@@ -4,10 +4,12 @@ import {
   CHAVE_MIN_PARA_CONFERIR,
   MODELO_ID_MAX,
   MSG_ID_PARECE_CHAVE,
+  ORDEM_PADRAO_PROVEDORES,
   ORIGEM_PROVEDOR,
   erroDoIdDeModelo,
   erroDoIdDeModeloComChave,
 } from './models';
+import { PROVEDORES } from '../ai/types';
 
 describe('erroDoIdDeModelo', () => {
   it.each(['gpt-6-luna', 'gemini-3.8-flash', 'claude-haiku-5-5', 'org/modelo:v1_2', ' gpt-6 ', ''])(
@@ -65,5 +67,12 @@ describe('ORIGEM_PROVEDOR', () => {
 
     expect(daCsp.length).toBeGreaterThanOrEqual(3);
     expect(Object.values(ORIGEM_PROVEDOR).sort()).toEqual(daCsp);
+  });
+});
+
+describe('ORDEM_PADRAO_PROVEDORES', () => {
+  it('Gemini primeiro, depois OpenAI e Anthropic; cada provedor uma vez', () => {
+    expect(ORDEM_PADRAO_PROVEDORES).toEqual(['gemini', 'openai', 'anthropic']);
+    expect([...ORDEM_PADRAO_PROVEDORES].sort()).toEqual([...PROVEDORES].sort());
   });
 });

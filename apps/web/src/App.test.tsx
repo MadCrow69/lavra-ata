@@ -36,13 +36,14 @@ describe('App', () => {
       within(screen.getByRole('region', { name: 'OpenAI' })).getByLabelText('Chave de API'),
       'sk-teste-ficticia-0002',
     );
-    await user.click(screen.getByRole('button', { name: 'Mover Google Gemini para cima' }));
+    // O padrão põe o Gemini primeiro; a pessoa escolhe a OpenAI na frente, e a escolha dela vale.
+    await user.click(screen.getByRole('button', { name: 'Mover OpenAI para cima' }));
     await user.click(within(dialogo).getByRole('button', { name: 'Concluir' }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     const cabecalho = screen.getByRole('banner');
     expect(within(cabecalho).getByRole('button', { name: /^IA: / })).toHaveTextContent(
-      'IA: Gemini → OpenAI',
+      'IA: OpenAI → Gemini',
     );
     // Sem "Lembrar", a chave não foi gravada no navegador; a sessão guarda só o rascunho e as
     // preferências (a ordem recém-escolhida), sem chave (espera o salvamento com debounce
@@ -56,7 +57,7 @@ describe('App', () => {
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(2);
     expect(JSON.parse(sessionStorage.getItem(PREFERENCIAS) ?? 'null')).toMatchObject({
-      ordem: ['gemini', 'openai', 'anthropic'],
+      ordem: ['openai', 'gemini', 'anthropic'],
     });
     for (const chave of [RASCUNHO, PREFERENCIAS]) {
       const guardado = sessionStorage.getItem(chave) ?? '';

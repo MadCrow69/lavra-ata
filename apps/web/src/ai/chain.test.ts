@@ -168,7 +168,7 @@ describe('gerarComFallback', () => {
       const store = criarKeyStore(null);
       store.definir({ provedor: 'openai', chave: 'k1', modelo: '', estado: 'nao_testada' });
       const aoRecusarChave = vi.fn((cfg: ProviderConfig, erro: ErroProvedor) => {
-        store.definirEstado(cfg.id, cfg.chave, 'invalida', erro.semCredito);
+        store.definirEstado(cfg.id, cfg.chave, 'invalida', erro.motivo);
       });
       // Sem avançar os timers: se houvesse espera de retry, a promessa não resolveria.
       const r = await gerarComFallback(cadeia, reqCom(), {
@@ -179,13 +179,17 @@ describe('gerarComFallback', () => {
       expect(fetchFalso).toHaveBeenCalledTimes(1);
       expect(r.provedor).toBe('gemini');
       expect(r.falhas).toHaveLength(1);
-      expect(r.falhas[0]).toMatchObject({ provedor: 'openai', erro: 'chave_invalida' });
+      expect(r.falhas[0]).toMatchObject({
+        provedor: 'openai',
+        erro: 'chave_invalida',
+        motivo: 'sem_credito',
+      });
       expect(r.falhas[0]?.mensagem).toContain('sem crédito ou saldo');
       expect(aoRecusarChave).toHaveBeenCalledTimes(1);
       expect(aoRecusarChave).toHaveBeenCalledWith(cadeia[0], expect.any(ErroProvedor));
       // A chave sai da cadeia e fica marcada como sem saldo, não como "mal copiada".
       expect(store.cadeia()).toEqual([]);
-      expect(store.listar()[0]).toMatchObject({ estado: 'invalida', semCredito: true });
+      expect(store.listar()[0]).toMatchObject({ estado: 'invalida', motivo: 'sem_credito' });
     } finally {
       vi.unstubAllGlobals();
     }

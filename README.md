@@ -10,9 +10,9 @@ Gerador de atas de reunião brasileiras a partir da transcrição, direto no nav
 
 ## Como funciona
 
-1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição.
+1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição (ou envia o `.txt`/`.vtt`; o conteúdo de um `.vtt` colado no campo é convertido como o arquivo). Se a transcrição traz quem falou (falas "Nome: fala" ou as marcas `<v Nome>` do `.vtt`), o app sugere essas pessoas como participantes (nome todo em maiúsculas ou minúsculas entra com a caixa padrão: "MARIA DE ALMEIDA" vira "Maria de Almeida"; a transcrição não muda); com o `.vtt`, sugere também o término a partir do início e da duração da gravação. Nada entra sem o seu clique.
 2. O app **mascara os identificadores pessoais** (CPF, CNPJ, telefone, e-mail, cartão etc.) com [`@lavra/pii-br`](packages/pii-br/README.md) e mostra, antes do envio, o que vai para a IA ("Original" × "Enviado à IA").
-3. A chamada vai **direto do navegador ao provedor**, sem passar por servidor do Lavra. Se um provedor falhar, o app tenta o próximo da sua lista de prioridade e registra a troca na seção (ex.: "Gerado por Gemini · gemini-3.8-flash — OpenAI falhou (limite de uso)").
+3. A chamada vai **direto do navegador ao provedor**, sem passar por servidor do Lavra. Se um provedor falhar, o app tenta o próximo da sua lista de prioridade e registra a troca na seção (ex.: "Gerado por OpenAI · gpt-6-luna — Gemini falhou (limite de uso)"). A ordem padrão é Gemini → OpenAI → Anthropic (a maioria tem chave gratuita do Gemini); você a muda no modal de chaves, e a sua ordem vale.
 4. A IA devolve JSON validado por schema; o app põe os dados originais de volta **neste navegador** e monta a ata em uma folha A4, em texto puro (nunca HTML vindo da IA). Você revisa seção por seção: edita à mão, regera ou ajusta com uma instrução.
 5. Com a ata revisada, você **baixa em PDF ou DOCX** (com a sua logo no cabeçalho, se quiser) ou copia as tarefas agrupadas por responsável.
 
@@ -105,16 +105,17 @@ formulário (dados, participantes) ───────────────
 - **Sem backend:** o site é estático (GitHub Pages) e as únicas conexões são as do navegador aos três provedores.
 - **CSP em `<meta>`** (o GitHub Pages não permite cabeçalhos próprios), gerada de uma fonte única e conferida no build; o E2E roda contra o build com a CSP ativa e reprova qualquer requisição a outro host ou violação da política.
 - **Exportação local:** PDF e DOCX são montados no navegador, a partir do mesmo modelo da folha.
-- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.011 testes unitários (Vitest) e 38 testes E2E (Playwright).
+- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.182 testes unitários (Vitest) e 44 testes E2E (Playwright).
 
 ## Limitações
 
 - **Nomes de pessoas não são mascarados.** A ata precisa deles; a biblioteca mascara só identificadores com formato próprio (documentos, contatos, cartão). Isto não é anonimização.
 - **Toda ata é minuta.** Os modelos de ata foram redigidos com base na legislação citada, **sem revisão de profissional da área** (a base de cada texto fixo está em [`docs/base-legal.md`](docs/base-legal.md)). Contribuições de advogados e técnicos são bem-vindas ([Como contribuir](CONTRIBUTING.md)).
 - **OpenAI direto do navegador:** funciona (verificado no [spike de conectividade](docs/spike-conectividade.md)), mas a OpenAI não suporta oficialmente essa chamada, e o CORS já quebrou antes (out/2025 e jan/2026, segundo a pesquisa registrada no [documento de design](docs/superpowers/specs/2026-10-20-lavra-design.md)). A lista de prioridade de provedores é a proteção contra uma nova quebra.
-- **Adaptador da Anthropic não verificado com chamada real.** Foi construído pela documentação e é testado com respostas interceptadas; a conta usada nos testes está sem crédito. OpenAI e Gemini foram verificados no spike.
+- **A chave da Anthropic precisa estar ligada a um workspace.** Chaves de escopo "Organização" exigem o cabeçalho `anthropic-workspace-id`, que o app não envia; nesse caso o app avisa e pede uma chave criada dentro de um workspace.
 - **PDF conferido em partes.** Na ata corporativa, verificado abrindo PDFs de 200 participantes e 200 encaminhamentos no visualizador do Chromium; nas atas de CIPA, condomínio (200 condôminos) e sócios de Ltda, conferido pelo texto extraído ("Página X de Y" em todas as páginas) e pela primeira e última página renderizadas, não no visualizador.
 - **DOCX: tipografia não conferida.** As fontes não vão embutidas no DOCX e o Word as troca por substitutas. O layout foi conferido pelo XML (cabeçalho de tabela repetido, linhas que não se partem, numeração de página e imagem) e, nas atas de CIPA, condomínio e sócios de Ltda, abrindo os arquivos no Microsoft Word: ali se conferiram grade, colunas, quebras de página e assinaturas, não a tipografia. O DOCX da ata corporativa e a logo no Word seguem conferidos só pelo XML; o LibreOffice não foi testado.
+- **Sugestão de participantes só acha quem falou com nome.** No texto colado ou `.txt`, só vale a linha que começa por "Nome:" com até 5 palavras, só letras (sem dígito, vírgula ou parênteses). No `.vtt`, o nome da marca `<v>` vale como escrito ("Souza, Ana" não é reordenado; só sai um sufixo de convidado como "(Convidado)"). Quem participou sem falar, rótulos genéricos ("Speaker 1", "Desconhecido") e rótulos de campo ("Assunto:", "Pauta:") não são sugeridos.
 - **Tarefas por responsável** agrupam só ignorando espaço, caixa e forma Unicode: "Ana" e "Ana Souza" continuam sendo pessoas diferentes.
 
 ## Roadmap

@@ -12,6 +12,8 @@ import { useDraft } from '../../domain/DraftContext';
 import { Field } from '../../ui/Field';
 import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
+import { NUMERO_BLOCO } from './numero-bloco';
+import { SugestaoDoFim } from './SugestaoDoFim';
 import styles from './form.module.css';
 
 function mensagemPautaVazia(rotulo: string): string {
@@ -165,7 +167,12 @@ export function DadosBlock({ tipo }: { tipo: AtaTypeDefinition }) {
   };
 
   return (
-    <FormBlock numero={2} titulo="Dados da reunião" bloco="dados" faltando={faltando}>
+    <FormBlock
+      numero={NUMERO_BLOCO.dados}
+      titulo="Dados da reunião"
+      bloco="dados"
+      faltando={faltando}
+    >
       <div className={styles.grade}>
         {tipo.campos
           .filter((campo) => ehVisivel(campo, state.dados))
@@ -183,6 +190,7 @@ export function DadosBlock({ tipo }: { tipo: AtaTypeDefinition }) {
               }}
             />
           ))}
+        <SugestaoDoFim tipo={tipo} className={styles.linhaInteira} />
         <div className={styles.linhaInteira}>
           <PautaCampo
             rotulo={tipo.rotulos.pauta}

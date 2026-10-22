@@ -1,0 +1,428 @@
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it } from 'vitest';
+import { corporativa } from '../../ata-types/corporativa';
+import { LIMITE_PARTICIPANTES } from '../../config/limits';
+import type { AtaDraft, Participante } from '../../domain/draft';
+import { criarRascunho } from '../../domain/draft-reducer';
+import { renderizarComProvedores } from '../../test/provedores';
+import { FALANTES_FICTICIOS, vttFicticio } from '../../test/vtt-ficticio';
+import { DadosBlock } from './DadosBlock';
+import { ParticipantesBlock } from './ParticipantesBlock';
+import { TranscricaoBlock } from './TranscricaoBlock';
+
+function participante(i: number, nome: string): Participante {
+  return {
+    id: `p${String(i)}`,
+    nome,
+    papel: '',
+    presenca: 'presente',
+    justificativa: '',
+    extras: {},
+  };
+}
+
+function montar(inicial: Partial<AtaDraft> = {}) {
+  const user = userEvent.setup();
+  const r = renderizarComProvedores(
+    <>
+      <DadosBlock tipo={corporativa} />
+      <ParticipantesBlock tipo={corporativa} />
+      <TranscricaoBlock tipo={corporativa} />
+    </>,
+    { inicial: { ...criarRascunho('corporativa'), ...inicial } },
+  );
+  return { user, ...r };
+}
+
+function blocoTranscricao(): HTMLElement {
+  return screen.getByRole('region', { name: 'Transcrição' });
+}
+
+function blocoParticipantes(): HTMLElement {
+  return screen.getByRole('region', { name: 'Participantes' });
+}
+
+function blocoDados(): HTMLElement {
+  return screen.getByRole('region', { name: 'Dados da reunião' });
+}
+
+function campoArquivo(container: HTMLElement): HTMLInputElement {
+  const el = container.querySelector('input[type="file"]');
+  if (!(el instanceof HTMLInputElement)) throw new Error('input de arquivo não encontrado');
+  return el;
+}
+
+const vtt = (conteudo: string, nome = 'reuniao.vtt') =>
+  new File([conteudo], nome, { type: 'text/vtt' });
+
+describe('participantes a partir de quem falou', () => {
+  it('sugere quem falou; ao clicar, entram como presentes no bloco 3, com toast do que mudou', async () => {
+    const { user } = montar({
+      transcricao: [
+        'Ana Souza: Bom dia.',
+        'Bruno Lima: Olá.',
+        'ana souza: De novo.',
+        'Carla Dias: Oi.',
+      ].join('\n'),
+    });
+    const sugestao = within(blocoTranscricao());
+    expect(
+      sugestao.getByText('Encontramos 3 pessoas que falaram: Ana Souza, Bruno Lima e Carla Dias.'),
+    ).toBeInTheDocument();
+    expect(
+      sugestao.getByText(
+        'Quem participou sem falar não aparece na transcrição — inclua à mão no bloco 3.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(blocoParticipantes()).getByText('Nenhum participante ainda.', { exact: false }),
+    ).toBeInTheDocument();
+
+    await user.click(sugestao.getByRole('button', { name: 'Adicionar como participantes' }));
+
+    const lista = within(blocoParticipantes()).getByRole('region', {
+      name: 'Lista de participantes',
+    });
+    const nomes = within(lista)
+      .getAllByLabelText(/^Nome do participante/)
+      .map((el) => (el as HTMLInputElement).value);
+    expect(nomes).toEqual(['Ana Souza', 'Bruno Lima', 'Carla Dias']);
+    expect(
+      within(blocoParticipantes()).getByText('3 participantes · 3 presentes'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Notificações' })).getByText(
+        '3 participantes adicionados ao bloco 3.',
+      ),
+    ).toBeInTheDocument();
+    expect(sugestao.getByText('Todos os que falaram já estão na lista.')).toBeInTheDocument();
+    expect(
+      sugestao.queryByRole('button', { name: 'Adicionar como participantes' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('quem já está na lista (sem diferença de caixa/acento) não é duplicado e é contado no toast', async () => {
+    const { user } = montar({
+      participantes: [participante(1, 'BRUNO LIMA'), participante(2, 'Ana Souza')],
+      transcricao: ['Ana Souza: a', 'Bruno Lima: b', 'Carla Dias: c'].join('\n'),
+    });
+    const sugestao = within(blocoTranscricao());
+    expect(sugestao.getByText(/2 já estão na lista\./)).toBeInTheDocument();
+    await user.click(sugestao.getByRole('button', { name: 'Adicionar como participante' }));
+    expect(
+      screen.getByText('1 participante adicionado ao bloco 3 (2 já estavam na lista).'),
+    ).toBeInTheDocument();
+    expect(
+      within(blocoParticipantes()).getByText('3 participantes · 3 presentes'),
+    ).toBeInTheDocument();
+  });
+
+  it('no teto de participantes, não oferece o botão e explica', () => {
+    montar({
+      participantes: Array.from({ length: LIMITE_PARTICIPANTES }, (_, i) =>
+        participante(i, `Pessoa ${String(i)}`),
+      ),
+      transcricao: 'Carla Dias: c',
+    });
+    const sugestao = within(blocoTranscricao());
+    expect(
+      sugestao.getByText(
+        `A lista já tem o limite de ${String(LIMITE_PARTICIPANTES)} participantes: ninguém mais pode ser adicionado.`,
+      ),
+    ).toBeInTheDocument();
+    expect(sugestao.queryByRole('button', { name: /^Adicionar como/ })).not.toBeInTheDocument();
+  });
+
+  it('sem falas "Nome: fala", nada é sugerido', () => {
+    montar({ transcricao: 'Vamos começar a reunião.' });
+    expect(within(blocoTranscricao()).queryByText(/^Encontramos/)).not.toBeInTheDocument();
+  });
+
+  it('um .vtt exportado (ids uuid, falas em várias linhas) sugere cada falante uma vez', async () => {
+    const { user, container } = montar();
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const sugestao = within(blocoTranscricao());
+    expect(
+      await sugestao.findByText(
+        `Encontramos 4 pessoas que falaram: ${FALANTES_FICTICIOS.slice(0, 3).join(', ')} e ${FALANTES_FICTICIOS[3]}.`,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('nome em MAIÚSCULAS entra no bloco 3 com a caixa padrão; a transcrição não muda', async () => {
+    const { user, container } = montar();
+    const conteudo = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:04.000',
+      '<v MARIA DE ALMEIDA PRADO>Bom dia.</v>',
+      '',
+      '00:00:05.000 --> 00:00:08.000',
+      '<v Ana Souza>Olá.</v>',
+    ].join('\n');
+    await user.upload(campoArquivo(container), vtt(conteudo));
+    const transcricao = within(blocoTranscricao());
+    expect(
+      await transcricao.findByText(
+        'Encontramos 2 pessoas que falaram: Maria de Almeida Prado e Ana Souza.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(transcricao.getByRole('button', { name: 'Adicionar como participantes' }));
+    const lista = within(blocoParticipantes()).getByRole('region', {
+      name: 'Lista de participantes',
+    });
+    expect(
+      within(lista)
+        .getAllByLabelText(/^Nome do participante/)
+        .map((el) => (el as HTMLInputElement).value),
+    ).toEqual(['Maria de Almeida Prado', 'Ana Souza']);
+    expect(transcricao.getByLabelText(/^Transcrição da reunião/)).toHaveValue(
+      'MARIA DE ALMEIDA PRADO: Bom dia.\nAna Souza: Olá.',
+    );
+  });
+
+  it('o aviso do upload cita quem falou; os textos da sugestão não são aria-live (sem anúncio repetido)', async () => {
+    const { user, container } = montar();
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const transcricao = within(blocoTranscricao());
+    expect(await transcricao.findByRole('status')).toHaveTextContent(
+      /^Arquivo “reuniao\.vtt” carregado: [\d.]+ caracteres e 4 pessoas que falaram — veja a sugestão abaixo\.$/,
+    );
+    const textos = [
+      ...screen.getByTestId('sugestao-falantes').querySelectorAll('[aria-live]'),
+      ...(screen.queryByTestId('sugestao-fim')?.querySelectorAll('[aria-live]') ?? []),
+    ];
+    expect(textos).toEqual([]);
+
+    await user.click(transcricao.getByRole('button', { name: 'Adicionar como participantes' }));
+    const texto = transcricao.getByText('Todos os que falaram já estão na lista.');
+    expect(texto).toHaveFocus();
+    expect(texto.closest('[aria-live]')).toBeNull();
+  });
+
+  it('.vtt com convidados de reunião online: sugere pelo nome da marca, sem o sufixo e sem reordenar', async () => {
+    const { user, container } = montar();
+    const conteudo = [
+      'WEBVTT',
+      '',
+      '1a2b3c4d-0000-4000-8000-000000000001/1-0',
+      '00:00:01.000 --> 00:00:04.000',
+      '<v Souza, Ana>Bom dia,',
+      'vamos começar.</v>',
+      '',
+      '1a2b3c4d-0000-4000-8000-000000000001/2-0',
+      '00:00:05.000 --> 00:00:08.000',
+      '<v Rui Matos (Convidado)>Olá a todos.</v>',
+    ].join('\n');
+    await user.upload(campoArquivo(container), vtt(conteudo));
+    expect(
+      await within(blocoTranscricao()).findByText(
+        'Encontramos 2 pessoas que falaram: Souza, Ana e Rui Matos.',
+      ),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('conteúdo cru de .vtt colado no campo vale como enviar o arquivo', () => {
+  function campoTranscricao(): HTMLTextAreaElement {
+    return within(blocoTranscricao()).getByLabelText<HTMLTextAreaElement>(
+      /^Transcrição da reunião/,
+    );
+  }
+
+  it('converte em "Nome: fala", sugere quem falou e a duração, e diz o que fez', async () => {
+    const { user } = montar({ dados: { inicio: '14:00' } });
+    await user.click(campoTranscricao());
+    await user.paste(vttFicticio(36));
+
+    const valor = campoTranscricao().value;
+    expect(valor.startsWith('Ana Souza: Bom dia a todos')).toBe(true);
+    for (const resto of ['-->', '0f3c2a9e', 'WEBVTT', '<v', '</v']) {
+      expect(valor).not.toContain(resto);
+    }
+    const transcricao = within(blocoTranscricao());
+    expect(transcricao.getByRole('status')).toHaveTextContent(
+      'Transcrição .vtt colada convertida: 36 falas e 4 pessoas que falaram — veja a sugestão abaixo.',
+    );
+    expect(transcricao.getByText(/^Encontramos 4 pessoas que falaram:/)).toBeInTheDocument();
+    expect(within(blocoDados()).getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+  });
+
+  it('BOM e linhas em branco antes do WEBVTT não impedem a conversão', async () => {
+    const { user } = montar();
+    await user.click(campoTranscricao());
+    await user.paste(`${String.fromCharCode(0xfeff)}\n  ${vttFicticio(8)}`);
+    expect(campoTranscricao().value.startsWith('Ana Souza:')).toBe(true);
+  });
+
+  it('texto comum colado não é convertido nem gera aviso', async () => {
+    const { user } = montar();
+    await user.click(campoTranscricao());
+    await user.paste('Ana Souza: 00:00:01.000 --> não é vtt');
+    expect(campoTranscricao()).toHaveValue('Ana Souza: 00:00:01.000 --> não é vtt');
+    expect(within(blocoTranscricao()).queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('digitar (sem colar) nunca converte', () => {
+    montar();
+    fireEvent.change(campoTranscricao(), { target: { value: vttFicticio(4) } });
+    expect(campoTranscricao().value.startsWith('WEBVTT')).toBe(true);
+    expect(within(blocoDados()).queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+  });
+
+  it('WEBVTT sem falas: o texto fica como colado e o erro diz causa e ação', async () => {
+    const { user } = montar();
+    await user.click(campoTranscricao());
+    await user.paste('WEBVTT\n\nNOTE só uma nota');
+    expect(campoTranscricao()).toHaveValue('WEBVTT\n\nNOTE só uma nota');
+    expect(within(blocoTranscricao()).getByRole('alert')).toHaveTextContent(
+      'O texto colado começa com WEBVTT, mas não encontrei falas nele, então ficou como foi colado. Confira se copiou a transcrição .vtt inteira ou envie o arquivo .vtt.',
+    );
+  });
+
+  it('colar outro .vtt por cima de tudo troca os dados do .vtt; Desfazer devolve o anterior', async () => {
+    const { user } = montar({ dados: { inicio: '14:00' } });
+    await user.click(campoTranscricao());
+    await user.paste(vttFicticio(36));
+    const novo = [
+      'WEBVTT',
+      '',
+      '00:00:00.000 --> 00:10:00.000',
+      '<v Iva Reis>Outra reunião.</v>',
+    ].join('\n');
+    campoTranscricao().setSelectionRange(0, campoTranscricao().value.length);
+    await user.paste(novo);
+    expect(campoTranscricao()).toHaveValue('Iva Reis: Outra reunião.');
+    expect(within(blocoDados()).getByText('A transcrição dura 10 min.')).toBeInTheDocument();
+    await user.click(within(blocoTranscricao()).getByRole('button', { name: 'Desfazer' }));
+    expect(campoTranscricao().value.startsWith('Ana Souza:')).toBe(true);
+    expect(within(blocoDados()).getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+  });
+});
+
+describe('colagem que não muda o texto não deixa marca para depois', () => {
+  it('uma edição posterior (sem tecla ou com tecla) mantém a duração do .vtt', async () => {
+    const { user, container } = montar({ dados: { inicio: '14:00' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const dados = within(blocoDados());
+    expect(await dados.findByText('A transcrição dura 27 min.')).toBeInTheDocument();
+    const campo =
+      within(blocoTranscricao()).getByLabelText<HTMLTextAreaElement>(/^Transcrição da reunião/);
+    await user.click(campo);
+
+    // Tudo selecionado, `paste` sem `change` (ex.: colou o mesmo texto ou a colagem foi cancelada).
+    campo.setSelectionRange(0, campo.value.length);
+    fireEvent.paste(campo);
+    await new Promise((resolver) => setTimeout(resolver, 0));
+    // Edição sem tecla (ditado, arrastar texto) no ciclo seguinte.
+    fireEvent.change(campo, { target: { value: `${campo.value} ditado` } });
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+
+    // De novo, agora com uma tecla logo depois: a tecla zera a marca antes do `change`.
+    campo.setSelectionRange(0, campo.value.length);
+    fireEvent.paste(campo);
+    campo.setSelectionRange(campo.value.length, campo.value.length);
+    await user.keyboard('!');
+    expect(campo.value.endsWith('!')).toBe(true);
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+  });
+});
+
+describe('colar por cima do campo inteiro troca a transcrição', () => {
+  it('a duração e os nomes do .vtt anterior somem; colar num trecho os mantém', async () => {
+    const { user, container } = montar({ dados: { inicio: '14:00' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const dados = within(blocoDados());
+    expect(await dados.findByText('A transcrição dura 27 min.')).toBeInTheDocument();
+    const campo = within(blocoTranscricao()).getByLabelText(/^Transcrição da reunião/);
+
+    // Colar num trecho (cursor no fim): edição do mesmo texto.
+    await user.click(campo);
+    (campo as HTMLTextAreaElement).setSelectionRange(
+      (campo as HTMLTextAreaElement).value.length,
+      (campo as HTMLTextAreaElement).value.length,
+    );
+    await user.paste(' complemento');
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+
+    // Selecionar tudo e colar: outra transcrição.
+    (campo as HTMLTextAreaElement).setSelectionRange(
+      0,
+      (campo as HTMLTextAreaElement).value.length,
+    );
+    await user.paste('Iva Reis: outra reunião.');
+    expect(campo).toHaveValue('Iva Reis: outra reunião.');
+    expect(dados.queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+    expect(
+      within(blocoTranscricao()).getByText('Encontramos 1 pessoa que falou: Iva Reis.'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('término a partir da duração do .vtt', () => {
+  it('início vazio: diz a duração e pede o início; preenchido: oferece o término e preenche', async () => {
+    const { user, container } = montar();
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const dados = within(blocoDados());
+    expect(
+      await dados.findByText(
+        'A transcrição dura 27 min — preencha o início para sugerirmos o término.',
+      ),
+    ).toBeInTheDocument();
+
+    await user.type(dados.getByLabelText(/^Início/), '14:00');
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+    await user.click(dados.getByRole('button', { name: 'Preencher o término com 14h27' }));
+
+    expect(dados.getByLabelText(/^Término/)).toHaveValue('14:27');
+    expect(
+      dados.getByText(
+        'Término preenchido com 14h27 (início 14h + 27 min da transcrição). Ajuste se a reunião terminou em outro horário.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(dados.getByRole('button', { name: 'Desfazer' }));
+    expect(dados.getByLabelText(/^Término/)).toHaveValue('');
+  });
+
+  it('término já preenchido nunca é sobrescrito nem sugerido', async () => {
+    const { user, container } = montar({ dados: { inicio: '14:00', fim: '16:00' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    await screen.findByDisplayValue(/Ana Souza:/);
+    expect(within(blocoDados()).queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+    expect(within(blocoDados()).getByLabelText(/^Término/)).toHaveValue('16:00');
+  });
+
+  it('passaria da meia-noite: não sugere e diz por quê', async () => {
+    const { user, container } = montar({ dados: { inicio: '23:50' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    expect(
+      await within(blocoDados()).findByText(
+        'A transcrição dura 27 min: somada ao início (23h50), passaria da meia-noite. Preencha o término à mão.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(blocoDados()).queryByRole('button', { name: /^Preencher o término/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('.txt não tem tempos: nada de duração; Limpar a transcrição apaga a duração', async () => {
+    const { user, container } = montar({ dados: { inicio: '14:00' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    expect(await within(blocoDados()).findByText('A transcrição dura 27 min.')).toBeInTheDocument();
+    await user.click(within(blocoTranscricao()).getByRole('button', { name: 'Limpar' }));
+    await waitFor(() => {
+      expect(within(blocoDados()).queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+    });
+    // Desfazer o Limpar devolve o texto E a duração.
+    await user.click(within(blocoTranscricao()).getByRole('button', { name: 'Desfazer' }));
+    expect(within(blocoDados()).getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+
+    await user.upload(
+      campoArquivo(container),
+      new File(['Ana: oi'], 'r.txt', { type: 'text/plain' }),
+    );
+    await screen.findByDisplayValue('Ana: oi');
+    expect(within(blocoDados()).queryByText(/A transcrição dura/)).not.toBeInTheDocument();
+  });
+});

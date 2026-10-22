@@ -135,11 +135,32 @@ describe('persistência do rascunho', () => {
       }),
     ],
     [
+      'falha anterior com motivo de recusa desconhecido',
+      comResultado({
+        atribuicao: {
+          resumo: {
+            provedor: 'gemini',
+            modelo: 'm',
+            falhas: [{ provedor: 'openai', erro: 'chave_invalida', motivo: 'x' }],
+          },
+        },
+      }),
+    ],
+    [
       'atribuição sem falhas nem fallbackDe',
       comResultado({ atribuicao: { resumo: { provedor: 'gemini', modelo: 'm' } } }),
     ],
     ['avisos com número', comResultado({ avisos: { resumo: [1] } })],
     ['editadas que não é lista', comResultado({ editadas: 'resumo' })],
+    ['vtt não é objeto', { ...rascunhoCompleto(), vtt: 72 }],
+    ['vtt sem lista de nomes', { ...rascunhoCompleto(), vtt: { duracaoMin: 72 } }],
+    ['vtt com nome não texto', { ...rascunhoCompleto(), vtt: { falantes: [1] } }],
+    [
+      'vtt com duração não numérica',
+      { ...rascunhoCompleto(), vtt: { duracaoMin: '72', falantes: [] } },
+    ],
+    ['vtt com duração zero', { ...rascunhoCompleto(), vtt: { duracaoMin: 0, falantes: ['Ana'] } }],
+    ['vtt vazio', { ...rascunhoCompleto(), vtt: { falantes: [] } }],
     ['valor que não é objeto', 42],
     ['null', null],
   ])('formato inválido (%s) → null', (_nome, valor) => {
@@ -206,7 +227,10 @@ describe('persistência do rascunho', () => {
         resumo: {
           provedor: 'gemini',
           modelo: 'm',
-          falhas: [{ provedor: 'openai', erro: 'limite' }],
+          falhas: [
+            { provedor: 'openai', erro: 'limite' },
+            { provedor: 'anthropic', erro: 'chave_invalida', motivo: 'sem_workspace' },
+          ],
         },
       },
     }) as AtaDraft;
@@ -226,6 +250,18 @@ describe('persistência do rascunho', () => {
       resumo: { provedor: 'gemini', modelo: 'm', falhas: [{ provedor: 'openai' }] },
       decisoes: { provedor: 'openai', modelo: 'm', falhas: [] },
     });
+  });
+
+  it('os dados do .vtt fazem ida e volta (só na sessão, como o resto do rascunho)', () => {
+    const d = draftReducer(rascunhoCompleto(), {
+      type: 'definirTranscricao',
+      texto: 'Ana: bom dia.',
+      vtt: { duracaoMin: 72, falantes: ['Souza, Ana'] },
+    });
+    salvarRascunho(d);
+    expect(carregarRascunho()).toEqual(d);
+    expect(carregarRascunho()?.vtt).toEqual({ duracaoMin: 72, falantes: ['Souza, Ana'] });
+    expect(localStorage.length).toBe(0);
   });
 
   it('a chave de API nunca aparece no JSON salvo', () => {

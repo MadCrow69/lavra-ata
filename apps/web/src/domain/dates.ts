@@ -147,13 +147,52 @@ export function formatarDataPorExtenso(iso: string): string {
   return `${abertura} do mês de ${MESES[mes - 1] as string} de ${anoPorExtenso(ano)}`;
 }
 
-/** '14:30' → '14h30'; '09:00' → '9h'. */
-export function formatarHora(hhmm: string): string {
+const MINUTOS_POR_HORA = 60;
+const MINUTOS_POR_DIA = 24 * MINUTOS_POR_HORA;
+
+/** 'HH:MM' → minutos desde 00:00; fora do formato ou de 00:00–23:59 lança RangeError. */
+function lerHora(hhmm: string): number {
   const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
   const horas = m ? Number(m[1]) : NaN;
   const minutos = m ? Number(m[2]) : NaN;
   if (!m || horas > 23 || minutos > 59) {
     throw new RangeError(`Hora inválida: "${hhmm}". Use o formato HH:MM (00:00 a 23:59).`);
   }
+  return horas * MINUTOS_POR_HORA + minutos;
+}
+
+function exigirMinutosInteiros(minutos: number, minimo: number): void {
+  if (!Number.isInteger(minutos) || minutos < minimo) {
+    throw new RangeError(`Duração inválida: ${String(minutos)}. Use minutos inteiros.`);
+  }
+}
+
+/** 72 → '1h12'; 60 → '1h' (sem limite de 24 h: é duração, não hora do dia). */
+function horasEMinutos(total: number): string {
+  const horas = Math.floor(total / MINUTOS_POR_HORA);
+  const minutos = total % MINUTOS_POR_HORA;
   return minutos === 0 ? `${String(horas)}h` : `${String(horas)}h${doisDigitos(minutos)}`;
+}
+
+/** '14:30' → '14h30'; '09:00' → '9h'. */
+export function formatarHora(hhmm: string): string {
+  return horasEMinutos(lerHora(hhmm));
+}
+
+/** Duração em minutos: 72 → '1h12'; 60 → '1h'; 45 → '45 min'. Zero ou fração lança RangeError. */
+export function formatarDuracao(minutos: number): string {
+  exigirMinutosInteiros(minutos, 1);
+  return minutos < MINUTOS_POR_HORA ? `${String(minutos)} min` : horasEMinutos(minutos);
+}
+
+/**
+ * '14:00' + 72 → '15:12', no mesmo dia: passar de 23:59 devolve `null` (a ata não tem como saber
+ * se a reunião virou o dia). Hora inválida ou minutos negativos/fracionados lançam RangeError.
+ */
+export function somarMinutos(hhmm: string, minutos: number): string | null {
+  const inicio = lerHora(hhmm);
+  exigirMinutosInteiros(minutos, 0);
+  const total = inicio + minutos;
+  if (total >= MINUTOS_POR_DIA) return null;
+  return `${doisDigitos(Math.floor(total / MINUTOS_POR_HORA))}:${doisDigitos(total % MINUTOS_POR_HORA)}`;
 }
