@@ -24,6 +24,7 @@ pnpm --filter @lavra/web e2e    # E2E (Playwright) contra o build; exige `pnpm b
 pnpm --filter @lavra/web cobertura:fontes   # regera a cobertura de caracteres das fontes do PDF
 pnpm --filter @lavra/web metricas:fontes    # regera as métricas do Inter usadas no teste de largura das colunas
 pnpm --filter @lavra/web gif                # regrava docs/demo.gif (exige `pnpm build` antes e o ffmpeg)
+pnpm --filter @lavra/web og                 # regera a imagem do card de compartilhamento e o ícone PNG (exige `pnpm build` antes)
 ```
 
 O `pnpm dev` não existe na raiz; use o filtro do pacote, como acima.
@@ -43,6 +44,14 @@ O mesmo vale para `apps/web/src/test/metricas-inter.gerada.ts` (avanço de cada 
 - Requer o [ffmpeg](https://ffmpeg.org/download.html). Se ele não estiver no `PATH`, aponte o executável na variável `FFMPEG` (ex.: `FFMPEG=/caminho/do/ffmpeg pnpm --filter @lavra/web gif`).
 - O orçamento é de **3 MB**: acima disso o script falha sem tocar no `docs/demo.gif` atual. Para caber, reduza fps, largura ou cores em `OPCOES_GIF` (`apps/web/scripts/video-para-gif.mjs`) ou encurte as pausas do roteiro.
 - Regrave o GIF quando a interface mostrada nele mudar de forma visível, e confira os quadros antes de commitar.
+
+### Card de compartilhamento e ícone
+
+O `apps/web/index.html` traz as tags do card (Open Graph, usado pelo LinkedIn) e o ícone. As URLs do card são absolutas e seguem `SITE.demo` (`apps/web/src/config/site.ts`); `src/config/compartilhamento.test.ts` reprova divergência, imagem fora de 1200×630 ou acima de 300 kB, e ícone com texto, script ou cor fora dos tokens.
+
+- `apps/web/public/favicon.svg` é desenhado à mão (só formas, com as cores de `tokens.css`).
+- `og-image.png` e `apple-touch-icon.png` são gerados do app: `pnpm --filter @lavra/web og` roda `apps/web/og/imagens.spec.ts` contra o build (rode `pnpm build` antes), abre o exemplo de reunião corporativa e fotografa a tela; o ícone PNG sai do `favicon.svg`. Como o GIF, fica fora do E2E: o CI nunca gera. Depois, rode `pnpm build` de novo para as imagens entrarem no `dist/`.
+- Regere quando a interface da primeira tela mudar de forma visível, e confira a imagem antes de commitar.
 
 ### Exemplo de um tipo de ata novo
 

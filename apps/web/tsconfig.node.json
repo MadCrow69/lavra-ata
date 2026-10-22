@@ -15,9 +15,11 @@
     "vitest.config.ts",
     "playwright.config.ts",
     "playwright.gif.config.ts",
+    "playwright.og.config.ts",
     "csp.config.js",
     "scripts",
     "e2e",
-    "gif"
+    "gif",
+    "og"
   ]
 }

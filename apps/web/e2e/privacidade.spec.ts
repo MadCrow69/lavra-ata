@@ -62,3 +62,30 @@ test.describe('Privacidade: como verificar', () => {
     expect(rede.chamadas).toEqual([]);
   });
 });
+
+test.describe('Card de compartilhamento e ícone', () => {
+  test('o build serve o ícone, o PNG da tela inicial e a imagem do card, sem violar a CSP', async ({
+    app: page,
+    rede,
+  }) => {
+    const icone = await page.locator('link[rel="icon"]').getAttribute('href');
+    const iconePng = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
+    // O Vite acrescenta o `base` aos arquivos de `public/`.
+    expect(icone).toBe('/lavra-ata/favicon.svg');
+    expect(iconePng).toBe('/lavra-ata/apple-touch-icon.png');
+    // A imagem do card tem URL absoluta (o LinkedIn não resolve caminho relativo): o mesmo arquivo
+    // é servido pelo build em `og-image.png`.
+    const card = await page.locator('meta[property="og:image"]').getAttribute('content');
+    expect(card).toMatch(/^https:\/\/.+\/og-image\.png$/);
+    for (const [caminho, tipo] of [
+      ['favicon.svg', 'image/svg+xml'],
+      ['apple-touch-icon.png', 'image/png'],
+      ['og-image.png', 'image/png'],
+    ] as const) {
+      const resposta = await page.request.get(caminho);
+      expect(resposta.status(), caminho).toBe(200);
+      expect(resposta.headers()['content-type'], caminho).toContain(tipo);
+    }
+    await afirmarLimpo(page, rede);
+  });
+});
