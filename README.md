@@ -105,7 +105,7 @@ formulário (dados, participantes) ───────────────
 - **Sem backend:** o site é estático (GitHub Pages) e as únicas conexões são as do navegador aos três provedores.
 - **CSP em `<meta>`** (o GitHub Pages não permite cabeçalhos próprios), gerada de uma fonte única e conferida no build; o E2E roda contra o build com a CSP ativa e reprova qualquer requisição a outro host ou violação da política.
 - **Exportação local:** PDF e DOCX são montados no navegador, a partir do mesmo modelo da folha.
-- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.112 testes unitários (Vitest) e 43 testes E2E (Playwright).
+- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.158 testes unitários (Vitest) e 43 testes E2E (Playwright).
 
 ## Limitações
 
