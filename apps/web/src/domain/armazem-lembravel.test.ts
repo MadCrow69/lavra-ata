@@ -165,6 +165,13 @@ describe('criarArmazemLembravel', () => {
     });
   });
 
+  it('localDisponivel diz se há localStorage (a fonte única desse fato para quem usa)', () => {
+    expect(criar(storageFalso().storage, storageFalso().storage).localDisponivel).toBe(true);
+    expect(criar(storageFalso().storage, null).localDisponivel).toBe(false);
+    localStorage.clear();
+    expect(criarArmazemLembravel(CHAVE, ler, serializar).localDisponivel).toBe(true);
+  });
+
   it('sem storages explícitos usa o do navegador', () => {
     sessionStorage.clear();
     localStorage.clear();

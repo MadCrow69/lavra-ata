@@ -2,7 +2,6 @@ import { LOGO_BYTES_MAX_PNG, LOGO_SAIDA_MAX_PX } from '../config/logo';
 import { LOGO } from '../config/storage-keys';
 import type { LogoDoc } from '../document/model';
 import { criarArmazemLembravel } from '../domain/armazem-lembravel';
-import { storageOuNulo } from '../domain/storage-ou-nulo';
 import { bytesDoDataUrlPng, ehDataUrlPng } from './png-data-url';
 
 export interface LogoStore {
@@ -63,7 +62,6 @@ export function criarLogoStore(sessao?: Storage | null, local?: Storage | null):
   const armazem = criarArmazemLembravel(LOGO, lerLogo, serializar, sessao, local);
   let atual: LogoDoc | null = armazem.lido;
   let lembrar = armazem.lembrado;
-  const localDisponivel = (local === undefined ? storageOuNulo('local') : local) !== null;
 
   return {
     atual: () => atual,
@@ -88,7 +86,7 @@ export function criarLogoStore(sessao?: Storage | null, local?: Storage | null):
         const naSessao = atual === null ? true : armazem.gravarSessao(atual);
         return { persistiu: naSessao };
       }
-      if (atual === null) return { persistiu: localDisponivel };
+      if (atual === null) return { persistiu: armazem.localDisponivel };
       lembrar = armazem.gravarLocal(atual);
       return { persistiu: lembrar };
     },

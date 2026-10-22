@@ -11,6 +11,8 @@ export interface ArmazemLembravel<T> {
   lido: T | null;
   /** O valor lido veio do `localStorage`. */
   lembrado: boolean;
+  /** Há `localStorage` para lembrar (o navegador não o bloqueou na abertura). */
+  localDisponivel: boolean;
   gravarSessao: (v: T) => boolean;
   gravarLocal: (v: T) => boolean;
   apagarSessao: () => void;
@@ -81,6 +83,7 @@ export function criarArmazemLembravel<T>(
   return {
     lido: doLocal ?? daSessao,
     lembrado: doLocal !== null,
+    localDisponivel: alvoLocal !== null,
     gravarSessao: (v) => gravar(alvoSessao, chave, v, serializar),
     gravarLocal: (v) => gravar(alvoLocal, chave, v, serializar),
     apagarSessao: () => {
