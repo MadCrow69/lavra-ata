@@ -1,4 +1,4 @@
-import { MODELOS } from '../config/models';
+import { MODELOS, ORDEM_PADRAO_PROVEDORES } from '../config/models';
 import { CHAVES } from '../config/storage-keys';
 import { storageOuNulo } from '../domain/storage-ou-nulo';
 import { PROVEDORES, type MotivoRecusa, type ProviderConfig, type ProviderId } from './types';
@@ -73,7 +73,7 @@ function ehProvedor(v: unknown): v is ProviderId {
 export function normalizarOrdem(ordem: readonly unknown[]): ProviderId[] {
   const vistos = new Set<ProviderId>();
   for (const p of ordem) if (ehProvedor(p)) vistos.add(p);
-  for (const p of PROVEDORES) vistos.add(p);
+  for (const p of ORDEM_PADRAO_PROVEDORES) vistos.add(p);
   return [...vistos];
 }
 
@@ -122,7 +122,7 @@ export function criarKeyStore(storage?: Storage | null, ordemInicial?: OrdemInic
   // Lida de novo em `apagarTudo`: vale a preferência de AGORA, não a da abertura.
   const ordemBase = (): ProviderId[] => {
     const base = typeof ordemInicial === 'function' ? ordemInicial() : ordemInicial;
-    return base ? normalizarOrdem(base) : [...PROVEDORES];
+    return base ? normalizarOrdem(base) : [...ORDEM_PADRAO_PROVEDORES];
   };
   let ordem: ProviderId[] = ordemBase();
   let lembrar = false;

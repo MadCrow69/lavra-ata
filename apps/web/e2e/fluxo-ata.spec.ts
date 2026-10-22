@@ -41,9 +41,15 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     rede,
   }) => {
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI, 'Google Gemini': CHAVE_GEMINI });
-    await expect(page.getByRole('banner').getByRole('button', { name: /^IA: / })).toContainText(
-      'IA: OpenAI → Gemini',
-    );
+    const botaoIa = page.getByRole('banner').getByRole('button', { name: /^IA: / });
+    // Ordem padrão: Gemini primeiro.
+    await expect(botaoIa).toContainText('IA: Gemini → OpenAI');
+    // A pessoa põe a OpenAI na frente: a escolha dela vence a ordem padrão.
+    await botaoIa.click();
+    const dialogo = page.getByRole('dialog', { name: 'Chaves de IA' });
+    await dialogo.getByRole('button', { name: 'Mover OpenAI para cima' }).click();
+    await dialogo.getByRole('button', { name: 'Concluir' }).click();
+    await expect(botaoIa).toContainText('IA: OpenAI → Gemini');
 
     await preencherReuniao(page);
     const gerar = page.getByRole('button', { name: /Gerar ata/ });

@@ -118,7 +118,7 @@ describe('criarKeyStore', () => {
     expect(store.listar()).toEqual([]);
     expect(store.cadeia()).toEqual([]);
     expect(store.lembrar()).toBe(false);
-    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
+    expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
     expect(dados.has(CHAVES)).toBe(false);
   });
 
@@ -170,7 +170,7 @@ describe('criarKeyStore', () => {
       const store = criarKeyStore(storage);
       expect(store.listar()).toEqual([]);
       expect(store.lembrar()).toBe(false);
-      expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
+      expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
     }
   });
 
@@ -182,7 +182,7 @@ describe('criarKeyStore', () => {
     const store = criarKeyStore(storage);
     expect(store.listar().map((c) => c.provedor)).toEqual(['gemini']);
     expect(store.lembrar()).toBe(true);
-    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
+    expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
   });
 
   it('storage que lança (modo privado) não derruba nada', () => {
@@ -253,7 +253,7 @@ describe('criarKeyStore', () => {
     store.definir(chave({ provedor: 'gemini', chave: CHAVE_GEMINI }));
     store.definirEstado('openai', CHAVE_OPENAI, 'invalida');
     expect(store.cadeia().map((c) => c.id)).toEqual(['gemini']);
-    expect(store.listar().map((c) => c.provedor)).toEqual(['openai', 'gemini']);
+    expect(store.listar().map((c) => c.provedor)).toEqual(['gemini', 'openai']);
 
     store.definirEstado('gemini', CHAVE_GEMINI, 'invalida');
     expect(store.cadeia()).toEqual([]);
@@ -273,8 +273,8 @@ describe('criarKeyStore', () => {
     });
     const store = criarKeyStore(storage);
     expect(store.cadeia()).toEqual([
-      { id: 'openai', modelo: MODELOS.openai.padrao, chave: CHAVE_OPENAI },
       { id: 'gemini', modelo: 'gem-x', chave: CHAVE_GEMINI },
+      { id: 'openai', modelo: MODELOS.openai.padrao, chave: CHAVE_OPENAI },
     ]);
   });
 
@@ -379,19 +379,19 @@ describe('criarKeyStore', () => {
       const store = criarKeyStore(null, ['anthropic']);
       store.reordenar(['openai', 'gemini', 'anthropic']);
       store.apagarTudo();
-      expect(store.ordem()).toEqual(['anthropic', 'openai', 'gemini']);
+      expect(store.ordem()).toEqual(['anthropic', 'gemini', 'openai']);
     });
 
     it('a ordem inicial pode ser uma função: apagar tudo lê a preferência de agora', () => {
       let preferida: ProviderId[] | undefined = ['anthropic'];
       const store = criarKeyStore(null, () => preferida);
-      expect(store.ordem()).toEqual(['anthropic', 'openai', 'gemini']);
+      expect(store.ordem()).toEqual(['anthropic', 'gemini', 'openai']);
       preferida = ['gemini', 'openai'];
       store.apagarTudo();
       expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
       preferida = undefined;
       store.apagarTudo();
-      expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
+      expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
     });
   });
 });

@@ -121,6 +121,8 @@ function EdicaoManual() {
 interface Opcoes {
   inicial?: AtaDraft;
   chaves?: ChaveProvedor[];
+  /** Ordem escolhida pela pessoa; ausente = a ordem padrão (Gemini primeiro). */
+  ordem?: ProviderId[];
   impl?: Partial<Record<ProviderId, Gerar>>;
   comBlocos?: boolean;
   comEdicao?: boolean;
@@ -128,9 +130,13 @@ interface Opcoes {
   noExemplo?: boolean;
 }
 
+/** A pessoa pôs a OpenAI na frente (a escolha dela vence a ordem padrão). */
+const OPENAI_PRIMEIRO: ProviderId[] = ['openai', 'gemini', 'anthropic'];
+
 function renderizar({
   inicial = completo(),
   chaves = [],
+  ordem,
   impl = {},
   comBlocos = false,
   comEdicao = false,
@@ -138,6 +144,7 @@ function renderizar({
 }: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
+  if (ordem) store.reordenar(ordem);
   const onConfigurarChaves = vi.fn();
   const onGerada = vi.fn();
   const { a, gerar } = adaptadores(impl);
@@ -256,8 +263,16 @@ describe('GenerateBar', () => {
     expect(gerar.openai).not.toHaveBeenCalled();
   });
 
+  it('sem ordem escolhida, o Gemini vai primeiro (ordem padrão)', () => {
+    renderizar({ chaves: [OPENAI, GEMINI] });
+    expect(screen.getByText('Envia para Gemini · gemini-3.8-flash (depois OpenAI)')).toBeVisible();
+  });
+
   it('com chave: mostra para quem envia, o modelo e o próximo da fila', async () => {
-    const { user, onConfigurarChaves } = renderizar({ chaves: [OPENAI, GEMINI] });
+    const { user, onConfigurarChaves } = renderizar({
+      chaves: [OPENAI, GEMINI],
+      ordem: OPENAI_PRIMEIRO,
+    });
     expect(screen.getByText('Envia para OpenAI · gpt-6-luna (depois Gemini)')).toBeVisible();
     await user.click(screen.getByRole('button', { name: /Trocar/ }));
     expect(onConfigurarChaves).toHaveBeenCalledTimes(1);
@@ -289,6 +304,7 @@ describe('GenerateBar', () => {
   it('sucesso com fallback: grava a ata e o toast diz quem gerou e quem falhou', async () => {
     const { user, onGerada } = renderizar({
       chaves: [OPENAI, GEMINI],
+      ordem: OPENAI_PRIMEIRO,
       impl: {
         openai: () =>
           Promise.reject(new ErroProvedor('limite', 'openai', 'limite', 429, { repetivel: false })),
@@ -307,6 +323,7 @@ describe('GenerateBar', () => {
   it('chave recusada no fallback: marcada como inválida e sai da fila (spec 8.1.1)', async () => {
     const { store, user } = renderizar({
       chaves: [OPENAI, GEMINI],
+      ordem: OPENAI_PRIMEIRO,
       impl: {
         openai: () => Promise.reject(erroProvedor('chave_invalida', 'openai', { status: 401 })),
         gemini: () => Promise.resolve(RESPOSTA),
@@ -322,6 +339,7 @@ describe('GenerateBar', () => {
   it('chave recusada com a cadeia toda falhando também é marcada; as outras não', async () => {
     const { store, user } = renderizar({
       chaves: [OPENAI, GEMINI],
+      ordem: OPENAI_PRIMEIRO,
       impl: {
         openai: () => Promise.reject(erroProvedor('chave_invalida', 'openai', { status: 403 })),
         gemini: () => Promise.reject(erroProvedor('recusa', 'gemini')),
@@ -337,6 +355,7 @@ describe('GenerateBar', () => {
     let tentativas = 0;
     const { user, gerar } = renderizar({
       chaves: [OPENAI, GEMINI],
+      ordem: OPENAI_PRIMEIRO,
       impl: {
         openai: () => {
           tentativas++;

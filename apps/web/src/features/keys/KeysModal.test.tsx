@@ -179,7 +179,8 @@ describe('KeysModal', () => {
     await user.click(screen.getByRole('button', { name: 'Mostrar chave de OpenAI' }));
     await user.type(campoChave('Google Gemini'), CHAVE_2);
 
-    expect(store.cadeia().map((c) => c.chave)).toEqual([CHAVE, CHAVE_2]);
+    // Ordem padrão: Gemini primeiro.
+    expect(store.cadeia().map((c) => c.chave)).toEqual([CHAVE_2, CHAVE]);
     expect(dados.size).toBe(0);
 
     // Testar (com falha) e trocar a ordem também não podem vazar a chave.
@@ -392,7 +393,7 @@ describe('KeysModal', () => {
     });
     await user.type(campoChave('OpenAI'), CHAVE);
     await user.type(campoChave('Google Gemini'), CHAVE_2);
-    expect(store.cadeia().map((c) => c.id)).toEqual(['openai', 'gemini']);
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini', 'openai']);
 
     await user.click(screen.getByRole('button', { name: 'Testar chave de OpenAI' }));
     expect(
@@ -406,7 +407,7 @@ describe('KeysModal', () => {
 
     await user.type(campoChave('OpenAI'), '9');
     expect(within(cartao('OpenAI')).queryByText(/Chave inválida/)).not.toBeInTheDocument();
-    expect(store.cadeia().map((c) => c.id)).toEqual(['openai', 'gemini']);
+    expect(store.cadeia().map((c) => c.id)).toEqual(['gemini', 'openai']);
   });
 
   it('navegador que bloqueia o armazenamento: "Lembrar" não liga e o aviso aparece', async () => {
@@ -505,28 +506,30 @@ describe('KeysModal', () => {
     await user.type(campoChave('OpenAI'), CHAVE);
     await user.type(campoChave('Google Gemini'), CHAVE_2);
 
-    await user.click(screen.getByRole('button', { name: 'Mover Google Gemini para cima' }));
+    // Ordem padrão: Gemini primeiro; a pessoa põe a OpenAI na frente.
     expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
-    expect(screen.getByRole('button', { name: 'Mover Google Gemini para cima' })).toHaveFocus();
-    expect(screen.getByTestId('cadeia')).toHaveTextContent(/^gemini:.*\|openai:/);
+    await user.click(screen.getByRole('button', { name: 'Mover OpenAI para cima' }));
+    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
+    expect(screen.getByRole('button', { name: 'Mover OpenAI para cima' })).toHaveFocus();
+    expect(screen.getByTestId('cadeia')).toHaveTextContent(/^openai:.*\|gemini:/);
     expect(
-      screen.getByText('Nova ordem de preferência: Google Gemini, OpenAI, Anthropic.'),
+      screen.getByText('Nova ordem de preferência: OpenAI, Google Gemini, Anthropic.'),
     ).toBeInTheDocument();
     // Na ponta, o botão não faz nada e continua focável.
-    await user.click(screen.getByRole('button', { name: 'Mover Google Gemini para cima' }));
-    expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
+    await user.click(screen.getByRole('button', { name: 'Mover OpenAI para cima' }));
+    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
 
     // Teclado: Enter e Espaço.
-    const baixo = screen.getByRole('button', { name: 'Mover Google Gemini para baixo' });
+    const baixo = screen.getByRole('button', { name: 'Mover OpenAI para baixo' });
     baixo.focus();
     await user.keyboard('{Enter}');
-    expect(store.ordem()).toEqual(['openai', 'gemini', 'anthropic']);
-    expect(screen.getByRole('button', { name: 'Mover Google Gemini para baixo' })).toHaveFocus();
+    expect(store.ordem()).toEqual(['gemini', 'openai', 'anthropic']);
+    expect(screen.getByRole('button', { name: 'Mover OpenAI para baixo' })).toHaveFocus();
     await user.keyboard(' ');
-    expect(store.ordem()).toEqual(['openai', 'anthropic', 'gemini']);
-    expect(screen.getByRole('button', { name: 'Mover Google Gemini para baixo' })).toHaveFocus();
+    expect(store.ordem()).toEqual(['gemini', 'anthropic', 'openai']);
+    expect(screen.getByRole('button', { name: 'Mover OpenAI para baixo' })).toHaveFocus();
     expect(
-      screen.getByText('Nova ordem de preferência: OpenAI, Anthropic, Google Gemini.'),
+      screen.getByText('Nova ordem de preferência: Google Gemini, Anthropic, OpenAI.'),
     ).toBeInTheDocument();
   });
 
@@ -601,7 +604,7 @@ describe('KeysModal', () => {
       const preferencias = criarPreferenciasStore(null, null);
       const { user } = await montar({ preferencias });
       await user.click(screen.getByRole('button', { name: 'Mover Anthropic para cima' }));
-      expect(preferencias.atual().ordem).toEqual(['openai', 'anthropic', 'gemini']);
+      expect(preferencias.atual().ordem).toEqual(['gemini', 'anthropic', 'openai']);
     });
 
     it('trocar o modelo grava modelos.openai (e só ele)', async () => {
