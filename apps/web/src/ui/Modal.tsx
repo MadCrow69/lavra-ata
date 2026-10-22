@@ -18,6 +18,11 @@ export interface ModalProps {
   acoes?: ReactNode;
   /** Elemento que recebe o foco ao abrir; ausente = o painel (comportamento atual). */
   focoInicial?: RefObject<HTMLElement | null>;
+  /**
+   * Nome do corpo rolável. Com ele, o corpo vira uma região focável (entra no Tab) e rola pelas
+   * setas: para diálogo longo com trechos só de texto, que o teclado não alcançaria de outro modo.
+   */
+  rotuloCorpo?: string;
 }
 
 const FOCAVEIS =
@@ -53,7 +58,15 @@ function focaveisDe(raiz: HTMLElement): HTMLElement[] {
  * atrás não rola. Div com `role="dialog"` (e não `<dialog>`) para o comportamento ser o mesmo
  * em qualquer navegador e testável.
  */
-export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }: ModalProps) {
+export function Modal({
+  aberto,
+  titulo,
+  onFechar,
+  children,
+  acoes,
+  focoInicial,
+  rotuloCorpo,
+}: ModalProps) {
   const tituloId = useId();
   const painelRef = useRef<HTMLDivElement>(null);
   // Identidade deste modal na pilha de modais abertos.
@@ -154,7 +167,14 @@ export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }
             <span aria-hidden="true">✕</span>
           </button>
         </header>
-        <div className={styles.corpo}>{children}</div>
+        <div
+          className={styles.corpo}
+          {...(rotuloCorpo === undefined
+            ? {}
+            : { role: 'region', 'aria-label': rotuloCorpo, tabIndex: 0 })}
+        >
+          {children}
+        </div>
         {acoes ? <footer className={styles.rodape}>{acoes}</footer> : null}
       </div>
     </div>,

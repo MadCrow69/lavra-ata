@@ -13,6 +13,16 @@ import { Modal } from '../../ui/Modal';
 import styles from './como-verificar.module.css';
 
 export const TITULO_COMO_VERIFICAR = 'Privacidade: como verificar';
+/** Nome do corpo rolável do diálogo (o texto é longo e rola pelo teclado). */
+export const ROTULO_CORPO_COMO_VERIFICAR = 'Texto de Privacidade: como verificar';
+/** Só quando a página não tem o `<meta>` de CSP: no servidor de desenvolvimento ele não é inserido. */
+export const AVISO_SEM_META_CSP =
+  'Nesta página a tag não existe porque o servidor de desenvolvimento não a insere; ela vem no build, como no site publicado.';
+
+/** A página atual tem o `<meta>` de CSP? (Build local ou publicado: sim; `pnpm dev`: não.) */
+function temMetaDeCsp(): boolean {
+  return document.querySelector('meta[http-equiv="Content-Security-Policy" i]') !== null;
+}
 
 export interface ComoVerificarModalProps {
   aberto: boolean;
@@ -46,7 +56,12 @@ export function ComoVerificarModal({
   const emDesenvolvimento = commit === COMMIT_DESENVOLVIMENTO;
 
   return (
-    <Modal aberto={aberto} titulo={TITULO_COMO_VERIFICAR} onFechar={onFechar}>
+    <Modal
+      aberto={aberto}
+      titulo={TITULO_COMO_VERIFICAR}
+      onFechar={onFechar}
+      rotuloCorpo={ROTULO_CORPO_COMO_VERIFICAR}
+    >
       <div className={styles.conteudo}>
         <section className={styles.secao}>
           <h3>O que sai do navegador</h3>
@@ -90,9 +105,7 @@ export function ComoVerificarModal({
             <code>&lt;meta http-equiv=&quot;Content-Security-Policy&quot;&gt;</code> lista os
             destinos permitidos em <code>connect-src</code>. O próprio navegador bloqueia qualquer
             outro.
-            {emDesenvolvimento
-              ? ' Na versão de desenvolvimento a tag não existe: ela é inserida só no build publicado.'
-              : ''}
+            {aberto && !temMetaDeCsp() ? ` ${AVISO_SEM_META_CSP}` : ''}
           </p>
           <p>
             <LinkExterno href={urlDoCodigo(CAMINHOS_CODIGO.csp, commit)}>

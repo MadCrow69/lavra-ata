@@ -6,7 +6,12 @@ import { criarKeyStore } from '../../ai/keys';
 import { ORIGEM_PROVEDOR } from '../../config/models';
 import { CAMINHOS_CODIGO, SITE, urlDoCodigo, urlDoCommit } from '../../config/site';
 import { Header } from '../../shell/Header';
-import { ComoVerificarModal, TITULO_COMO_VERIFICAR } from './ComoVerificar';
+import {
+  AVISO_SEM_META_CSP,
+  ComoVerificarModal,
+  ROTULO_CORPO_COMO_VERIFICAR,
+  TITULO_COMO_VERIFICAR,
+} from './ComoVerificar';
 
 /** Consultas restritas à seção (`<section>`) cujo `h3` tem este nome. */
 function secaoDe(titulo: string) {
@@ -105,6 +110,35 @@ describe('Privacidade: como verificar (modal)', () => {
       `${SITE.repositorio}/tree/main/apps/web/src/ai/providers`,
     );
     expect(screen.queryByText(/publicado pelo GitHub Actions/)).not.toBeInTheDocument();
+  });
+
+  it('o texto longo rola pelo teclado: o corpo é uma região focável com nome', () => {
+    renderizarModal(SHA);
+    const corpo = screen.getByRole('region', { name: ROTULO_CORPO_COMO_VERIFICAR });
+    expect(corpo).toHaveAttribute('tabindex', '0');
+    expect(within(corpo).getByRole('heading', { name: 'O que não é protegido' })).toBeVisible();
+  });
+
+  it('sem o <meta> de CSP na página (servidor de desenvolvimento), avisa que a tag não está nela', () => {
+    renderizarModal(SHA);
+    expect(
+      secaoDe('Confira a política de segurança (CSP)').getByText(AVISO_SEM_META_CSP, {
+        exact: false,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('com o <meta> de CSP na página (build local ou publicado), não diz que a tag falta', () => {
+    const meta = document.createElement('meta');
+    meta.httpEquiv = 'Content-Security-Policy';
+    meta.content = "default-src 'self'";
+    document.head.append(meta);
+    try {
+      renderizarModal('dev');
+      expect(screen.queryByText(AVISO_SEM_META_CSP, { exact: false })).not.toBeInTheDocument();
+    } finally {
+      meta.remove();
+    }
   });
 
   it('indica o site publicado', () => {
