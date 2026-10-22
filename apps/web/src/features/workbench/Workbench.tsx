@@ -169,9 +169,10 @@ function Bancada({
     mostrar({ titulo });
   };
 
-  // Rascunho vazio e IA parada: não há o que perder, então "Nova ata" não pergunta.
+  // Rascunho vazio (ou o exemplo intacto) e IA parada: não há o que perder, então "Nova ata" não
+  // pergunta.
   const pedirNovaAta = () => {
-    if (!temConteudo(state) && operacao === null) novaAta();
+    if ((!temConteudo(state) || exemplo.intacto) && operacao === null) novaAta();
     else setConfirmando(true);
   };
 

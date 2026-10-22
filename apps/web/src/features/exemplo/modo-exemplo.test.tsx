@@ -553,6 +553,8 @@ describe('modo exemplo: sair', () => {
     preferencias.definir({ tom: 'conciso' });
     const { user } = renderizar({ preferencias });
     await verExemplo(user, cipa.rotulo);
+    // Editado: agora há o que perder, então "Nova ata" pergunta.
+    await user.type(screen.getByLabelText(/^Empresa/), ' Filial');
 
     await user.click(screen.getByRole('button', { name: 'Nova ata' }));
     const dialogo = screen.getByRole('dialog', { name: 'Começar uma nova ata?' });
@@ -572,12 +574,33 @@ describe('modo exemplo: sair', () => {
     expect(screen.queryByRole('img', { name: 'Logo da organização' })).not.toBeInTheDocument();
   });
 
+  it('"Nova ata" com o exemplo intacto não pergunta (nada a perder): sai do exemplo e diz o que mudou', async () => {
+    simularLargura(true);
+    const preferencias = criarPreferenciasStore(null, null);
+    preferencias.definir({ tom: 'conciso' });
+    const { user } = renderizar({ preferencias });
+    await verExemplo(user, cipa.rotulo);
+
+    await user.click(screen.getByRole('button', { name: 'Nova ata' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(banner()).toBeNull();
+    expect(lerExemploDaSessao()).toBeNull();
+    expect(screen.getByLabelText(/^Empresa/)).toHaveValue('');
+    expect(screen.getByLabelText(/^Tom da redação/)).toHaveValue('conciso');
+    expect(
+      screen.getByText('Nova ata iniciada. Tipo mantido; o tom voltou ao que você usava.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Nova ata' })).toHaveFocus();
+  });
+
   it('"Nova ata" no modo exemplo com logo da pessoa: o texto diz que a logo dela fica', async () => {
     simularLargura(true);
     const logoStore = criarLogoStore(null, null);
     logoStore.definir(LOGO_PESSOA);
     const { user } = renderizar({ logoStore });
     await verExemplo(user, cipa.rotulo);
+    await user.type(screen.getByLabelText(/^Empresa/), ' Filial');
 
     await user.click(screen.getByRole('button', { name: 'Nova ata' }));
     const dialogo = screen.getByRole('dialog', { name: 'Começar uma nova ata?' });

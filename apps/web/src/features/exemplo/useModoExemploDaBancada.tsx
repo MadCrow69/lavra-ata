@@ -46,6 +46,8 @@ export interface ModoExemploDaBancada {
   /** O que formulário e folha leem (`ModoExemploProvider`). */
   valor: EstadoExemplo;
   ligado: boolean;
+  /** No exemplo e sem nenhuma alteração: sair não perde nada, então não pergunta. */
+  intacto: boolean;
   abrirSeletor: () => void;
   /**
    * Núcleo de "Nova ata" e de "Começar a minha", sem aviso: formulário vazio com o tipo mantido,
@@ -238,6 +240,7 @@ export function useModoExemploDaBancada({
   return {
     valor,
     ligado: modo !== null,
+    intacto,
     abrirSeletor: () => {
       setEscolhendo(true);
     },
