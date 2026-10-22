@@ -10,6 +10,7 @@
     "test": "vitest run --maxWorkers=4",
     "typecheck": "tsc -b",
     "e2e": "playwright test",
+    "gif": "playwright test -c playwright.gif.config.ts && node scripts/video-para-gif.mjs",
     "cobertura:fontes": "node scripts/gerar-cobertura-fontes.mjs",
     "metricas:fontes": "node scripts/gerar-metricas-fontes.mjs"
   },
