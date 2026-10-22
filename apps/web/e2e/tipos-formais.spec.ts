@@ -12,6 +12,7 @@ import {
   comeca,
   configurarChaves,
   escolherTipo,
+  ROTULOS_TIPO,
   expect,
   folha,
   gerarAta,
@@ -31,10 +32,12 @@ import { MARCADOR_CPF } from './fixtures/respostas';
  * com CSP ativa. Cada cenário passa pela rede auditada de `apoio.ts` e termina em `afirmarLimpo`.
  */
 
-const TIPO_CORPORATIVA = 'Reunião corporativa';
-const TIPO_CIPA = 'CIPA — reunião ordinária ou extraordinária';
-const TIPO_CONDOMINIO = 'Condomínio — assembleia geral';
-const TIPO_LTDA = 'Sócios de Ltda — reunião ou assembleia';
+const {
+  corporativa: TIPO_CORPORATIVA,
+  cipa: TIPO_CIPA,
+  condominio: TIPO_CONDOMINIO,
+  'socios-ltda': TIPO_LTDA,
+} = ROTULOS_TIPO;
 
 const MOTIVO_IA_OCUPADA = 'Aguarde a geração em andamento terminar.';
 const UMA_LACUNA = '1 campo marcado com [PREENCHER] vai sair no documento como está.';

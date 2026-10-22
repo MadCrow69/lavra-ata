@@ -1,5 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import {
+  abrirPagina,
   afirmarLimpo,
   CHAVE_OPENAI,
   CPF,
@@ -143,6 +144,56 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     await expect(campo(page, 'Transcrição da reunião')).toHaveValue('');
 
     await afirmarLimpo(page, rede);
+  });
+
+  test('as preferências valem em outra aba (mesmo navegador) e "Esquecer" devolve o padrão, sem violar a CSP', async ({
+    app: primeira,
+    context,
+    rede,
+  }) => {
+    const vinho = await rgbDaOpcao(primeira, 'Vinho');
+    await preencherReuniao(primeira);
+    await primeira.getByRole('radio', { name: /CIPA/ }).check();
+    await primeira.getByLabel('Tom da redação').selectOption('conciso');
+    await primeira.getByRole('radio', { name: 'Vinho' }).check();
+    await primeira.getByRole('checkbox', { name: LEMBRAR }).check();
+    await expect(primeira.getByText('Preferências lembradas neste navegador.')).toBeVisible();
+
+    // Só campos de preferência, e nada do que foi digitado na transcrição.
+    const guardado = (await localDoNavegador(primeira)).join('\n');
+    const lembradas: unknown = JSON.parse(guardado.slice(`${CHAVE_PREFERENCIAS}=`.length));
+    expect(Object.keys(lembradas as object).sort()).toEqual(
+      expect.arrayContaining(['destaque', 'tipoId', 'tom', 'versao']),
+    );
+    for (const chave of Object.keys(lembradas as object)) {
+      expect(['versao', 'tipoId', 'tom', 'destaque', 'ordem', 'modelos']).toContain(chave);
+    }
+    expect(guardado).not.toContain(TRANSCRICAO_BASICA.slice(0, 30));
+    await afirmarLimpo(primeira, rede);
+
+    // Sessão nova, mesmo `localStorage`: a escolha chega sem rascunho e sem violar a CSP.
+    const segunda = await abrirPagina(context, rede);
+    await expect(segunda.getByRole('radio', { name: /CIPA/ })).toBeChecked();
+    await expect(segunda.getByLabel('Tom da redação')).toHaveValue('conciso');
+    expect(await coresCalculadas(folha(segunda).locator('h2').first())).toEqual([vinho]);
+    await expect(campo(segunda, 'Transcrição da reunião')).toHaveValue('');
+    await afirmarLimpo(segunda, rede);
+
+    await segunda.getByRole('button', { name: 'Esquecer preferências' }).click();
+    await expect(segunda.getByText(/^Preferências apagadas deste navegador\./)).toBeVisible();
+    expect(await localDoNavegador(segunda)).toEqual([]);
+
+    // Depois de esquecer, uma sessão nova abre no padrão.
+    const terceira = await abrirPagina(context, rede);
+    const grafite = await rgbDaOpcao(terceira, 'Grafite (padrão)');
+    await expect(terceira.getByRole('radio', { name: 'Reunião corporativa' })).toBeChecked();
+    await expect(terceira.getByRole('radio', { name: 'Grafite (padrão)' })).toBeChecked();
+    expect(await coresCalculadas(folha(terceira).locator('h2').first())).toEqual([grafite]);
+    expect(grafite).not.toBe(vinho);
+    await afirmarLimpo(terceira, rede);
+
+    await segunda.close();
+    await terceira.close();
   });
 
   test('"Esquecer preferências" apaga do navegador e a escolha segue valendo na aba', async ({

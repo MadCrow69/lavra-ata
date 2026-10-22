@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './apoio';
+import { afirmarLimpo, expect, test } from './apoio';
 
 /** A página não rola na horizontal (a ata ainda não existe, então o auxiliar de cartões não serve). */
 async function paginaCabeNaLargura(page: Page) {
@@ -16,6 +16,7 @@ async function paginaCabeNaLargura(page: Page) {
 test.describe('Privacidade: como verificar', () => {
   test('os hosts do modal são os do connect-src da CSP; Esc devolve o foco; cabe em 360 px', async ({
     app: page,
+    rede,
   }) => {
     await page.setViewportSize({ width: 360, height: 740 });
     await paginaCabeNaLargura(page);
@@ -36,6 +37,14 @@ test.describe('Privacidade: como verificar', () => {
       await expect(secao.getByText(host, { exact: true })).toBeVisible();
     }
 
+    // O link do código aponta para a pasta dos adaptadores (o ref depende do build: não se fixa).
+    const href = await dialogo
+      .getByRole('link', { name: 'Adaptadores de IA (as chamadas aos provedores)' })
+      .getAttribute('href');
+    // Prefixo literal: `config/site.ts` lê `__COMMIT_SHA__`, que não existe no Node do Playwright.
+    expect(href?.startsWith('https://github.com/MadCrow69/lavra-ata/tree/')).toBe(true);
+    expect(href?.endsWith('/apps/web/src/ai/providers')).toBe(true);
+
     const medidas = await dialogo.evaluate((el) => ({
       painel: el.scrollWidth - el.clientWidth,
       pagina: document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -48,5 +57,7 @@ test.describe('Privacidade: como verificar', () => {
     await expect(botao).toBeFocused();
 
     await paginaCabeNaLargura(page);
+    await afirmarLimpo(page, rede);
+    expect(rede.chamadas).toEqual([]);
   });
 });
