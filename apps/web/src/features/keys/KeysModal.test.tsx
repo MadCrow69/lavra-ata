@@ -8,10 +8,17 @@ import { criarKeyStore } from '../../ai/keys';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
 import { erroSemCredito } from '../../ai/providers/comum';
 import { MODELOS, URL_CHAVE } from '../../config/models';
-import { CHAVES } from '../../config/storage-keys';
+import { CHAVES, PREFERENCIAS } from '../../config/storage-keys';
+import { storageFalso as storageComItens } from '../../test/storage-falso';
+import { PreferenciasProvider } from '../../preferencias/PreferenciasContext';
+import {
+  criarPreferenciasStore,
+  type PreferenciasStore,
+} from '../../preferencias/preferencias-store';
 import { KeysModal } from './KeysModal';
 
 const CHAVE = 'sk-teste-ficticia-9f3a7c21';
+const CHAVE_LONGA = 'segredo-ficticio-0123456789-abcdef';
 const CHAVE_2 = 'AIzaTesteFicticia8b4d6e10';
 
 function storageFalso() {
@@ -103,6 +110,7 @@ async function montar(
     testar?: Partial<Record<ProviderId, Testar>>;
     onFechar?: () => void;
     storage?: Storage;
+    preferencias?: PreferenciasStore;
   } = {},
 ) {
   const user = userEvent.setup();
@@ -110,9 +118,14 @@ async function montar(
   const store = criarKeyStore(opcoes.storage ?? fake.storage);
   const adaptadores = adaptadoresCom(opcoes.testar);
   render(
-    <KeysProvider store={store}>
-      <Host adaptadores={adaptadores} {...(opcoes.onFechar ? { onFechar: opcoes.onFechar } : {})} />
-    </KeysProvider>,
+    <PreferenciasProvider store={opcoes.preferencias ?? criarPreferenciasStore(null, null)}>
+      <KeysProvider store={store}>
+        <Host
+          adaptadores={adaptadores}
+          {...(opcoes.onFechar ? { onFechar: opcoes.onFechar } : {})}
+        />
+      </KeysProvider>
+    </PreferenciasProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Abrir chaves' }));
   return { user, store, adaptadores, ...fake };
@@ -550,14 +563,223 @@ describe('KeysModal', () => {
     });
     const store = criarKeyStore(fake.storage);
     render(
-      <KeysProvider store={store}>
-        <Host adaptadores={adaptadoresCom()} />
-      </KeysProvider>,
+      <PreferenciasProvider store={criarPreferenciasStore(null, null)}>
+        <KeysProvider store={store}>
+          <Host adaptadores={adaptadoresCom()} />
+        </KeysProvider>
+      </PreferenciasProvider>,
     );
     await user.click(screen.getByRole('button', { name: 'Abrir chaves' }));
     expect(campoChave('OpenAI')).toHaveValue(CHAVE);
     expect(within(cartao('OpenAI')).getByLabelText('Id do modelo')).toHaveValue('modelo-livre-1');
     expect(screen.getByRole('checkbox', { name: 'Lembrar neste navegador' })).toBeChecked();
+  });
+
+  describe('preferências lembradas', () => {
+    it('mover Anthropic para cima grava a ordem nas preferências', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.click(screen.getByRole('button', { name: 'Mover Anthropic para cima' }));
+      expect(preferencias.atual().ordem).toEqual(['openai', 'anthropic', 'gemini']);
+    });
+
+    it('trocar o modelo grava modelos.openai (e só ele)', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      const escolha = MODELOS.openai.opcoes.find((o) => o.id !== MODELOS.openai.padrao);
+      expect(escolha).toBeDefined();
+      await user.selectOptions(
+        within(cartao('OpenAI')).getByLabelText('Modelo'),
+        escolha?.id ?? '',
+      );
+      expect(preferencias.atual().modelos).toEqual({ openai: escolha?.id });
+    });
+
+    it('id livre digitado também é lembrado, aparado', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      await user.type(within(cartao('OpenAI')).getByLabelText('Id do modelo'), ' meu-modelo ');
+      expect(preferencias.atual().modelos).toEqual({ openai: 'meu-modelo' });
+    });
+
+    it('apagar o id livre digitado esquece o modelo lembrado (e o cartão volta ao padrão)', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      await user.type(campo, 'meu-modelo');
+      expect(preferencias.atual().modelos).toEqual({ openai: 'meu-modelo' });
+      await user.clear(campo);
+      expect(preferencias.atual().modelos).toBeUndefined();
+    });
+
+    it('escolher "Outro modelo…" esquece o modelo lembrado, como o campo que nasce vazio', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const escolha = MODELOS.openai.opcoes.find((o) => o.id !== MODELOS.openai.padrao)?.id ?? '';
+      preferencias.definir({ modelos: { openai: escolha } });
+      const { user } = await montar({ preferencias });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveValue(escolha);
+
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+
+      expect(within(cartao('OpenAI')).getByLabelText('Id do modelo')).toHaveValue('');
+      expect(preferencias.atual().modelos).toBeUndefined();
+    });
+
+    it('chave colada no campo do modelo: explica, não grava em storage nenhum e mantém o modelo anterior', async () => {
+      const sessao = storageComItens();
+      const local = storageComItens();
+      const chaves = storageFalso();
+      const preferencias = criarPreferenciasStore(sessao.storage, local.storage);
+      preferencias.definirLembrar(true);
+      const { user, store } = await montar({ preferencias, storage: chaves.storage });
+      store.definirLembrar(true);
+      await user.type(campoChave('OpenAI'), CHAVE);
+      const modeloAntes = store.listar()[0]?.modelo;
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      // Uma chave com a forma de chave da OpenAI, e a própria chave digitada no cartão.
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      const colada = 'sk-proj-teste-ficticia-0a1b2c3d4e5f';
+      await user.click(campo);
+      await user.paste(colada);
+      expect(campo).toBeInvalid();
+      expect(
+        within(cartao('OpenAI')).getByText(/parece uma chave de API, não um id de modelo/),
+      ).toBeVisible();
+      expect(preferencias.atual().modelos).toBeUndefined();
+      expect(store.listar()[0]?.modelo).toBe(modeloAntes);
+      expect(chaves.dados.get(CHAVES) ?? '').not.toContain(colada);
+      for (const { itens } of [sessao, local]) {
+        expect(itens.get(PREFERENCIAS) ?? '').not.toContain(colada);
+      }
+
+      // Corrigir limpa o aviso e passa a valer.
+      await user.clear(campo);
+      await user.type(campo, 'modelo-bom');
+      expect(campo).toBeValid();
+      expect(preferencias.atual().modelos).toEqual({ openai: 'modelo-bom' });
+    });
+
+    it('a chave do próprio cartão colada no modelo também é recusada', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.type(campoChave('OpenAI'), CHAVE_LONGA);
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      await user.click(within(cartao('OpenAI')).getByLabelText('Id do modelo'));
+      await user.paste(CHAVE_LONGA);
+      expect(
+        within(cartao('OpenAI')).getByText(/parece uma chave de API, não um id de modelo/),
+      ).toBeVisible();
+      expect(preferencias.atual().modelos).toBeUndefined();
+    });
+
+    it('chave curta (menos de 20 caracteres) não dá alarme falso num id que a contém', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.type(campoChave('OpenAI'), 'gpt');
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      await user.type(within(cartao('OpenAI')).getByLabelText('Id do modelo'), 'gpt-6-luna-x');
+      expect(within(cartao('OpenAI')).queryByText(/parece uma chave/)).not.toBeInTheDocument();
+      expect(preferencias.atual().modelos).toEqual({ openai: 'gpt-6-luna-x' });
+    });
+
+    it('ordem inversa: id inválido no campo do modelo e SÓ DEPOIS a chave — o id nunca chega a storage nenhum', async () => {
+      const sessao = storageComItens();
+      const local = storageComItens();
+      const chaves = storageFalso();
+      const preferencias = criarPreferenciasStore(sessao.storage, local.storage);
+      preferencias.definirLembrar(true);
+      const { user, store } = await montar({ preferencias, storage: chaves.storage });
+      store.definirLembrar(true);
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      const colada = 'sk-proj-teste-ficticia-0a1b2c3d4e5f';
+      await user.click(campo);
+      await user.paste(colada);
+      expect(campo).toBeInvalid();
+
+      // Agora a chave: é salva normalmente, mas com o modelo padrão, nunca com o id inválido.
+      await user.type(campoChave('OpenAI'), CHAVE);
+      expect(store.listar()).toMatchObject([{ provedor: 'openai', chave: CHAVE }]);
+      expect(store.listar()[0]?.modelo).toBe(MODELOS.openai.padrao);
+      expect(campo).toBeInvalid();
+      expect(JSON.stringify(store.listar())).not.toContain(colada);
+      expect(chaves.dados.get(CHAVES) ?? '').toContain(CHAVE);
+      expect(chaves.dados.get(CHAVES) ?? '').not.toContain(colada);
+      expect(preferencias.atual().modelos).toBeUndefined();
+      for (const { itens } of [sessao, local]) {
+        expect(itens.get(PREFERENCIAS) ?? '').not.toContain(colada);
+      }
+    });
+
+    it('depois de um id inválido, o último id válido é o que acompanha a chave', async () => {
+      const { user, store } = await montar();
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      await user.type(campo, 'modelo-bom');
+      await user.type(campo, ' x');
+      expect(campo).toBeInvalid();
+      await user.type(campoChave('OpenAI'), CHAVE);
+      expect(store.listar()[0]?.modelo).toBe('modelo-bom');
+    });
+
+    it('a chave digitada DEPOIS de um id que a contém: o id deixa de valer e é esquecido', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user, store } = await montar({ preferencias });
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      await user.type(campo, CHAVE_LONGA);
+      expect(preferencias.atual().modelos).toEqual({ openai: CHAVE_LONGA });
+      await user.type(campoChave('OpenAI'), CHAVE_LONGA);
+      expect(campo).toBeInvalid();
+      expect(within(cartao('OpenAI')).getByText(/parece uma chave de API/)).toBeVisible();
+      expect(store.listar()[0]?.modelo).toBe(MODELOS.openai.padrao);
+      expect(preferencias.atual().modelos).toBeUndefined();
+    });
+
+    it('id com caractere inválido explica a causa e a ação', async () => {
+      const { user } = await montar();
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      await user.type(within(cartao('OpenAI')).getByLabelText('Id do modelo'), 'meu modelo');
+      expect(within(cartao('OpenAI')).getByText(/só aceita letras, números/)).toBeVisible();
+    });
+
+    it('cartão sem chave abre com o modelo lembrado', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const lembrado = MODELOS.openai.opcoes.find((o) => o.id !== MODELOS.openai.padrao);
+      preferencias.definir({ modelos: { openai: lembrado?.id ?? '' } });
+      await montar({ preferencias });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveValue(lembrado?.id);
+      // Digitar a chave grava com o modelo lembrado, não com o padrão.
+      const user = userEvent.setup();
+      await user.type(campoChave('OpenAI'), CHAVE);
+      expect(screen.getByTestId('cadeia')).toHaveTextContent(`openai:${lembrado?.id ?? ''}`);
+    });
+
+    it('modelo lembrado fora da lista abre em "Outro modelo…" com o id no campo', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      preferencias.definir({ modelos: { openai: 'modelo-livre-9' } });
+      await montar({ preferencias });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveDisplayValue('Outro modelo…');
+      expect(within(cartao('OpenAI')).getByLabelText('Id do modelo')).toHaveValue('modelo-livre-9');
+    });
+
+    it('a chave guardada vence o modelo lembrado', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      preferencias.definir({ modelos: { openai: 'modelo-livre-9' } });
+      const fake = storageFalso();
+      const antes = criarKeyStore(fake.storage);
+      antes.definirLembrar(true);
+      antes.definir({
+        provedor: 'openai',
+        chave: CHAVE,
+        modelo: MODELOS.openai.padrao,
+        estado: 'nao_testada',
+      });
+      await montar({ preferencias, storage: fake.storage });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveValue(MODELOS.openai.padrao);
+    });
   });
 
   it('link "Onde conseguir a chave" abre a página oficial em nova aba, com aviso para leitor de tela', async () => {

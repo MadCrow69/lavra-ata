@@ -70,7 +70,7 @@ function ehProvedor(v: unknown): v is ProviderId {
 }
 
 /** Ordem válida: ids conhecidos, sem repetição; o que faltar entra no fim na ordem padrão. */
-function normalizarOrdem(ordem: readonly unknown[]): ProviderId[] {
+export function normalizarOrdem(ordem: readonly unknown[]): ProviderId[] {
   const vistos = new Set<ProviderId>();
   for (const p of ordem) if (ehProvedor(p)) vistos.add(p);
   for (const p of PROVEDORES) vistos.add(p);
@@ -106,15 +106,25 @@ function lerPersistido(bruto: string | null): Persistido | null {
   return { chaves: validas, ordem: normalizarOrdem(Array.isArray(ordem) ? ordem : []) };
 }
 
+/** Ordem de partida dos provedores: a lista ou uma função que a devolve (lida a cada vez). */
+export type OrdemInicial = readonly ProviderId[] | (() => readonly ProviderId[] | undefined);
+
 /**
  * Guarda as chaves de API na memória da página. Só vão para `storage` (por padrão
  * `localStorage`) quando a pessoa marca "Lembrar neste navegador". `null` = nunca persiste.
+ * `ordemInicial` (preferência lembrada) define a ordem de partida quando não há chaves lembradas.
  * Nunca registra a chave em log nem lança por falha de armazenamento.
  */
-export function criarKeyStore(storage?: Storage | null): KeyStore {
+export function criarKeyStore(storage?: Storage | null, ordemInicial?: OrdemInicial): KeyStore {
   const alvo = storage === undefined ? storageOuNulo('local') : storage;
   const chaves = new Map<ProviderId, ChaveProvedor>();
-  let ordem: ProviderId[] = [...PROVEDORES];
+  // Preferência lembrada de ordem: só vale sem chaves lembradas (a ordem gravada com elas vence).
+  // Lida de novo em `apagarTudo`: vale a preferência de AGORA, não a da abertura.
+  const ordemBase = (): ProviderId[] => {
+    const base = typeof ordemInicial === 'function' ? ordemInicial() : ordemInicial;
+    return base ? normalizarOrdem(base) : [...PROVEDORES];
+  };
+  let ordem: ProviderId[] = ordemBase();
   let lembrar = false;
   let bloqueado = false;
   let revisao = 0;
@@ -238,7 +248,7 @@ export function criarKeyStore(storage?: Storage | null): KeyStore {
         .map((c) => ({ id: c.provedor, modelo: c.modelo, chave: c.chave })),
     apagarTudo() {
       chaves.clear();
-      ordem = [...PROVEDORES];
+      ordem = ordemBase();
       lembrar = false;
       bloqueado = false;
       apagarGravado();

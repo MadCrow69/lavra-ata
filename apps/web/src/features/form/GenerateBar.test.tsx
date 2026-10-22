@@ -11,6 +11,8 @@ import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { OperacaoIAProvider, useOperacaoIA } from '../../generation/OperacaoIA';
+import { MOTIVO_EXEMPLO } from '../exemplo/ModoExemplo';
+import { ModoExemploDeTeste } from '../../test/modo-exemplo';
 import { ToastProvider } from '../../ui/Toast';
 import { DadosBlock } from './DadosBlock';
 import { GenerateBar } from './GenerateBar';
@@ -122,6 +124,8 @@ interface Opcoes {
   impl?: Partial<Record<ProviderId, Gerar>>;
   comBlocos?: boolean;
   comEdicao?: boolean;
+  /** Renderiza dentro do modo exemplo (IA parada). */
+  noExemplo?: boolean;
 }
 
 function renderizar({
@@ -130,6 +134,7 @@ function renderizar({
   impl = {},
   comBlocos = false,
   comEdicao = false,
+  noExemplo = false,
 }: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
@@ -137,27 +142,29 @@ function renderizar({
   const onGerada = vi.fn();
   const { a, gerar } = adaptadores(impl);
   render(
-    <KeysProvider store={store}>
-      <DraftProvider inicial={inicial}>
-        <OperacaoIAProvider>
-          <ToastProvider>
-            {comBlocos ? (
-              <>
-                <DadosBlock tipo={corporativa} />
-                <TranscricaoBlock tipo={corporativa} />
-              </>
-            ) : null}
-            <GenerateBar
-              onConfigurarChaves={onConfigurarChaves}
-              onGerada={onGerada}
-              opcoesCadeia={{ adaptadores: a, esperaRetryMs: 0 }}
-            />
-            {comEdicao ? <EdicaoManual /> : null}
-            <Espiao />
-          </ToastProvider>
-        </OperacaoIAProvider>
-      </DraftProvider>
-    </KeysProvider>,
+    <ModoExemploDeTeste ligado={noExemplo}>
+      <KeysProvider store={store}>
+        <DraftProvider inicial={inicial}>
+          <OperacaoIAProvider>
+            <ToastProvider>
+              {comBlocos ? (
+                <>
+                  <DadosBlock tipo={corporativa} />
+                  <TranscricaoBlock tipo={corporativa} />
+                </>
+              ) : null}
+              <GenerateBar
+                onConfigurarChaves={onConfigurarChaves}
+                onGerada={onGerada}
+                opcoesCadeia={{ adaptadores: a, esperaRetryMs: 0 }}
+              />
+              {comEdicao ? <EdicaoManual /> : null}
+              <Espiao />
+            </ToastProvider>
+          </OperacaoIAProvider>
+        </DraftProvider>
+      </KeysProvider>
+    </ModoExemploDeTeste>,
   );
   return { onConfigurarChaves, onGerada, gerar, store, user: userEvent.setup() };
 }
@@ -165,6 +172,45 @@ function renderizar({
 const botaoGerar = () => screen.getByRole('button', { name: /Gerar ata/ });
 
 describe('GenerateBar', () => {
+  it('modo exemplo: com chave e tudo preenchido, Gerar fica parado com o motivo e nada é chamado', async () => {
+    const { user, gerar, onConfigurarChaves } = renderizar({ chaves: [OPENAI], noExemplo: true });
+    expect(botaoGerar()).toBeDisabled();
+    expect(botaoGerar()).toHaveAccessibleDescription(MOTIVO_EXEMPLO);
+    expect(screen.getByText(MOTIVO_EXEMPLO)).toBeVisible();
+    // Nada de "Envia para …": no exemplo nada é enviado.
+    expect(screen.queryByText(/Envia para/)).not.toBeInTheDocument();
+    await user.click(botaoGerar());
+    expect(gerar.openai).not.toHaveBeenCalled();
+    expect(onConfigurarChaves).not.toHaveBeenCalled();
+  });
+
+  it('modo exemplo ligado depois de uma falha: "Tentar de novo" para com o motivo', async () => {
+    const { user, gerar } = renderizar({
+      chaves: [OPENAI],
+      impl: { openai: () => Promise.reject(erroProvedor('rede', 'openai')) },
+    });
+    await user.click(botaoGerar());
+    const alerta = await screen.findByRole('alert');
+    const tentar = within(alerta).getByRole('button', { name: 'Tentar de novo' });
+    expect(tentar).toBeEnabled();
+    gerar.openai.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Ligar o modo exemplo' }));
+    expect(tentar).toBeDisabled();
+    expect(tentar).toHaveAccessibleDescription(MOTIVO_EXEMPLO);
+    await user.click(tentar);
+    expect(gerar.openai).not.toHaveBeenCalled();
+  });
+
+  it('modo exemplo: o motivo vem antes do que falta na descrição do botão', () => {
+    renderizar({
+      inicial: completo({ pauta: [] }),
+      chaves: [OPENAI],
+      noExemplo: true,
+    });
+    expect(botaoGerar()).toHaveAccessibleDescription(`${MOTIVO_EXEMPLO} Falta: Pauta`);
+  });
+
   it('falta: botão desabilitado com o resumo do que falta', () => {
     renderizar({
       inicial: completo({ dados: { ...completo().dados, data: '' }, pauta: [] }),

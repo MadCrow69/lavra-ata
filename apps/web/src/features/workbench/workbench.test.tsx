@@ -7,13 +7,20 @@ import { erroSemCredito } from '../../ai/providers/comum';
 import { KeysProvider } from '../../ai/KeysContext';
 import { criarKeyStore, type KeyStore } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
-import { LOGO, RASCUNHO } from '../../config/storage-keys';
+import { corDoDestaque } from '../../config/destaque';
+import { LOGO, PREFERENCIAS, RASCUNHO } from '../../config/storage-keys';
 import { ESPERA_SALVAR_RASCUNHO_MS } from '../../config/ui';
 import type { AtaDraft, ResultadoAta } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
 import { carregarRascunho, salvarRascunho } from '../../domain/persistence';
 import type { LogoDoc } from '../../document/model';
 import { criarLogoStore, type LogoStore } from '../../logo/logo-store';
+import { PreferenciasProvider } from '../../preferencias/PreferenciasContext';
+import {
+  criarPreferenciasStore,
+  type PreferenciasStore,
+} from '../../preferencias/preferencias-store';
+import { storageFalso } from '../../test/storage-falso';
 import { registrarTipoDeTeste } from '../../test/tipo-de-teste';
 import { ToastProvider } from '../../ui/Toast';
 import { Workbench } from './Workbench';
@@ -55,6 +62,7 @@ interface Opcoes {
   gerar?: Gerar;
   store?: KeyStore;
   logo?: { store?: LogoStore; processar?: (arquivo: File) => Promise<LogoDoc> };
+  preferencias?: PreferenciasStore;
 }
 
 const LOGO_FICTICIA: LogoDoc = {
@@ -63,18 +71,25 @@ const LOGO_FICTICIA: LogoDoc = {
   altura: 100,
 };
 
-function renderizar({ gerar = () => Promise.resolve(resposta()), store, logo }: Opcoes = {}) {
+function renderizar({
+  gerar = () => Promise.resolve(resposta()),
+  store,
+  logo,
+  preferencias,
+}: Opcoes = {}) {
   const espiao = vi.fn<Gerar>(gerar);
   const keyStore = store ?? criarKeyStore(null);
   const utils = render(
-    <KeysProvider store={keyStore}>
-      <ToastProvider>
-        <Workbench
-          opcoesCadeia={{ adaptadores: adaptadores(espiao), esperaRetryMs: 0 }}
-          {...(logo ? { logo } : {})}
-        />
-      </ToastProvider>
-    </KeysProvider>,
+    <PreferenciasProvider store={preferencias ?? criarPreferenciasStore(null, null)}>
+      <KeysProvider store={keyStore}>
+        <ToastProvider>
+          <Workbench
+            opcoesCadeia={{ adaptadores: adaptadores(espiao), esperaRetryMs: 0 }}
+            {...(logo ? { logo } : {})}
+          />
+        </ToastProvider>
+      </KeysProvider>
+    </PreferenciasProvider>,
   );
   return { ...utils, gerar: espiao, store: keyStore, user: userEvent.setup() };
 }
@@ -258,6 +273,45 @@ describe('Workbench: rascunho recuperado', () => {
     renderizar();
     expect(screen.getByText('Rascunho recuperado desta aba.')).toBeVisible();
     expect(screen.getByLabelText(/^Assunto/)).toHaveValue('Reembolsos');
+  });
+
+  it('o rascunho recuperado vale mais que as preferências e não grava nada nelas', () => {
+    // Preferências lembradas dizem CIPA/conciso/vinho; o rascunho desta aba é de condomínio/formal.
+    const sessao = storageFalso();
+    const local = storageFalso();
+    const lembradas = JSON.stringify({
+      versao: 1,
+      tipoId: 'cipa',
+      tom: 'conciso',
+      destaque: 'vinho',
+    });
+    local.itens.set(PREFERENCIAS, lembradas);
+    sessao.itens.set(PREFERENCIAS, lembradas);
+    salvarRascunho(completo({ tipoId: 'condominio', tom: 'formal' }));
+    const preferencias = criarPreferenciasStore(sessao.storage, local.storage);
+    const antesSessao = sessao.itens.get(PREFERENCIAS);
+    const antesLocal = local.itens.get(PREFERENCIAS);
+
+    renderizar({ preferencias });
+
+    expect(screen.getByText('Rascunho recuperado desta aba.')).toBeVisible();
+    expect(screen.getByRole('radio', { name: /Condomínio/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /CIPA/ })).not.toBeChecked();
+    expect(screen.getByLabelText('Tom da redação')).toHaveValue('formal');
+    // A cor (que não é do rascunho) segue a preferência; as preferências não foram tocadas.
+    expect(folha().style.getPropertyValue('--cor-folha-destaque')).toBe(corDoDestaque('vinho'));
+    expect(sessao.itens.get(PREFERENCIAS)).toBe(antesSessao);
+    expect(local.itens.get(PREFERENCIAS)).toBe(antesLocal);
+    expect(preferencias.atual()).toMatchObject({ tipoId: 'cipa', tom: 'conciso' });
+  });
+
+  it('sem rascunho, a ata nova parte do tipo e do tom lembrados', () => {
+    const preferencias = criarPreferenciasStore(storageFalso().storage, storageFalso().storage);
+    preferencias.definir({ tipoId: 'cipa', tom: 'conciso' });
+    renderizar({ preferencias });
+    expect(screen.getByRole('radio', { name: /CIPA/ })).toBeChecked();
+    expect(screen.getByLabelText('Tom da redação')).toHaveValue('conciso');
+    expect(screen.queryByText('Rascunho recuperado desta aba.')).not.toBeInTheDocument();
   });
 
   it('rascunho vazio salvo não mostra o aviso', () => {

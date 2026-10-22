@@ -23,6 +23,8 @@ pnpm build                      # build de todos os pacotes
 pnpm --filter @lavra/web e2e    # E2E (Playwright) contra o build; exige `pnpm build` antes
 pnpm --filter @lavra/web cobertura:fontes   # regera a cobertura de caracteres das fontes do PDF
 pnpm --filter @lavra/web metricas:fontes    # regera as métricas do Inter usadas no teste de largura das colunas
+pnpm --filter @lavra/web gif                # regrava docs/demo.gif (exige `pnpm build` antes e o ffmpeg)
+pnpm --filter @lavra/web og                 # regera a imagem do card de compartilhamento e o ícone PNG (exige `pnpm build` antes)
 ```
 
 O `pnpm dev` não existe na raiz; use o filtro do pacote, como acima.
@@ -35,6 +37,31 @@ O aviso "caracteres que não existem na fonte do PDF" se baseia em `apps/web/src
 
 O mesmo vale para `apps/web/src/test/metricas-inter.gerada.ts` (avanço de cada caractere do Inter regular e negrito, usado por `colunas-a4.test.ts` para provar que o cabeçalho e as opções de cada coluna de participantes cabem no A4): rode `pnpm --filter @lavra/web metricas:fontes` ao trocar a fonte do corpo; `gerar-metricas-fontes.test.ts` reprova se estiver desatualizado.
 
+### GIF de demonstração do README
+
+`docs/demo.gif` é gravado, não desenhado: `pnpm --filter @lavra/web gif` roda o roteiro `apps/web/gif/demo.spec.ts` com o Playwright contra o build (rode `pnpm build` antes), grava o vídeo em `apps/web/test-results/gif/` e o converte em GIF com o ffmpeg, em duas passadas (paleta própria). A gravação também falha se houver chamada a provedor de IA, violação de CSP ou erro no console. O roteiro fica fora da pasta do E2E (`apps/web/e2e`): o CI nunca grava.
+
+- Requer o [ffmpeg](https://ffmpeg.org/download.html). Se ele não estiver no `PATH`, aponte o executável na variável `FFMPEG` (ex.: `FFMPEG=/caminho/do/ffmpeg pnpm --filter @lavra/web gif`).
+- O orçamento é de **3 MB**: acima disso o script falha sem tocar no `docs/demo.gif` atual. Para caber, reduza fps, largura ou cores em `OPCOES_GIF` (`apps/web/scripts/video-para-gif.mjs`) ou encurte as pausas do roteiro.
+- Regrave o GIF quando a interface mostrada nele mudar de forma visível, e confira os quadros antes de commitar.
+
+### Card de compartilhamento e ícone
+
+O `apps/web/index.html` traz as tags do card (Open Graph, usado pelo LinkedIn) e o ícone. As URLs do card são absolutas e seguem `SITE.demo` (`apps/web/src/config/site.ts`); `src/config/compartilhamento.test.ts` reprova divergência, imagem fora de 1200×630 ou acima de 300 kB, e ícone com texto, script ou cor fora dos tokens.
+
+- `apps/web/public/favicon.svg` é desenhado à mão (só formas, com as cores de `tokens.css`).
+- `og-image.png` e `apple-touch-icon.png` são gerados do app: `pnpm --filter @lavra/web og` roda `apps/web/og/imagens.spec.ts` contra o build (rode `pnpm build` antes), abre o exemplo de reunião corporativa e fotografa a tela; o ícone PNG sai do `favicon.svg`. Como o GIF, fica fora do E2E: o CI nunca gera. Depois, rode `pnpm build` de novo para as imagens entrarem no `dist/`.
+- Regere quando a interface da primeira tela mudar de forma visível, e confira a imagem antes de commitar.
+
+### Exemplo de um tipo de ata novo
+
+Todo tipo de ata tem de ter o seu exemplo para o botão "Ver exemplo". O teste `apps/web/src/exemplos/exemplos.test.ts` percorre `ATA_TYPES` e **reprova o tipo sem exemplo**. Para adicionar:
+
+1. Crie `apps/web/src/exemplos/dados/exemplo-<tipo>.ts` exportando `exemplo` (formato `Exemplo`, em `apps/web/src/exemplos/tipos.ts`), com os auxiliares de `montar.ts` e os identificadores fictícios de `ficticios.ts`. Dados e pessoas inventados, organização com "Exemplo" no nome, e-mails `@example.com`, e a transcrição escrita do zero.
+2. Registre o carregador em `CARREGADORES_EXEMPLO`, em `apps/web/src/exemplos/carregar.ts`, com `import()` dinâmico: o exemplo vira um chunk próprio (`exemplo-<tipo>`) e não pode entrar na carga inicial; o `check-bundle` reprova o build se entrar.
+3. Todo texto legal fixo vem do tipo de ata. O resultado do exemplo só traz votos, quórum e unanimidade se estiverem ditos na transcrição; o que não foi dito fica como `[PREENCHER: …]`.
+4. Atualize as tabelas de expectativas no topo de `exemplos.test.ts` (lacunas e seções com conteúdo) e, no E2E, `ROTULOS_TIPO` e `EXEMPLOS_E2E` em `apps/web/e2e/apoio.ts` e os fixtures de `apps/web/e2e/fixtures/respostas.ts`.
+
 ### Testes com teto de workers
 
 Rode sempre `pnpm test`, que já limita a 4 workers (`--maxWorkers=4`). Se invocar o Vitest diretamente, mantenha o teto e não execute duas suítes ao mesmo tempo: em máquinas com pouca memória, a suíte sem limite esgota os recursos.
@@ -45,6 +72,10 @@ Rode sempre `pnpm test`, que já limita a 4 workers (`--maxWorkers=4`). Se invoc
 2. Faça as alterações, com testes quando houver comportamento novo.
 3. Abra um Pull Request preenchendo o [template](.github/pull_request_template.md).
 4. Após a aprovação, o PR é integrado com **squash merge**. O título do PR, em Conventional Commits, vira a mensagem do commit.
+
+## Publicação
+
+Todo push na `main` publica o site no GitHub Pages pelo workflow `.github/workflows/deploy.yml`; no PR, o mesmo workflow só roda o build, sem publicar. Para conferir a versão no ar, compare o hash do commit exibido no rodapé do site (ou em "Privacidade: como verificar") com o último commit da `main`.
 
 ## Commits
 

@@ -56,6 +56,11 @@ export interface DocumentModel {
    * (spec 8.1.1). Não vai para PDF nem DOCX. `null` quando nenhuma seção tem autoria de IA.
    */
   rodapeInterno: string | null;
+  /**
+   * Cor (`#rrggbb`) do título da ata, dos subtítulos e dos títulos de seção, nos três formatos.
+   * No padrão é a tinta do texto: o documento sai como se não houvesse destaque.
+   */
+  corDestaque: string;
 }
 
 /** Logo da pessoa já validada e rasterizada: PNG em data URL, com as dimensões em pixels. */

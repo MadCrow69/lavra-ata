@@ -1,12 +1,25 @@
-// Verificação pura da carga inicial do build (usada por check-bundle.mjs): o gerador de PDF/DOCX e
-// as fontes embutidas só podem chegar por `import()` dinâmico, nunca no que o HTML carrega de cara.
+// Verificação pura da carga inicial do build (usada por check-bundle.mjs): os módulos sob demanda (o
+// gerador de PDF/DOCX, as fontes embutidas e os dados dos exemplos) só podem chegar por `import()`
+// dinâmico, nunca no que o HTML carrega de cara.
 import { listTags } from './csp-verify.mjs';
 
 /**
- * Trechos que só existem nos módulos sob demanda: o WOFF em base64 das fontes do PDF ("wOFF" →
- * `d09GRg`), o pdfkit (cabeçalho `%PDF-`) e o `docx` (parte `word/document.xml`).
+ * CPF fictício presente só nos dados do modo exemplo — `src/exemplos/ficticios.ts` (fonte única dos
+ * identificadores fictícios, importada apenas pelos módulos de `src/exemplos/dados/`).
  */
-export const MARCADORES_SOB_DEMANDA = Object.freeze(['d09GRg', '%PDF-', 'word/document.xml']);
+export const MARCADORES_EXEMPLO = Object.freeze(['529.982.247-25']);
+
+/**
+ * Trechos que só existem nos módulos sob demanda: o WOFF em base64 das fontes do PDF ("wOFF" →
+ * `d09GRg`), o pdfkit (cabeçalho `%PDF-`), o `docx` (parte `word/document.xml`) e os dados dos
+ * exemplos (`MARCADORES_EXEMPLO`).
+ */
+export const MARCADORES_SOB_DEMANDA = Object.freeze([
+  'd09GRg',
+  '%PDF-',
+  'word/document.xml',
+  ...MARCADORES_EXEMPLO,
+]);
 
 /**
  * Teto da carga inicial (script de entrada + modulepreload + CSS), em bytes sem compressão. Compensa
@@ -45,7 +58,8 @@ export function arquivosDaCargaInicial(html) {
 }
 
 /**
- * Confere que nenhum arquivo da carga inicial carrega o gerador de PDF/DOCX nem as fontes.
+ * Confere que nenhum arquivo da carga inicial carrega um módulo sob demanda (gerador de PDF/DOCX,
+ * fontes ou dados dos exemplos).
  * Devolve a lista de problemas (vazia = aprovado).
  * @param {string} html conteúdo de `dist/index.html`
  * @param {(caminho: string) => string | null} ler conteúdo do arquivo; `null` se não existir
@@ -69,7 +83,7 @@ export function verificarCargaInicial(html, ler) {
     for (const marcador of MARCADORES_SOB_DEMANDA) {
       if (conteudo.includes(marcador)) {
         problemas.push(
-          `${caminho} contém ${marcador}: o gerador de PDF/DOCX ou as fontes entraram na carga inicial`,
+          `${caminho} contém ${marcador}: um módulo sob demanda (PDF/DOCX, fontes ou dados dos exemplos) entrou na carga inicial`,
         );
       }
     }

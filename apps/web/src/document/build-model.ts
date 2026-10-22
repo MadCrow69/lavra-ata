@@ -15,6 +15,7 @@ import {
   TEXTO_SECOES_PENDENTES,
   TITULO_ENCAMINHAMENTOS,
 } from '../config/documento';
+import { DESTAQUE_PADRAO, corDoDestaque, type IdDestaque } from '../config/destaque';
 import {
   ROTULO_PRESENCA,
   ROTULO_STATUS,
@@ -233,6 +234,7 @@ export function construirDocumento(
   d: EntradaDoDocumento,
   tipo: AtaTypeDefinition,
   logo: LogoDoc | null = null,
+  destaque: IdDestaque = DESTAQUE_PADRAO,
 ): DocumentModel {
   const resultado = d.resultado;
   const blocos: DocBloco[] = [];
@@ -293,5 +295,6 @@ export function construirDocumento(
     blocos,
     rodape: RODAPE_PAGINADO,
     rodapeInterno: rodapeInterno(blocos, resultado),
+    corDestaque: corDoDestaque(destaque),
   };
 }

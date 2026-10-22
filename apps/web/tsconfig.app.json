@@ -8,7 +8,8 @@
     "outDir": "node_modules/.tmp/tsc-app",
     "tsBuildInfoFile": "node_modules/.tmp/tsc-app/tsbuildinfo",
     "jsx": "react-jsx",
+    "resolveJsonModule": true,
     "types": ["vite/client", "@testing-library/jest-dom"]
   },
-  "include": ["src"]
+  "include": ["src", "src/**/*.json"]
 }

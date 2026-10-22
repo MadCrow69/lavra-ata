@@ -15,6 +15,7 @@ import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
+import { MOTIVO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
 import styles from './revisao.module.css';
 
 export const MOTIVO_SEM_CHAVE = 'Configure uma chave de IA para usar esta ação.';
@@ -104,12 +105,16 @@ export function SectionActions({
       : state.resultado?.secoes[chave];
   const cadeia = keys.cadeia();
   const semChave = cadeia.length === 0;
-  const motivo = semChave
-    ? MOTIVO_SEM_CHAVE
-    : operacao !== null && !estaOcupada
-      ? MOTIVO_IA_OCUPADA
-      : null;
-  const iaParada = semChave || operacao !== null || editando;
+  // No modo exemplo nada vai para a IA: a seção se edita à mão, mas não se regera nem se ajusta.
+  const noExemplo = useModoExemplo().tipoId !== null;
+  const motivo = noExemplo
+    ? MOTIVO_EXEMPLO
+    : semChave
+      ? MOTIVO_SEM_CHAVE
+      : operacao !== null && !estaOcupada
+        ? MOTIVO_IA_OCUPADA
+        : null;
+  const iaParada = noExemplo || semChave || operacao !== null || editando;
   const ajusteAberto = ajustando && !vazia;
   // Editar à mão fica livre, salvo quando um resultado de IA vai substituir o que a pessoa fizer.
   const edicaoParada = editando || operacao?.tipo === 'ata' || estaOcupada;
@@ -121,7 +126,7 @@ export function SectionActions({
 
   /** Porta única das chamadas (Regerar, Ajustar e "Tentar de novo"). */
   const executar = async (pedido: string | null, origem: Origem) => {
-    if (semChave || operacao !== null) return;
+    if (noExemplo || semChave || operacao !== null) return;
     await chamada.executar(
       (signal, opcoes) => regerarSecao(state, tipo, chave, pedido, cadeia, signal, opcoes),
       {

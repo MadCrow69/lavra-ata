@@ -1,11 +1,22 @@
 import { createContext, use, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { criarKeyStore, type KeyStore } from './keys';
+import { criarKeyStore, type KeyStore, type OrdemInicial } from './keys';
 
 const KeysContext = createContext<KeyStore | null>(null);
 
-/** Dono do `KeyStore` do app. Testes injetam um `store` com storage falso. */
-export function KeysProvider({ children, store }: { children: ReactNode; store?: KeyStore }) {
-  const [instancia] = useState<KeyStore>(() => store ?? criarKeyStore());
+/**
+ * Dono do `KeyStore` do app. Testes injetam um `store` com storage falso. `ordemInicial` (ordem
+ * lembrada nas preferências) só vale sem chaves lembradas e sem `store` injetado.
+ */
+export function KeysProvider({
+  children,
+  store,
+  ordemInicial,
+}: {
+  children: ReactNode;
+  store?: KeyStore;
+  ordemInicial?: OrdemInicial;
+}) {
+  const [instancia] = useState<KeyStore>(() => store ?? criarKeyStore(undefined, ordemInicial));
   return <KeysContext value={instancia}>{children}</KeysContext>;
 }
 

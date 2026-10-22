@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ErroProvedor, mensagemSemCredito } from '../../ai/errors';
 import { useKeys } from '../../ai/KeysContext';
 import type { ProviderAdapter, ProviderId } from '../../ai/types';
-import { MODELOS, ROTULO_PROVEDOR, URL_CHAVE } from '../../config/models';
+import { MODELOS, ROTULO_PROVEDOR, URL_CHAVE, erroDoIdDeModeloComChave } from '../../config/models';
+import { usePreferenciasStore } from '../../preferencias/PreferenciasContext';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import styles from './keys.module.css';
@@ -35,17 +36,27 @@ export function CartaoProvedor({
   registrarSeta,
 }: CartaoProps) {
   const keys = useKeys();
+  const preferencias = usePreferenciasStore();
   const rotulo = ROTULO_PROVEDOR[provedor];
   const tituloId = useId();
   const opcoes = MODELOS[provedor].opcoes;
   const atual = keys.listar().find((c) => c.provedor === provedor);
 
   const [chave, setChave] = useState(atual?.chave ?? '');
+  // Modelo de partida: o da chave guardada, senão o lembrado nas preferências, senão o padrão.
+  const [modeloInicial] = useState(
+    () => atual?.modelo ?? preferencias.atual().modelos?.[provedor] ?? MODELOS[provedor].padrao,
+  );
   const [modo, setModo] = useState<'lista' | 'outro'>(
-    atual && !opcoes.some((o) => o.id === atual.modelo) ? 'outro' : 'lista',
+    opcoes.some((o) => o.id === modeloInicial) ? 'lista' : 'outro',
   );
   // Em modo "lista" é o id escolhido; em modo "outro", o que a pessoa digitou.
-  const [modelo, setModelo] = useState(atual?.modelo ?? MODELOS[provedor].padrao);
+  const [modelo, setModelo] = useState(modeloInicial);
+  // Id digitado que não pode ser usado: a causa e o que fazer (nada é gravado enquanto durar).
+  const [erroModelo, setErroModelo] = useState<string | null>(null);
+  // O único modelo que pode ir para o KeyStore e para as preferências: o último id VÁLIDO
+  // ('' = o padrão). O que está no campo pode ser inválido e nunca é gravado.
+  const [modeloGravado, setModeloGravado] = useState(modeloInicial);
   const [visivel, setVisivel] = useState(false);
   const [testando, setTestando] = useState(false);
   const [falha, setFalha] = useState<string | null>(null);
@@ -80,24 +91,46 @@ export function CartaoProvedor({
     cancelarTeste();
     setFalha(null);
     setChave(valor);
-    gravar(valor, modelo, 'nao_testada');
+    // A chave nova pode passar a aparecer no id digitado (campo ou o já gravado): reavalia.
+    if (modo === 'outro') setErroModelo(erroDoIdDeModeloComChave(modelo, valor));
+    let seguro = modeloGravado;
+    if (erroDoIdDeModeloComChave(seguro, valor) !== null) {
+      seguro = '';
+      setModeloGravado('');
+      preferencias.definir({ modelos: { [provedor]: '' } });
+    }
+    gravar(valor, seguro, 'nao_testada');
   };
 
   const aoEscolherModelo = (valor: string): void => {
+    setErroModelo(null);
     if (valor === OUTRO_MODELO) {
       setModo('outro');
       setModelo('');
+      setModeloGravado('');
       gravar(chave, '', atual?.estado ?? 'nao_testada', atual?.semCredito);
+      // O campo nasce vazio (= o padrão): o modelo lembrado sai junto, como ao apagar o campo.
+      preferencias.definir({ modelos: { [provedor]: '' } });
       return;
     }
     setModo('lista');
     setModelo(valor);
+    setModeloGravado(valor);
     gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
+    preferencias.definir({ modelos: { [provedor]: valor } });
   };
 
   const aoDigitarModelo = (valor: string): void => {
     setModelo(valor);
+    // Uma chave colada aqui por engano não pode ir para o KeyStore (que pode estar lembrado no
+    // navegador) nem para as preferências: enquanto o id for inválido, vale o modelo anterior.
+    const erro = erroDoIdDeModeloComChave(valor, chave);
+    setErroModelo(erro);
+    if (erro !== null) return;
+    setModeloGravado(valor);
     gravar(chave, valor, atual?.estado ?? 'nao_testada', atual?.semCredito);
+    // Em branco apaga o modelo lembrado (volta o padrão); o store ignora o que não é um id.
+    preferencias.definir({ modelos: { [provedor]: valor } });
   };
 
   const apagar = (): void => {
@@ -245,6 +278,7 @@ export function CartaoProvedor({
         {modo === 'outro' ? (
           <Field
             rotulo="Id do modelo"
+            erro={erroModelo ?? undefined}
             ajuda={`Em branco, vale o padrão (${MODELOS[provedor].padrao}).`}
           >
             {(controle) => (

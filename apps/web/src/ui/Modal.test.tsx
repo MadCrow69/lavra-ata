@@ -88,6 +88,34 @@ describe('Modal', () => {
     expect(screen.getByRole('button', { name: 'Confirmar' })).toHaveFocus();
   });
 
+  it('com rotuloCorpo, o corpo rolável é uma região nomeada que entra no Tab (rola pelo teclado)', async () => {
+    const user = userEvent.setup();
+    render(
+      <Modal aberto titulo="Longo" onFechar={vi.fn()} rotuloCorpo="Texto do diálogo longo">
+        <p>Só texto, sem nada focável.</p>
+      </Modal>,
+    );
+    const corpo = screen.getByRole('region', { name: 'Texto do diálogo longo' });
+    expect(corpo).toHaveTextContent('Só texto, sem nada focável.');
+    expect(corpo).toHaveAttribute('tabindex', '0');
+    // Ordem: Fechar, corpo; e volta ao Fechar.
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Fechar' })).toHaveFocus();
+    await user.tab();
+    expect(corpo).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Fechar' })).toHaveFocus();
+  });
+
+  it('sem rotuloCorpo, o corpo não é região nem entra no Tab', async () => {
+    const user = userEvent.setup();
+    render(<Exemplo />);
+    await user.click(screen.getByRole('button', { name: 'Abrir' }));
+    expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    expect(screen.getByText('Título do modal').closest('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelectorAll('[role="dialog"] [tabindex="0"]')).toHaveLength(0);
+  });
+
   it('trava a rolagem da página enquanto aberto e a libera ao fechar', async () => {
     const user = userEvent.setup();
     render(<Exemplo />);

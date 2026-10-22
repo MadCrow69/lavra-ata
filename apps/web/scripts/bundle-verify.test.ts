@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  MARCADORES_EXEMPLO,
   MARCADORES_SOB_DEMANDA,
   ORCAMENTO_CARGA_INICIAL_BYTES,
   arquivosDaCargaInicial,
@@ -24,8 +26,37 @@ function leitor(arquivos: Record<string, string>) {
 }
 
 describe('MARCADORES_SOB_DEMANDA', () => {
-  it('cobre fontes WOFF em base64, pdfkit e docx', () => {
-    expect(MARCADORES_SOB_DEMANDA).toEqual(['d09GRg', '%PDF-', 'word/document.xml']);
+  it('cobre fontes WOFF em base64, pdfkit, docx e os dados dos exemplos', () => {
+    expect(MARCADORES_SOB_DEMANDA).toEqual([
+      'd09GRg',
+      '%PDF-',
+      'word/document.xml',
+      ...MARCADORES_EXEMPLO,
+    ]);
+  });
+});
+
+describe('MARCADORES_EXEMPLO', () => {
+  const EXEMPLOS = new URL('../src/exemplos/', import.meta.url);
+  const DADOS = new URL('dados/', EXEMPLOS);
+
+  it('é o CPF fictício que só os dados dos exemplos citam', () => {
+    expect(MARCADORES_EXEMPLO).toEqual(['529.982.247-25']);
+  });
+
+  it('ficticios.ts contém cada marcador de exemplo', () => {
+    const ficticios = readFileSync(new URL('ficticios.ts', EXEMPLOS), 'utf8');
+
+    for (const marcador of MARCADORES_EXEMPLO) expect(ficticios).toContain(marcador);
+  });
+
+  it('todo arquivo de dados dos exemplos importa os identificadores de ../ficticios', () => {
+    const arquivos = readdirSync(DADOS).filter((nome) => nome.endsWith('.ts'));
+
+    expect(arquivos.length).toBeGreaterThanOrEqual(4);
+    for (const nome of arquivos) {
+      expect(readFileSync(new URL(nome, DADOS), 'utf8'), nome).toMatch(/from '\.\.\/ficticios'/);
+    }
   });
 });
 
@@ -67,7 +98,7 @@ describe('verificarCargaInicial', () => {
       );
 
       expect(problemas).toEqual([
-        `${BASE}index-abc.js contém ${marcador}: o gerador de PDF/DOCX ou as fontes entraram na carga inicial`,
+        `${BASE}index-abc.js contém ${marcador}: um módulo sob demanda (PDF/DOCX, fontes ou dados dos exemplos) entrou na carga inicial`,
       ]);
     },
   );

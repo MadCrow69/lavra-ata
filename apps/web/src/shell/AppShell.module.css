@@ -44,21 +44,72 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--espaco-2) var(--espaco-4);
+  min-width: 0;
+  max-width: 100%;
 }
 
-.botaoPrimario {
-  min-height: 44px;
-  padding: 0 var(--espaco-4);
-  border: 0;
-  border-radius: var(--raio);
-  background: var(--cor-primaria);
-  color: var(--cor-sobre-primaria);
-  font-weight: 600;
-  cursor: pointer;
+/* Textos longos quebram dentro do botão em vez de estourar a largura (360 px). */
+.acoes button {
+  max-width: 100%;
+  padding-block: var(--espaco-1);
+  line-height: 1.25;
 }
 
-.botaoPrimario:hover {
-  background: var(--cor-primaria-hover);
+/* Embrulho de "Privacidade" e "GitHub": no celular viram links menores (abaixo). */
+.acaoMenor {
+  display: contents;
+}
+
+/*
+ * Celular: sem o slogan e com as ações numa grade de 2 colunas, na ordem do DOM (que é a do
+ * leitor de tela e do Tab): os botões à esquerda, "Privacidade" e "GitHub" como links à direita,
+ * com o mesmo texto visível (nome acessível igual) e alvo de 44 px.
+ */
+@media (max-width: 29.99rem) {
+  .cabecalho {
+    padding-block: var(--espaco-2);
+  }
+
+  .slogan {
+    display: none;
+  }
+
+  .acoes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--espaco-2);
+    width: 100%;
+  }
+
+  .acaoMenor {
+    display: flex;
+    min-width: 0;
+  }
+
+  .acaoMenor > button,
+  .acaoMenor > a {
+    min-height: 44px;
+    padding-inline: var(--espaco-1);
+    border-color: transparent;
+    background: transparent;
+    color: var(--cor-primaria);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: start;
+    text-decoration: underline;
+  }
+
+  .acaoMenor > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  /* Uma linha só: a altura da linha dá o alvo de 44 px sem separar o texto da seta. */
+  .acaoMenor > a {
+    display: inline-block;
+    line-height: 44px;
+  }
 }
 
 /* ---------- Abas (tela estreita) ---------- */

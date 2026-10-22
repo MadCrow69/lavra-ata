@@ -1,4 +1,4 @@
-import { COMMIT_CURTO_TAMANHO, COMMIT_DESENVOLVIMENTO, SITE } from '../config/site';
+import { COMMIT_CURTO_TAMANHO, COMMIT_DESENVOLVIMENTO, SITE, urlDoCommit } from '../config/site';
 import { LinkExterno } from '../ui/LinkExterno';
 import styles from './AppShell.module.css';
 
@@ -23,7 +23,7 @@ export function Footer({ commit = SITE.commit }: FooterProps) {
           {emDesenvolvimento ? (
             'versão de desenvolvimento'
           ) : (
-            <LinkExterno href={`${SITE.repositorio}/commit/${commit}`}>
+            <LinkExterno href={urlDoCommit(commit)}>
               {`versão ${commit.slice(0, COMMIT_CURTO_TAMANHO)}`}
             </LinkExterno>
           )}

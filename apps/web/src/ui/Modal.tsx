@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useSyncExternalStore,
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
@@ -18,6 +19,11 @@ export interface ModalProps {
   acoes?: ReactNode;
   /** Elemento que recebe o foco ao abrir; ausente = o painel (comportamento atual). */
   focoInicial?: RefObject<HTMLElement | null>;
+  /**
+   * Nome do corpo rolável. Com ele, o corpo vira uma região focável (entra no Tab) e rola pelas
+   * setas: para diálogo longo com trechos só de texto, que o teclado não alcançaria de outro modo.
+   */
+  rotuloCorpo?: string;
 }
 
 const FOCAVEIS =
@@ -42,6 +48,27 @@ function travarRolagem(): () => void {
 /** Modais abertos, do mais antigo ao mais novo. Só o do topo reage a foco, Tab e Esc. */
 const pilha: object[] = [];
 
+/** Quem quer saber se há diálogo aberto (ex.: os avisos, que esperam o diálogo fechar). */
+const ouvintes = new Set<() => void>();
+
+function avisarOuvintes(): void {
+  for (const ouvinte of ouvintes) ouvinte();
+}
+
+function assinar(ouvinte: () => void): () => void {
+  ouvintes.add(ouvinte);
+  return () => {
+    ouvintes.delete(ouvinte);
+  };
+}
+
+const haDialogoAberto = () => pilha.length > 0;
+
+/** Há algum `Modal` aberto agora? Atualiza quando o primeiro abre e quando o último fecha. */
+export function useDialogoAberto(): boolean {
+  return useSyncExternalStore(assinar, haDialogoAberto, () => false);
+}
+
 function focaveisDe(raiz: HTMLElement): HTMLElement[] {
   return Array.from(raiz.querySelectorAll<HTMLElement>(FOCAVEIS)).filter(
     (el) => !el.hasAttribute('hidden') && el.closest('[hidden]') === null,
@@ -53,7 +80,15 @@ function focaveisDe(raiz: HTMLElement): HTMLElement[] {
  * atrás não rola. Div com `role="dialog"` (e não `<dialog>`) para o comportamento ser o mesmo
  * em qualquer navegador e testável.
  */
-export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }: ModalProps) {
+export function Modal({
+  aberto,
+  titulo,
+  onFechar,
+  children,
+  acoes,
+  focoInicial,
+  rotuloCorpo,
+}: ModalProps) {
   const tituloId = useId();
   const painelRef = useRef<HTMLDivElement>(null);
   // Identidade deste modal na pilha de modais abertos.
@@ -74,6 +109,7 @@ export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }
     const origem = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const id = idRef.current;
     pilha.push(id);
+    avisarOuvintes();
     const soltarRolagem = travarRolagem();
     (focoInicialRef.current?.current ?? painelRef.current)?.focus();
 
@@ -88,6 +124,7 @@ export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }
     return () => {
       document.removeEventListener('focusin', guardaFoco);
       pilha.splice(pilha.indexOf(id), 1);
+      avisarOuvintes();
       soltarRolagem();
       if (origem?.isConnected) origem.focus();
     };
@@ -154,7 +191,14 @@ export function Modal({ aberto, titulo, onFechar, children, acoes, focoInicial }
             <span aria-hidden="true">✕</span>
           </button>
         </header>
-        <div className={styles.corpo}>{children}</div>
+        <div
+          className={styles.corpo}
+          {...(rotuloCorpo === undefined
+            ? {}
+            : { role: 'region', 'aria-label': rotuloCorpo, tabIndex: 0 })}
+        >
+          {children}
+        </div>
         {acoes ? <footer className={styles.rodape}>{acoes}</footer> : null}
       </div>
     </div>,

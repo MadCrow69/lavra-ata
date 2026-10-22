@@ -8,8 +8,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
+import { DESTAQUE_PADRAO } from '../../config/destaque';
 import { LOGO_ACCEPT } from '../../config/logo';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
@@ -25,9 +27,11 @@ import type { Atribuicao, Presenca } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 import { textoDeGeracao } from '../../generation/atribuicao';
 import { useLogo } from '../../logo/LogoContext';
+import { usePreferencias } from '../../preferencias/PreferenciasContext';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { plural } from '../../ui/plural';
 import { useToast } from '../../ui/Toast';
+import { useModoExemplo } from '../exemplo/ModoExemplo';
 import { ExportBar } from '../export/ExportBar';
 import { chavesUnicas } from './chaves';
 import { EncaminhamentosEditor } from './EncaminhamentosEditor';
@@ -468,11 +472,15 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
   const tipo = obterTipo(state.tipoId);
   const { dados, pauta, participantes, resultado } = state;
   // Só o que o documento lê: digitar na transcrição não recompõe a folha.
-  const { logo, processando, erro, aviso, enviar } = useLogo();
+  const { logo: logoDaPessoa, processando, erro, aviso, enviar } = useLogo();
+  // A logo da pessoa vence; sem ela, no modo exemplo, a folha mostra a logo fictícia do exemplo.
+  const modo = useModoExemplo();
+  const logo = logoDaPessoa ?? (modo.tipoId !== null ? modo.logo : null);
   const { mostrar } = useToast();
+  const destaque = usePreferencias().atual().destaque ?? DESTAQUE_PADRAO;
   const modelo = useMemo(
-    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo, logo),
-    [dados, pauta, participantes, resultado, tipo, logo],
+    () => construirDocumento({ dados, pauta, participantes, resultado }, tipo, logo, destaque),
+    [dados, pauta, participantes, resultado, tipo, logo, destaque],
   );
   // O envio feito aqui mostra o erro num aviso (toast): no celular o bloco de formulário, que também
   // mostra o erro, está em outra aba. Só avisa pelo que ESTE botão enviou.
@@ -558,6 +566,8 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
         data-folha
         lang="pt-BR"
         aria-label="Prévia da ata"
+        // Via CSSOM (style do React): a CSP `style-src 'self'` segue sem 'unsafe-inline'.
+        style={{ '--cor-folha-destaque': modelo.corDestaque } as CSSProperties}
       >
         {/* Timbre da folha: `div` e não `header`, para não virar um segundo marco "banner". */}
         <div className={styles.cabecalho}>

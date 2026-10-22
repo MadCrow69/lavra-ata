@@ -2,7 +2,7 @@ import type { MaskMap } from '@lavra/pii-br';
 import { describe, expect, it } from 'vitest';
 import { LIMITE_PARTICIPANTES } from '../config/limits';
 import type { AtaDraft, Atribuicao, DraftAction, ResultadoAta } from './draft';
-import { criarRascunho, draftReducer } from './draft-reducer';
+import { criarRascunho, draftReducer, temConteudo } from './draft-reducer';
 
 const MAPA: MaskMap = {
   version: 1,
@@ -48,6 +48,43 @@ describe('criarRascunho', () => {
 
   it('aceita o tipo', () => {
     expect(criarRascunho('assembleia').tipoId).toBe('assembleia');
+  });
+
+  it('aceita o tipo e o tom (preferências lembradas)', () => {
+    const d = criarRascunho('cipa', 'conciso');
+    expect(d.tipoId).toBe('cipa');
+    expect(d.tom).toBe('conciso');
+  });
+});
+
+describe('substituirRascunho', () => {
+  it('devolve exatamente o rascunho passado (o exemplo entra inteiro, nada do anterior sobra)', () => {
+    const anterior = { ...criarRascunho('corporativa', 'conciso'), transcricao: 'Ana: olá.' };
+    const novo = comResultado();
+    expect(draftReducer(anterior, { type: 'substituirRascunho', rascunho: novo })).toBe(novo);
+  });
+});
+
+describe('temConteudo', () => {
+  it('rascunho só com tipo e tom não tem conteúdo', () => {
+    expect(temConteudo(criarRascunho('cipa', 'conciso'))).toBe(false);
+    expect(temConteudo({ ...criarRascunho(), dados: { assunto: '   ' } })).toBe(false);
+  });
+
+  it('dado, pauta, participante, transcrição ou ata gerada contam como conteúdo', () => {
+    const base = criarRascunho();
+    expect(temConteudo({ ...base, dados: { assunto: 'Reembolsos' } })).toBe(true);
+    expect(temConteudo({ ...base, pauta: ['Item'] })).toBe(true);
+    expect(temConteudo({ ...base, transcricao: 'Ana: olá.' })).toBe(true);
+    expect(temConteudo(comResultado())).toBe(true);
+    expect(
+      temConteudo({
+        ...base,
+        participantes: [
+          { id: 'p1', nome: 'Ana', papel: '', presenca: 'presente', justificativa: '', extras: {} },
+        ],
+      }),
+    ).toBe(true);
   });
 });
 
@@ -380,9 +417,9 @@ describe('draftReducer', () => {
       const d = draftReducer(base, {
         type: 'atualizarParticipante',
         id: base.participantes[0]?.id ?? '',
-        patch: { extras: { vinculo: '  ' } },
+        patch: { extras: { vinculo: '\u00a0 ' } },
       });
-      expect(d.participantes[0]?.extras.vinculo).toBe('  ');
+      expect(d.participantes[0]?.extras.vinculo).toBe('\u00a0 ');
       const depois = draftReducer(d, {
         type: 'preencherExtrasVazios',
         campo: 'vinculo',

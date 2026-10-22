@@ -1,7 +1,7 @@
 import { LOGO_BYTES_MAX_PNG, LOGO_SAIDA_MAX_PX } from '../config/logo';
 import { LOGO } from '../config/storage-keys';
 import type { LogoDoc } from '../document/model';
-import { storageOuNulo } from '../domain/storage-ou-nulo';
+import { criarArmazemLembravel } from '../domain/armazem-lembravel';
 import { bytesDoDataUrlPng, ehDataUrlPng } from './png-data-url';
 
 export interface LogoStore {
@@ -29,8 +29,7 @@ const numeroNaCaixa = (v: unknown, maximo: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= maximo;
 
 /** Lê e valida o JSON gravado; qualquer defeito (formato, tipo de imagem, tamanho) → `null`. */
-function lerLogo(bruto: string | null): LogoDoc | null {
-  if (bruto === null) return null;
+function lerLogo(bruto: string): LogoDoc | null {
   let dado: unknown;
   try {
     dado = JSON.parse(bruto);
@@ -54,86 +53,48 @@ const serializar = (logo: LogoDoc): string =>
     altura: logo.altura,
   });
 
-function apagar(storage: Storage | null): void {
-  try {
-    storage?.removeItem(LOGO);
-  } catch {
-    // Sem acesso ao armazenamento: nada a apagar.
-  }
-}
-
-function gravar(storage: Storage | null, logo: LogoDoc): boolean {
-  try {
-    if (storage === null) return false;
-    storage.setItem(LOGO, serializar(logo));
-    return true;
-  } catch {
-    // Cota cheia ou armazenamento bloqueado.
-    return false;
-  }
-}
-
-/** Lê a logo do storage; o que estiver lá e for inválido é apagado. */
-function restaurar(storage: Storage | null): LogoDoc | null {
-  if (storage === null) return null;
-  try {
-    const logo = lerLogo(storage.getItem(LOGO));
-    if (logo === null) apagar(storage);
-    return logo;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Guarda a logo da organização: na memória, no `sessionStorage` (sobrevive a recarregar) e, só com
  * "Lembrar", no `localStorage`. `null` = sem esse armazenamento; `undefined` = o do navegador.
  * A logo nunca entra no rascunho da ata. Nunca lança por falha de armazenamento.
  */
 export function criarLogoStore(sessao?: Storage | null, local?: Storage | null): LogoStore {
-  const alvoSessao = sessao === undefined ? storageOuNulo('session') : sessao;
-  const alvoLocal = local === undefined ? storageOuNulo('local') : local;
-
-  const doLocal = restaurar(alvoLocal);
-  const daSessao = restaurar(alvoSessao);
-  let atual: LogoDoc | null = doLocal ?? daSessao;
-  let lembrar = doLocal !== null;
-  // A logo lembrada vale mais que a da sessão: espelha na sessão, para que desmarcar "Lembrar" e
-  // recarregar não traga de volta uma logo mais velha que ficou nesta aba.
-  if (doLocal !== null) gravar(alvoSessao, doLocal);
+  const armazem = criarArmazemLembravel(LOGO, lerLogo, serializar, sessao, local);
+  let atual: LogoDoc | null = armazem.lido;
+  let lembrar = armazem.lembrado;
 
   return {
     atual: () => atual,
     lembrar: () => lembrar,
     definir(logo) {
       atual = logo;
-      const naSessao = gravar(alvoSessao, logo);
+      const naSessao = armazem.gravarSessao(logo);
       if (!lembrar) return { persistiu: naSessao };
-      const noLocal = gravar(alvoLocal, logo);
+      const noLocal = armazem.gravarLocal(logo);
       // O local recusou: a logo deixa de ser "lembrada" (o que está lá é a versão anterior).
       if (!noLocal) {
         lembrar = false;
-        apagar(alvoLocal);
+        armazem.apagarLocal();
       }
       return { persistiu: naSessao && noLocal };
     },
     definirLembrar(v) {
       if (!v) {
         lembrar = false;
-        apagar(alvoLocal);
+        armazem.apagarLocal();
         // A sessão passa a ser a única cópia: tem de ser a logo atual, não uma mais velha.
-        const naSessao = atual === null ? true : gravar(alvoSessao, atual);
+        const naSessao = atual === null ? true : armazem.gravarSessao(atual);
         return { persistiu: naSessao };
       }
-      if (atual === null) return { persistiu: alvoLocal !== null };
-      lembrar = gravar(alvoLocal, atual);
+      if (atual === null) return { persistiu: armazem.localDisponivel };
+      lembrar = armazem.gravarLocal(atual);
       return { persistiu: lembrar };
     },
     remover() {
       atual = null;
       lembrar = false;
-      apagar(alvoSessao);
-      apagar(alvoLocal);
+      armazem.apagarSessao();
+      armazem.apagarLocal();
     },
   };
 }

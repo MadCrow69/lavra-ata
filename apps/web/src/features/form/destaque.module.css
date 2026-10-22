@@ -1,0 +1,38 @@
+.cores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--espaco-2);
+}
+
+.opcao {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: var(--raio);
+  cursor: pointer;
+}
+
+/* A escolhida se vê pela borda grossa e pelo próprio rádio, não só pela cor da amostra. */
+.opcao:has(input:checked) {
+  border-color: var(--cor-primaria);
+  border-width: 2px;
+}
+
+.opcao input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  flex: none;
+}
+
+.amostra {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1px solid var(--cor-borda-forte);
+  border-radius: 50%;
+}

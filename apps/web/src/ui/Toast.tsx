@@ -6,9 +6,11 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { DURACAO_TOAST_MS } from '../config/ui';
+import { useDialogoAberto } from './Modal';
 import styles from './Toast.module.css';
 
 export interface ToastDados {
@@ -27,13 +29,27 @@ interface ToastAtivo extends ToastDados {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
+/**
+ * Região com um diálogo aberto: fora da tela (abaixo dela) e transparente, para não cobrir título,
+ * Fechar nem ações do diálogo. NÃO usa `display`/`visibility`: o texto segue na árvore de
+ * acessibilidade, então o anúncio já feito não se repete quando a região volta, e o aviso que
+ * chega com o diálogo aberto é anunciado como sempre. Aplicado por CSSOM (a CSP não o bloqueia).
+ */
+const REGIAO_EM_ESPERA: CSSProperties = {
+  opacity: 0,
+  transform: 'translateY(calc(100% + 100vh))',
+};
+
 function ItemToast({
   toast,
   duracaoMs,
+  emEspera,
   onFechar,
 }: {
   toast: ToastAtivo;
   duracaoMs: number;
+  /** Há diálogo aberto: o aviso está fora da vista e o tempo dele não corre. */
+  emEspera: boolean;
   onFechar: (id: number) => void;
 }) {
   const [sobMouse, setSobMouse] = useState(false);
@@ -41,7 +57,7 @@ function ItemToast({
   const restanteRef = useRef(duracaoMs);
   /** Quem tinha o foco antes de ele entrar nas notificações (para devolver ao fechar). */
   const origemRef = useRef<HTMLElement | null>(null);
-  const pausado = sobMouse || comFoco;
+  const pausado = sobMouse || comFoco || emEspera;
 
   // Fechar pelo botão não deixa o foco cair no <body>: vai ao toast vizinho ou de volta à origem.
   const fecharPeloBotao = (botao: HTMLElement) => {
@@ -118,6 +134,8 @@ function ItemToast({
  * Notificações curtas, empilhadas no canto da tela. A região `aria-live="polite"` existe desde a
  * montagem (leitores de tela só anunciam mudanças em regiões já presentes). Cada toast some após
  * `duracaoMs`, com pausa enquanto o mouse está em cima ou o foco está dentro; o botão fecha na hora.
+ * Com um diálogo aberto, os avisos saem da vista e esperam (o tempo para): voltam, com o tempo que
+ * faltava, quando o último diálogo fecha.
  */
 export function ToastProvider({
   children,
@@ -128,6 +146,7 @@ export function ToastProvider({
 }) {
   const [toasts, setToasts] = useState<ToastAtivo[]>([]);
   const proximoIdRef = useRef(1);
+  const emEspera = useDialogoAberto();
 
   const fechar = useCallback((id: number) => {
     setToasts((atual) => atual.filter((t) => t.id !== id));
@@ -154,9 +173,16 @@ export function ToastProvider({
         data-toast-regiao=""
         aria-live="polite"
         aria-relevant="additions text"
+        style={emEspera ? REGIAO_EM_ESPERA : undefined}
       >
         {toasts.map((t) => (
-          <ItemToast key={t.id} toast={t} duracaoMs={duracaoMs} onFechar={fechar} />
+          <ItemToast
+            key={t.id}
+            toast={t}
+            duracaoMs={duracaoMs}
+            emEspera={emEspera}
+            onFechar={fechar}
+          />
         ))}
       </div>
     </ToastContext>

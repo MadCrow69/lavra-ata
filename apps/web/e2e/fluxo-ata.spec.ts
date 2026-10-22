@@ -1,4 +1,3 @@
-import type { Page } from '@playwright/test';
 import {
   CHAVE_GEMINI,
   CHAVE_OPENAI,
@@ -8,6 +7,7 @@ import {
   TRANSCRICAO_BASICA,
   colarComoPessoa,
   colarParticipantes,
+  conteudoDosStorages,
   configurarChaves,
   errosInesperados,
   expect,
@@ -35,25 +35,15 @@ function transcricaoGrande(tamanho: number): string {
   return falas.join('\n').slice(0, tamanho);
 }
 
-/** Toda a memória do navegador desta página (chaves e valores), para procurar a chave de API. */
-async function conteudoDosStorages(page: Page): Promise<{ local: string[]; sessao: string[] }> {
-  return page.evaluate(() => {
-    const ler = (storage: Storage) =>
-      Array.from({ length: storage.length }, (_, i) => {
-        const chave = storage.key(i) ?? '';
-        return `${chave}=${storage.getItem(chave) ?? ''}`;
-      });
-    return { local: ler(localStorage), sessao: ler(sessionStorage) };
-  });
-}
-
 test.describe('fluxo da ata no build com CSP ativa', () => {
   test('gera a ata com fallback OpenAI → Gemini, restaura o CPF e não vaza nada', async ({
     app: page,
     rede,
   }) => {
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI, 'Google Gemini': CHAVE_GEMINI });
-    await expect(page.getByRole('banner').getByRole('button')).toContainText('IA: OpenAI → Gemini');
+    await expect(page.getByRole('banner').getByRole('button', { name: /^IA: / })).toContainText(
+      'IA: OpenAI → Gemini',
+    );
 
     await preencherReuniao(page);
     const gerar = page.getByRole('button', { name: /Gerar ata/ });
@@ -94,6 +84,14 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     );
     await expect(documento).toContainText(CPF);
     await expect(documento).not.toContainText(MARCADOR_CPF);
+
+    // A cor de destaque chega à folha pela propriedade no `style` (CSSOM): sem violação de CSP.
+    await expect(documento).toHaveCSS('--cor-folha-destaque', '#1a1a1a');
+    await expect(documento.getByRole('heading', { name: 'Resumo' })).toHaveCSS(
+      'color',
+      'rgb(26, 26, 26)',
+    );
+    expect(await violacoesDeCsp(page)).toEqual([]);
 
     // O que saiu para os provedores: marcador no lugar do CPF, chave só em header.
     const geracoes = rede.chamadas.filter((c) => c.metodo === 'POST');
@@ -308,7 +306,10 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
 
     // Recarregar descarta as chaves: o cabeçalho volta ao estado sem chave.
     await page.reload();
-    await expect(page.getByRole('banner').getByRole('button')).not.toContainText('IA:');
+    await expect(
+      page.getByRole('banner').getByRole('button', { name: 'Configurar chaves de IA' }),
+    ).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('button', { name: /^IA: / })).toHaveCount(0);
     expect((await conteudoDosStorages(page)).local).toEqual([]);
   });
 });

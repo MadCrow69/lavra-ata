@@ -42,7 +42,7 @@ export const FOLGA_FALLBACK_MS = 20_000;
 
 type Provedor = 'openai' | 'gemini' | 'anthropic';
 
-const PROVEDOR_POR_HOST: Record<string, Provedor> = {
+export const PROVEDOR_POR_HOST: Record<string, Provedor> = {
   'api.openai.com': 'openai',
   'generativelanguage.googleapis.com': 'gemini',
   'api.anthropic.com': 'anthropic',
@@ -153,31 +153,40 @@ interface Fixtures {
   app: Page;
 }
 
+/**
+ * Abre uma página nova no app (mesmo contexto: o `localStorage` é o mesmo, o `sessionStorage` não),
+ * com a auditoria de CSP e de erros do console instalada ANTES do primeiro script do app.
+ */
+export async function abrirPagina(context: BrowserContext, rede: Rede): Promise<Page> {
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    window.__violacoes = [];
+    document.addEventListener(
+      'securitypolicyviolation',
+      (e) => {
+        window.__violacoes?.push(`${e.violatedDirective} ${e.blockedURI}`);
+      },
+      true,
+    );
+  });
+  page.on('pageerror', (erro) => {
+    rede.errosDePagina.push(erro.message);
+  });
+  page.on('console', (mensagem) => {
+    if (mensagem.type() === 'error') rede.errosDePagina.push(mensagem.text());
+  });
+  await page.goto('./');
+  await expect(page.getByRole('banner')).toBeVisible();
+  return page;
+}
+
 export const test = base.extend<Fixtures>({
   cenario: [{ openai: 'limite' }, { option: true }],
   rede: async ({ context, cenario }, usar) => {
     await usar(await auditarRede(context, cenario));
   },
-  app: async ({ page, rede }, usar) => {
-    await page.addInitScript(() => {
-      window.__violacoes = [];
-      document.addEventListener(
-        'securitypolicyviolation',
-        (e) => {
-          window.__violacoes?.push(`${e.violatedDirective} ${e.blockedURI}`);
-        },
-        true,
-      );
-    });
-    page.on('pageerror', (erro) => {
-      rede.errosDePagina.push(erro.message);
-    });
-    page.on('console', (mensagem) => {
-      if (mensagem.type() === 'error') rede.errosDePagina.push(mensagem.text());
-    });
-    await page.goto('./');
-    await expect(page.getByRole('banner')).toBeVisible();
-    await usar(page);
+  app: async ({ context, rede }, usar) => {
+    await usar(await abrirPagina(context, rede));
   },
 });
 
@@ -249,11 +258,55 @@ export async function preencherVazios(page: Page, rotuloCampo: string, rotuloVal
 
 /** Marca o tipo de ata pelo rótulo exato (o nome do rádio inclui a descrição, por isso o `label`). */
 export async function escolherTipo(page: Page, rotulo: string) {
-  await page
+  await radioDoTipo(page, rotulo).click();
+}
+
+/** O rádio do tipo pelo rótulo exato (o nome acessível do rádio inclui a descrição). */
+export function radioDoTipo(page: Page, rotulo: string): Locator {
+  return page
     .locator('label')
     .filter({ has: page.getByText(rotulo, { exact: true }) })
-    .getByRole('radio')
-    .click();
+    .getByRole('radio');
+}
+
+/** Rótulo de cada tipo de ata como aparece nos rádios do formulário e no seletor "Ver exemplo". */
+export const ROTULOS_TIPO: Record<TipoFixture, string> = {
+  corporativa: 'Reunião corporativa',
+  cipa: 'CIPA — reunião ordinária ou extraordinária',
+  condominio: 'Condomínio — assembleia geral',
+  'socios-ltda': 'Sócios de Ltda — reunião ou assembleia',
+};
+
+/**
+ * O que cada exemplo mostra: o nome da organização no cabeçalho da folha e o arquivo do PDF
+ * (`ata-<tipo>-<data>.pdf`). Repetição inevitável de `src/exemplos/dados/*`: esses módulos importam
+ * `?raw` (a logo SVG), que o Node do Playwright não resolve.
+ */
+export const EXEMPLOS_E2E: Record<TipoFixture, { organizacao: string; arquivo: string }> = {
+  corporativa: {
+    organizacao: 'Exemplo Tecnologia Ltda.',
+    arquivo: 'ata-corporativa-2026-10-14.pdf',
+  },
+  cipa: { organizacao: 'Metalúrgica Exemplo Ltda.', arquivo: 'ata-cipa-2026-10-08.pdf' },
+  condominio: {
+    organizacao: 'Condomínio Edifício Exemplo',
+    arquivo: 'ata-condominio-2026-10-15.pdf',
+  },
+  'socios-ltda': {
+    organizacao: 'Exemplo Comércio de Alimentos Ltda.',
+    arquivo: 'ata-socios-ltda-2026-10-20.pdf',
+  },
+};
+
+export const FRASE_BANNER_EXEMPLO = 'Você está vendo um exemplo — nada foi enviado para IA.';
+
+/** "Ver exemplo" → escolhe o tipo → espera o seletor fechar e o banner do modo exemplo aparecer. */
+export async function verExemplo(page: Page, rotuloDoTipo: string) {
+  await page.getByRole('button', { name: 'Ver exemplo', exact: true }).click();
+  const seletor = page.getByRole('dialog', { name: 'Ver um exemplo' });
+  await seletor.getByRole('button', { name: rotuloDoTipo, exact: true }).click();
+  await expect(seletor).toBeHidden();
+  await expect(page.getByText(FRASE_BANNER_EXEMPLO, { exact: true })).toBeVisible();
 }
 
 export const PARTICIPANTES_BASICOS = [
@@ -305,6 +358,20 @@ export function errosInesperados(rede: Rede): string[] {
 
 export async function violacoesDeCsp(page: Page): Promise<string[]> {
   return page.evaluate(() => window.__violacoes ?? []);
+}
+
+/** Toda a memória do navegador desta página (chaves e valores), para procurar a chave de API. */
+export async function conteudoDosStorages(
+  page: Page,
+): Promise<{ local: string[]; sessao: string[] }> {
+  return page.evaluate(() => {
+    const ler = (storage: Storage) =>
+      Array.from({ length: storage.length }, (_, i) => {
+        const chave = storage.key(i) ?? '';
+        return `${chave}=${storage.getItem(chave) ?? ''}`;
+      });
+    return { local: ler(localStorage), sessao: ler(sessionStorage) };
+  });
 }
 
 export function folha(page: Page): Locator {

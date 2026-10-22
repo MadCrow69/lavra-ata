@@ -65,6 +65,17 @@ export const URL_CHAVE: Record<ProviderId, string> = {
   anthropic: 'https://platform.claude.com/settings/keys',
 };
 
+/**
+ * Origem (esquema + host) de cada API de provedor: base das chamadas dos adaptadores e lista de
+ * hosts mostrada em "Privacidade: como verificar". Espelha `PROVIDER_ORIGINS` de `csp.config.js`
+ * (JS lido pelo Node no check-csp; o app não tem `allowJs`): a paridade é provada em `models.test.ts`.
+ */
+export const ORIGEM_PROVEDOR: Record<ProviderId, string> = {
+  openai: 'https://api.openai.com',
+  gemini: 'https://generativelanguage.googleapis.com',
+  anthropic: 'https://api.anthropic.com',
+};
+
 /** Espera, em ms, antes da única nova tentativa após `limite`/`instavel`. */
 export const ESPERA_RETRY_MS = 2_000;
 
@@ -74,4 +85,47 @@ export const ESPERA_RETRY_MS = 2_000;
  */
 export function esforcoDoModelo(provedor: ProviderId, modelo: string): string | undefined {
   return MODELOS[provedor].opcoes.find((o) => o.id === modelo)?.esforco;
+}
+
+/** Tamanho máximo aceito para um id de modelo digitado. */
+export const MODELO_ID_MAX = 100;
+
+const FORMATO_ID_MODELO = /^[A-Za-z0-9._:/-]+$/;
+/** Prefixos das chaves de API dos provedores: nenhum id de modelo começa assim. */
+const PARECE_CHAVE_DE_API = /^(sk-|AIza)/i;
+
+/** Só uma chave com este tamanho mínimo é procurada dentro do id digitado (a curta daria alarme falso). */
+export const CHAVE_MIN_PARA_CONFERIR = 20;
+
+export const MSG_ID_PARECE_CHAVE =
+  'Isto parece uma chave de API, não um id de modelo. Cole a chave no campo “Chave de API” e escreva aqui só o nome do modelo.';
+
+/**
+ * Por que um id de modelo digitado não pode ser usado (mensagem com causa + ação), ou `null` se
+ * está bom. Em branco é válido (vale o padrão do provedor). Existe, sobretudo, para que uma chave
+ * colada no campo errado nunca vire "preferência" gravada no navegador.
+ */
+export function erroDoIdDeModelo(id: string): string | null {
+  const limpo = id.trim();
+  if (limpo === '') return null;
+  if (PARECE_CHAVE_DE_API.test(limpo)) {
+    return MSG_ID_PARECE_CHAVE;
+  }
+  if (limpo.length > MODELO_ID_MAX) {
+    return `O id do modelo passa de ${String(MODELO_ID_MAX)} caracteres. Confira o id na página do provedor.`;
+  }
+  if (!FORMATO_ID_MODELO.test(limpo)) {
+    return 'O id do modelo só aceita letras, números e os símbolos . _ : / -. Remova os outros caracteres.';
+  }
+  return null;
+}
+
+/**
+ * Como `erroDoIdDeModelo`, e também recusa um id que contenha a chave de API digitada no mesmo
+ * cartão (quando ela tem pelo menos `CHAVE_MIN_PARA_CONFERIR` caracteres).
+ */
+export function erroDoIdDeModeloComChave(id: string, chave: string): string | null {
+  const trecho = chave.trim();
+  if (trecho.length >= CHAVE_MIN_PARA_CONFERIR && id.includes(trecho)) return MSG_ID_PARECE_CHAVE;
+  return erroDoIdDeModelo(id);
 }
