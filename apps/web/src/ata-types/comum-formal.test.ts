@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Participante } from '../domain/draft';
-import { MENSAGEM_CNPJ_INVALIDO, linhaSe, ou, presentes, validarCnpj } from './comum-formal';
+import {
+  MENSAGEM_CNPJ_INVALIDO,
+  linhaSe,
+  listados,
+  ou,
+  presentes,
+  validarCnpj,
+} from './comum-formal';
 
 function participante(id: string, parcial: Partial<Participante> = {}): Participante {
   return {
@@ -50,6 +57,19 @@ describe('presentes', () => {
       participante('e'),
     ];
     expect(presentes({ participantes: lista }).map((p) => p.id)).toEqual(['a', 'e']);
+  });
+});
+
+describe('listados', () => {
+  it('só ignora o nome em branco (ausentes e justificados entram), mantendo a ordem', () => {
+    const lista = [
+      participante('a', { presenca: 'ausente' }),
+      participante('b', { nome: '' }),
+      participante('c', { presenca: 'justificado' }),
+      participante('d', { nome: ' \t ' }),
+      participante('e'),
+    ];
+    expect(listados({ participantes: lista }).map((p) => p.id)).toEqual(['a', 'c', 'e']);
   });
 });
 

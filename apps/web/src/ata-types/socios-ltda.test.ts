@@ -148,16 +148,20 @@ describe('sócios de Ltda: registro', () => {
       [
         'localDigital',
         'localSemipresencial',
+        'capitalPresenteAbertura',
         'capitalPresente',
         'mesa',
         'convocacaoPresencaTodos',
         'convocacaoCienciaEscrita',
         'convocacaoContrato',
         'convocacaoEdital',
+        'convocacaoEditalNorma',
         'participacaoDistancia',
+        'participacaoDistanciaNorma',
         'declaracaoFormalidades',
         'fechoComPresentes',
         'avisoArquivamento',
+        'avisoArquivamentoNorma',
         'avisoProcuracao',
       ].sort(),
     );
@@ -485,7 +489,7 @@ describe('sócios de Ltda: fecho, assinaturas e avisos', () => {
     const avisos = (d: AtaDraft) => sociosLtda.avisosFinais?.(d) ?? [];
     expect(avisos(presencial())).toEqual([
       'Arquivamento: apresente cópia desta ata à Junta Comercial nos 20 dias seguintes à reunião (Código Civil, art. 1.075, § 2º). Peça a conferência de um profissional (advogado ou contador) antes de assinar e registrar.',
-      'Representação por procurador: o mandato deve especificar os atos autorizados e acompanhar a ata no registro, salvo disposição diversa do contrato social (Código Civil, art. 1.074, § 1º; Manual de Registro de Sociedade Limitada do DREI).',
+      'Representação por procurador: o procurador deve ser outro sócio ou advogado, e o mandato deve especificar os atos autorizados e acompanhar a ata no registro, salvo disposição diversa do contrato social (Código Civil, art. 1.074, § 1º; Manual de Registro de Sociedade Limitada do DREI).',
     ]);
     expect(avisos(cienciaEscrita())).toHaveLength(1);
     expect(avisos(digital())[0]).toContain('nos 20 dias seguintes à assembleia (');

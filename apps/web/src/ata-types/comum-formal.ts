@@ -1,5 +1,5 @@
 import { isValidCnpj } from '@lavra/pii-br';
-import type { EntradaDoDocumento, Participante } from '../domain/draft';
+import type { Participante } from '../domain/draft';
 import { preencher, textoLimpo } from './texto-modelo';
 
 /**
@@ -21,9 +21,17 @@ export function validarCnpj(texto: string): string | null {
   return isValidCnpj(normalizado) ? null : MENSAGEM_CNPJ_INVALIDO;
 }
 
+/**
+ * Participantes listados: os que têm nome preenchido, na ordem da lista (linha sem nome ainda não é
+ * uma pessoa da lista). Fonte única da regra.
+ */
+export function listados(d: { readonly participantes: readonly Participante[] }): Participante[] {
+  return d.participantes.filter((p) => p.nome.trim() !== '');
+}
+
 /** Participantes presentes com nome preenchido, na ordem da lista. */
-export function presentes(d: Pick<EntradaDoDocumento, 'participantes'>): Participante[] {
-  return d.participantes.filter((p) => p.presenca === 'presente' && p.nome.trim() !== '');
+export function presentes(d: { readonly participantes: readonly Participante[] }): Participante[] {
+  return listados(d).filter((p) => p.presenca === 'presente');
 }
 
 /** O texto digitado (aparado) ou a lacuna `[PREENCHER: …]`. */

@@ -19,7 +19,7 @@ import {
   textoCapitalPresente,
   type ResumoCapital,
 } from './capital';
-import { linhaSe, ou, presentes, validarCnpj } from './comum-formal';
+import { linhaSe, listados, ou, presentes, validarCnpj } from './comum-formal';
 import {
   dataPorExtensoOuNulo,
   horaOuNulo,
@@ -49,6 +49,7 @@ type Dados = Record<string, string>;
 const TEXTOS = Object.freeze({
   localDigital: 'de forma digital, considerada realizada na sede da sociedade, por meio de',
   localSemipresencial: 'de forma semipresencial, em',
+  capitalPresenteAbertura: 'Estiveram presentes ou representados sócios titulares de',
   capitalPresente: 'do capital social, conforme as participações informadas na relação a seguir.',
   mesa: 'Composição da mesa:',
   convocacaoPresencaTodos:
@@ -57,14 +58,18 @@ const TEXTOS = Object.freeze({
     'Dispensadas as formalidades de convocação, nos termos do art. 1.072, § 2º, do Código Civil, por terem todos os sócios declarado, por escrito, ciência do local, da data, da hora e da ordem do dia.',
   convocacaoContrato: 'Convocação realizada na forma do contrato social:',
   convocacaoEdital: 'Convocação por edital publicado em',
+  convocacaoEditalNorma: ', nos termos do art. 1.152, § 3º, do Código Civil.',
   participacaoDistancia: 'com participação e votação a distância mediante',
+  participacaoDistanciaNorma: ', nos termos do art. 1.080-A do Código Civil.',
   declaracaoFormalidades: 'A mesa declarou atendidas as formalidades legais para a realização da',
   fechoComPresentes:
     'da qual se lavrou a presente ata, que, lida e achada conforme, vai assinada pelos membros da mesa e pelos sócios presentes. Sócios presentes:',
   avisoArquivamento:
     'Arquivamento: apresente cópia desta ata à Junta Comercial nos 20 dias seguintes à',
+  avisoArquivamentoNorma:
+    '(Código Civil, art. 1.075, § 2º). Peça a conferência de um profissional (advogado ou contador) antes de assinar e registrar.',
   avisoProcuracao:
-    'Representação por procurador: o mandato deve especificar os atos autorizados e acompanhar a ata no registro, salvo disposição diversa do contrato social (Código Civil, art. 1.074, § 1º; Manual de Registro de Sociedade Limitada do DREI).',
+    'Representação por procurador: o procurador deve ser outro sócio ou advogado, e o mandato deve especificar os atos autorizados e acompanhar a ata no registro, salvo disposição diversa do contrato social (Código Civil, art. 1.074, § 1º; Manual de Registro de Sociedade Limitada do DREI).',
 });
 
 /** Forma no título ("Reunião"/"Assembleia"); no texto corrido, em minúsculas. */
@@ -311,7 +316,7 @@ function convocacao(dados: Dados): string {
     case 'contrato':
       return `${TEXTOS.convocacaoContrato} ${detalhe('meio e data da convocação')}.`;
     case 'edital':
-      return `${TEXTOS.convocacaoEdital} ${detalhe('veículos e datas das publicações')}, nos termos do art. 1.152, § 3º, do Código Civil.`;
+      return `${TEXTOS.convocacaoEdital} ${detalhe('veículos e datas das publicações')}${TEXTOS.convocacaoEditalNorma}`;
     default:
       return preencher('forma de convocação');
   }
@@ -326,7 +331,7 @@ function participacaoADistancia(dados: Dados): string | null {
       campo('participacao_distancia'),
       textoLimpo(dados.participacao_distancia),
     )?.toLowerCase() ?? preencher('forma de participação e voto a distância');
-  return `A ${formaNoTexto(dados)} foi realizada de forma ${modalidade}, ${TEXTOS.participacaoDistancia} ${forma}, nos termos do art. 1.080-A do Código Civil.`;
+  return `A ${formaNoTexto(dados)} foi realizada de forma ${modalidade}, ${TEXTOS.participacaoDistancia} ${forma}${TEXTOS.participacaoDistanciaNorma}`;
 }
 
 function preambulo(d: EntradaDoDocumento): string {
@@ -345,7 +350,7 @@ function preambulo(d: EntradaDoDocumento): string {
   return [
     `${data}, às ${hora}, ${lugar(dados)}, reuniram-se em ${formaNoTexto(dados)} os sócios de ${ou(dados.razao_social, 'nome empresarial')}, ` +
       `inscrita no CNPJ sob o nº ${ou(dados.cnpj, 'CNPJ')}${nire === '' ? '' : `, NIRE ${nire}`}, com sede em ${ou(dados.sede, 'endereço da sede')}.`,
-    `Estiveram presentes ou representados sócios titulares de ${capital} ${TEXTOS.capitalPresente}`,
+    `${TEXTOS.capitalPresenteAbertura} ${capital} ${TEXTOS.capitalPresente}`,
     `${TEXTOS.mesa} ${ou(dados.presidente, 'presidente')}, presidente, e ${ou(dados.secretario, 'secretário(a)')}, secretário(a).`,
     convocacao(dados),
     participacaoADistancia(dados),
@@ -389,7 +394,7 @@ function assinaturas(d: EntradaDoDocumento): GrupoAssinaturas[] {
 
 function avisosFinais(d: EntradaDoDocumento): string[] {
   const forma = formaOuNulo(d.dados)?.toLowerCase() ?? 'reunião ou assembleia';
-  const arquivamento = `${TEXTOS.avisoArquivamento} ${forma} (Código Civil, art. 1.075, § 2º). Peça a conferência de um profissional (advogado ou contador) antes de assinar e registrar.`;
+  const arquivamento = `${TEXTOS.avisoArquivamento} ${forma} ${TEXTOS.avisoArquivamentoNorma}`;
   const comProcurador = presentes(d).some((p) => procuradorDe(p.extras) !== '');
   return [arquivamento, ...(comProcurador ? [TEXTOS.avisoProcuracao] : [])];
 }
@@ -422,8 +427,8 @@ function alertasDaSoma(r: ResumoCapital): string[] {
 function resumoDosParticipantes(d: Pick<AtaDraft, 'dados' | 'participantes'>): ResumoParticipantes {
   const r = resumirCapital(d.dados, d.participantes);
   const capital = textoCapitalPresente(r);
-  const listados = d.participantes.filter((p) => p.nome.trim() !== '');
-  const naoPresentes = listados.filter((p) => p.presenca !== 'presente').length;
+  const socios = listados(d);
+  const naoPresentes = socios.filter((p) => p.presenca !== 'presente').length;
   const alertas = [...alertasDaSoma(r)];
   if (d.dados.convocacao === 'presenca_todos' && naoPresentes > 0) {
     alertas.push(
@@ -432,9 +437,9 @@ function resumoDosParticipantes(d: Pick<AtaDraft, 'dados' | 'participantes'>): R
         : `Você indicou que todos os sócios compareceram, mas ${String(naoPresentes)} sócios estão marcados como ausentes.`,
     );
   }
-  if (d.dados.forma === 'reuniao' && listados.length > MAXIMO_SOCIOS_EM_REUNIAO) {
+  if (d.dados.forma === 'reuniao' && socios.length > MAXIMO_SOCIOS_EM_REUNIAO) {
     alertas.push(
-      `A lista tem ${String(listados.length)} sócios: com mais de dez, o Código Civil exige assembleia (art. 1.072, § 1º). Confira a forma escolhida.`,
+      `A lista tem ${String(socios.length)} sócios: com mais de dez, o Código Civil exige assembleia (art. 1.072, § 1º). Confira a forma escolhida.`,
     );
   }
   return { texto: capital === null ? null : `Capital presente informado: ${capital}`, alertas };

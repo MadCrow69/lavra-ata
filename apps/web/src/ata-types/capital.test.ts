@@ -88,6 +88,21 @@ describe('quotasParaCentesimos (arredonda meio para cima)', () => {
     expect(quotasParaCentesimos(3, 3)).toBe(10000);
   });
 
+  it('pré-condição: total zero ou negativo, quotas negativas ou não inteiras lançam RangeError', () => {
+    for (const [q, t] of [
+      [1, 0],
+      [1, -3],
+      [-1, 3],
+      [1.5, 3],
+      [1, 2.5],
+      [Number.NaN, 3],
+      [2 ** 53, 3],
+    ] as const) {
+      expect(() => quotasParaCentesimos(q, t), `${String(q)} de ${String(t)}`).toThrow(RangeError);
+    }
+    expect(quotasParaCentesimos(0, 3)).toBe(0);
+  });
+
   it('meio exato sobe; números grandes sem perder precisão', () => {
     expect(quotasParaCentesimos(1, 20000)).toBe(1);
     expect(quotasParaCentesimos(750, 1000)).toBe(7500);
@@ -160,6 +175,13 @@ describe('resumirCapital em percentual', () => {
     expect(resumirCapital(quotas('10'), [socio('a', '10', 'justificado')]).presente).toBeNull();
   });
 
+  it('presente de 0% (digitado "0") vira null: a ata nunca diz "0%"', () => {
+    const r = resumirCapital(PERCENTUAL, [socio('a', '0'), socio('b', '100', 'ausente')]);
+    expect(r.somaTodos).toBe(10000);
+    expect(r.presente).toBeNull();
+    expect(textoCapitalPresente(r)).toBeNull();
+  });
+
   it('sem modo escolhido, lê como percentual', () => {
     expect(resumirCapital({}, [socio('a', '100')]).modo).toBe('percentual');
   });
@@ -196,6 +218,14 @@ describe('resumirCapital em quotas', () => {
     ]);
     expect(r.presente).toBe(6667);
     expect(r.presenteQuotas).toBe(2);
+  });
+
+  it('1 de 20.001 quotas arredonda para 0: presente null, nunca "0%"', () => {
+    const r = resumirCapital(quotas('20.001'), [socio('a', '1'), socio('b', '20.000', 'ausente')]);
+    expect(r.presenteQuotas).toBe(1);
+    expect(quotasParaCentesimos(1, 20001)).toBe(0);
+    expect(r.presente).toBeNull();
+    expect(textoCapitalPresente(r)).toBeNull();
   });
 
   it('total inválido ou vazio → presente null', () => {
