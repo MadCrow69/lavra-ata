@@ -614,6 +614,19 @@ describe('KeysModal', () => {
       expect(preferencias.atual().modelos).toBeUndefined();
     });
 
+    it('escolher "Outro modelo…" esquece o modelo lembrado, como o campo que nasce vazio', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const escolha = MODELOS.openai.opcoes.find((o) => o.id !== MODELOS.openai.padrao)?.id ?? '';
+      preferencias.definir({ modelos: { openai: escolha } });
+      const { user } = await montar({ preferencias });
+      expect(within(cartao('OpenAI')).getByLabelText('Modelo')).toHaveValue(escolha);
+
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+
+      expect(within(cartao('OpenAI')).getByLabelText('Id do modelo')).toHaveValue('');
+      expect(preferencias.atual().modelos).toBeUndefined();
+    });
+
     it('chave colada no campo do modelo: explica, não grava em storage nenhum e mantém o modelo anterior', async () => {
       const sessao = storageComItens();
       const local = storageComItens();

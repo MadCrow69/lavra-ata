@@ -109,6 +109,8 @@ export function CartaoProvedor({
       setModelo('');
       setModeloGravado('');
       gravar(chave, '', atual?.estado ?? 'nao_testada', atual?.semCredito);
+      // O campo nasce vazio (= o padrão): o modelo lembrado sai junto, como ao apagar o campo.
+      preferencias.definir({ modelos: { [provedor]: '' } });
       return;
     }
     setModo('lista');
