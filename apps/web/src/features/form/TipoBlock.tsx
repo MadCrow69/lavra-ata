@@ -9,6 +9,7 @@ import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
+import { MOTIVO_TIPO_NO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
 import { DestaqueField } from './DestaqueField';
 import { FormBlock } from './FormBlock';
 import { LembrarPreferencias } from './LembrarPreferencias';
@@ -31,6 +32,9 @@ export function TipoBlock() {
   const preferencias = usePreferenciasStore();
   const atual = obterTipo(state.tipoId);
   const iaOcupada = operacao !== null;
+  // No exemplo o tipo fica travado: a marca da sessão nunca diverge do tipo do rascunho.
+  const noExemplo = useModoExemplo().tipoId !== null;
+  const motivoTravado = noExemplo ? MOTIVO_TIPO_NO_EXEMPLO : iaOcupada ? MOTIVO_IA_OCUPADA : null;
   /** Tipo escolhido que espera a confirmação de descartar a ata gerada. */
   const [pendente, setPendente] = useState<AtaTypeDefinition | null>(null);
   const manterRef = useRef<HTMLButtonElement>(null);
@@ -62,8 +66,8 @@ export function TipoBlock() {
               name={grupoId}
               value={tipo.id}
               checked={atual.id === tipo.id}
-              disabled={iaOcupada}
-              aria-describedby={iaOcupada ? motivoId : undefined}
+              disabled={motivoTravado !== null}
+              aria-describedby={motivoTravado === null ? undefined : motivoId}
               onChange={() => {
                 escolher(tipo);
               }}
@@ -74,11 +78,11 @@ export function TipoBlock() {
             </span>
           </label>
         ))}
-        {iaOcupada ? (
+        {motivoTravado === null ? null : (
           <p id={motivoId} className={styles.opcaoDescricao}>
-            {MOTIVO_IA_OCUPADA}
+            {motivoTravado}
           </p>
-        ) : null}
+        )}
       </fieldset>
       <div className={styles.grade}>
         <Field rotulo="Tom da redação">

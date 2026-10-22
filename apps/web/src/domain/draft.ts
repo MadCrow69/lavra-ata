@@ -144,4 +144,6 @@ export type DraftAction =
       atribuicao: Atribuicao | null;
       mapa: MaskMap | null;
     }
-  | { type: 'novaAta' };
+  | { type: 'novaAta' }
+  /** Troca o rascunho inteiro (ex.: carregar um exemplo pronto). */
+  | { type: 'substituirRascunho'; rascunho: AtaDraft };

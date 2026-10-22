@@ -16,6 +16,10 @@ export type AppShellProps = ControleDaAba & {
   editar: ReactNode;
   documento: ReactNode;
   onConfigurarChaves: () => void;
+  /** Abre o seletor de exemplos; sem ele o cabeçalho não mostra "Ver exemplo". */
+  onVerExemplo?: () => void;
+  /** Aviso da página toda (ex.: modo exemplo), logo abaixo do cabeçalho e visível nas duas abas. */
+  aviso?: ReactNode;
   /** Avisos por aba, mostrados como contador na própria aba (tela estreita). */
   avisos?: Partial<Record<AbaId, number>>;
 };
@@ -30,6 +34,8 @@ export function AppShell({
   editar,
   documento,
   onConfigurarChaves,
+  onVerExemplo,
+  aviso,
   aba: abaControlada,
   onTrocarAba,
   avisos,
@@ -43,7 +49,8 @@ export function AppShell({
 
   return (
     <div className={styles.casca}>
-      <Header onConfigurarChaves={onConfigurarChaves} />
+      <Header onConfigurarChaves={onConfigurarChaves} {...(onVerExemplo ? { onVerExemplo } : {})} />
+      {aviso}
       {!largo && <MobileTabs ativa={aba} onChange={trocarAba} {...(avisos ? { avisos } : {})} />}
       <main className={largo ? styles.duasColunas : styles.umaColuna}>
         {ABAS.map(({ id, rotulo }) => {

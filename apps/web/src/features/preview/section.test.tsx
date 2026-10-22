@@ -10,7 +10,9 @@ import type { Atribuicao, AtaDraft, ResultadoAta } from '../../domain/draft';
 import { criarRascunho } from '../../domain/draft-reducer';
 import { GenerateBar } from '../form/GenerateBar';
 import { A4Preview } from './A4Preview';
+import { ModoExemploDeTeste } from '../../test/modo-exemplo';
 import { renderizarComProvedores } from '../../test/provedores';
+import { MOTIVO_EXEMPLO } from '../exemplo/ModoExemplo';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
 
 const CPF_NA_TRANSCRICAO = '529.982.247-25';
@@ -140,6 +142,8 @@ interface Opcoes {
   impl?: Partial<Record<ProviderId, Gerar>>;
   comBarra?: boolean;
   comEdicaoPorFora?: boolean;
+  /** Dentro do modo exemplo: ligado desde o início ou ligado depois pelo teste. */
+  exemplo?: 'ligado' | 'depois';
 }
 
 function renderizar({
@@ -148,18 +152,26 @@ function renderizar({
   impl = {},
   comBarra,
   comEdicaoPorFora,
+  exemplo,
 }: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
   const { a, gerar } = adaptadores(impl);
   const opcoesCadeia = { adaptadores: a, esperaRetryMs: 0 };
-  renderizarComProvedores(
+  const conteudo = (
     <>
       {comBarra ? <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={opcoesCadeia} /> : null}
       <A4Preview opcoesCadeia={opcoesCadeia} />
       {comEdicaoPorFora ? <EdicaoPorFora /> : null}
       <Espiao />
-    </>,
+    </>
+  );
+  renderizarComProvedores(
+    exemplo === undefined ? (
+      conteudo
+    ) : (
+      <ModoExemploDeTeste ligado={exemplo === 'ligado'}>{conteudo}</ModoExemploDeTeste>
+    ),
     { inicial, keyStore: store },
   );
   return { gerar, store, user: userEvent.setup() };
@@ -250,6 +262,50 @@ describe('revisão por seção: ações e atribuição', () => {
     expect(aviso).toHaveTextContent('A IA citou um CPF que não estava na transcrição — confira.');
     expect(aviso.querySelector('[aria-hidden="true"]')).not.toBeNull();
     expect(within(secao('Resumo')).queryByRole('note')).not.toBeInTheDocument();
+  });
+});
+
+describe('revisão por seção: modo exemplo', () => {
+  it('com chave: Regerar e Ajustar parados com o motivo do exemplo; Editar livre; nada é chamado', async () => {
+    const { user, gerar } = renderizar({ exemplo: 'ligado' });
+    const s = secao('Resumo');
+    const regerar = within(s).getByRole('button', { name: 'Regerar seção Resumo' });
+    const ajustar = within(s).getByRole('button', { name: 'Ajustar seção Resumo com instrução' });
+    expect(regerar).toBeDisabled();
+    expect(ajustar).toBeDisabled();
+    expect(regerar).toHaveAccessibleDescription(MOTIVO_EXEMPLO);
+    expect(ajustar).toHaveAccessibleDescription(MOTIVO_EXEMPLO);
+    expect(within(s).getByText(MOTIVO_EXEMPLO)).toBeVisible();
+    expect(within(s).getByRole('button', { name: 'Editar seção Resumo' })).toBeEnabled();
+    await user.click(regerar);
+    expect(gerar.gemini).not.toHaveBeenCalled();
+  });
+
+  it('o motivo do exemplo vem antes do "sem chave"', () => {
+    renderizar({ exemplo: 'ligado', chaves: [] });
+    expect(
+      within(secao('Resumo')).getByRole('button', { name: 'Regerar seção Resumo' }),
+    ).toHaveAccessibleDescription(MOTIVO_EXEMPLO);
+    expect(screen.queryByText(MOTIVO_SEM_CHAVE)).not.toBeInTheDocument();
+  });
+
+  it('ligado depois de uma falha: "Tentar de novo" para com o motivo', async () => {
+    const { user, gerar } = renderizar({
+      exemplo: 'depois',
+      impl: { gemini: () => Promise.reject(erroProvedor('rede', 'gemini')) },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    const alerta = await within(s).findByRole('alert');
+    const tentar = within(alerta).getByRole('button', { name: 'Tentar de novo' });
+    expect(tentar).toBeEnabled();
+    gerar.gemini.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Ligar o modo exemplo' }));
+    expect(tentar).toBeDisabled();
+    expect(tentar).toHaveAccessibleDescription(MOTIVO_EXEMPLO);
+    await user.click(tentar);
+    expect(gerar.gemini).not.toHaveBeenCalled();
   });
 });
 

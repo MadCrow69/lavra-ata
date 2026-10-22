@@ -31,6 +31,7 @@ import { usePreferencias } from '../../preferencias/PreferenciasContext';
 import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { plural } from '../../ui/plural';
 import { useToast } from '../../ui/Toast';
+import { useModoExemplo } from '../exemplo/ModoExemplo';
 import { ExportBar } from '../export/ExportBar';
 import { chavesUnicas } from './chaves';
 import { EncaminhamentosEditor } from './EncaminhamentosEditor';
@@ -471,7 +472,10 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
   const tipo = obterTipo(state.tipoId);
   const { dados, pauta, participantes, resultado } = state;
   // Só o que o documento lê: digitar na transcrição não recompõe a folha.
-  const { logo, processando, erro, aviso, enviar } = useLogo();
+  const { logo: logoDaPessoa, processando, erro, aviso, enviar } = useLogo();
+  // A logo da pessoa vence; sem ela, no modo exemplo, a folha mostra a logo fictícia do exemplo.
+  const modo = useModoExemplo();
+  const logo = logoDaPessoa ?? (modo.tipoId !== null ? modo.logo : null);
   const { mostrar } = useToast();
   const destaque = usePreferencias().atual().destaque ?? DESTAQUE_PADRAO;
   const modelo = useMemo(

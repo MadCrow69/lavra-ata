@@ -13,6 +13,7 @@ import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
+import { MOTIVO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
 import { focarCampo } from './focar-campo';
 import styles from './generate.module.css';
 
@@ -59,6 +60,8 @@ export function GenerateBar({
   const { operacao, ocupada: gerando, cancelarRef } = chamada;
   const resumoId = useId();
   const ocupadaId = useId();
+  const exemploId = useId();
+  const noExemplo = useModoExemplo().tipoId !== null;
 
   const tipo = obterTipo(state.tipoId);
   const faltas = camposFaltando(state, tipo);
@@ -66,8 +69,11 @@ export function GenerateBar({
   const cadeia = keys.cadeia();
   const ocupadaPorSecao = operacao !== null && !gerando;
 
-  /** Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta. */
-  const podeGerar = faltas.length === 0 && operacao === null;
+  /**
+   * Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta nem do
+   * modo exemplo (lá nada é enviado para IA).
+   */
+  const podeGerar = !noExemplo && faltas.length === 0 && operacao === null;
 
   const gerar = async () => {
     if (!podeGerar) return;
@@ -126,7 +132,11 @@ export function GenerateBar({
   };
 
   const [primeiro, ...depois] = cadeia;
-  const descricaoId = [faltas.length > 0 ? resumoId : null, ocupadaPorSecao ? ocupadaId : null]
+  const descricaoId = [
+    noExemplo ? exemploId : null,
+    faltas.length > 0 ? resumoId : null,
+    ocupadaPorSecao ? ocupadaId : null,
+  ]
     .filter((id) => id !== null)
     .join(' ');
 
@@ -149,6 +159,12 @@ export function GenerateBar({
         ) : null}
       </div>
 
+      {noExemplo ? (
+        <p id={exemploId} className={styles.statusTexto}>
+          {MOTIVO_EXEMPLO}
+        </p>
+      ) : null}
+
       {faltas.length > 0 ? (
         <button
           type="button"
@@ -164,26 +180,29 @@ export function GenerateBar({
         </button>
       ) : null}
 
-      <p className={styles.destino}>
-        {primeiro ? (
-          <>
-            {`Envia para ${ROTULO_CURTO[primeiro.id]} · ${primeiro.modelo}`}
-            {depois.length > 0
-              ? ` (depois ${LISTA.format(depois.map((c) => ROTULO_CURTO[c.id]))})`
-              : ''}{' '}
-            <button
-              type="button"
-              className={styles.link}
-              aria-label="Trocar provedor ou modelo"
-              onClick={onConfigurarChaves}
-            >
-              Trocar
-            </button>
-          </>
-        ) : (
-          'Nenhuma chave de IA configurada. Ao clicar em Gerar ata, você informa a sua.'
-        )}
-      </p>
+      {/* No exemplo nada é enviado: "Envia para …" contradiria o motivo logo acima. */}
+      {noExemplo ? null : (
+        <p className={styles.destino}>
+          {primeiro ? (
+            <>
+              {`Envia para ${ROTULO_CURTO[primeiro.id]} · ${primeiro.modelo}`}
+              {depois.length > 0
+                ? ` (depois ${LISTA.format(depois.map((c) => ROTULO_CURTO[c.id]))})`
+                : ''}{' '}
+              <button
+                type="button"
+                className={styles.link}
+                aria-label="Trocar provedor ou modelo"
+                onClick={onConfigurarChaves}
+              >
+                Trocar
+              </button>
+            </>
+          ) : (
+            'Nenhuma chave de IA configurada. Ao clicar em Gerar ata, você informa a sua.'
+          )}
+        </p>
+      )}
 
       {ocupadaPorSecao ? (
         <p id={ocupadaId} className={styles.statusTexto}>

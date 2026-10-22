@@ -1,5 +1,6 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { KeysProvider } from '../ai/KeysContext';
 import { criarKeyStore } from '../ai/keys';
@@ -20,13 +21,15 @@ function simularLargura(largo: boolean): void {
   );
 }
 
-function renderizar(onConfigurarChaves = vi.fn()) {
+function renderizar(onConfigurarChaves = vi.fn(), onVerExemplo?: () => void, aviso?: ReactNode) {
   return render(
     <KeysProvider>
       <AppShell
         editar={<p>conteúdo da bancada</p>}
         documento={<p>conteúdo da folha</p>}
         onConfigurarChaves={onConfigurarChaves}
+        {...(onVerExemplo ? { onVerExemplo } : {})}
+        {...(aviso ? { aviso } : {})}
       />
     </KeysProvider>,
   );
@@ -62,25 +65,45 @@ describe('AppShell em tela larga', () => {
     expect(onConfigurarChaves).toHaveBeenCalledTimes(1);
   });
 
-  it('não oferece botões de funções que ainda não existem', () => {
+  it('as ações do cabeçalho seguem a ordem: exemplo, privacidade, chaves de IA, GitHub', async () => {
     simularLargura(true);
-    renderizar();
-
-    expect(screen.queryByText(/Ver exemplo/)).not.toBeInTheDocument();
-  });
-
-  it('as ações do cabeçalho seguem a ordem: privacidade, chaves de IA, GitHub', () => {
-    simularLargura(true);
-    renderizar();
+    const onVerExemplo = vi.fn();
+    renderizar(vi.fn(), onVerExemplo);
 
     const acoes = within(screen.getByRole('navigation', { name: 'Ações do cabeçalho' }));
     const nomes = [...acoes.getAllByRole('button'), ...acoes.getAllByRole('link')]
       .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
       .map((el) => el.textContent);
-    expect(nomes).toHaveLength(3);
-    expect(nomes[0]).toContain('Privacidade: como verificar');
-    expect(nomes[1]).toContain('Configurar chaves de IA');
-    expect(nomes[2]).toContain('GitHub');
+    expect(nomes).toHaveLength(4);
+    expect(nomes[0]).toBe('Ver exemplo');
+    expect(nomes[1]).toContain('Privacidade: como verificar');
+    expect(nomes[2]).toContain('Configurar chaves de IA');
+    expect(nomes[3]).toContain('GitHub');
+
+    await userEvent.click(acoes.getByRole('button', { name: 'Ver exemplo' }));
+    expect(onVerExemplo).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem onVerExemplo, não há "Ver exemplo"', () => {
+    simularLargura(true);
+    renderizar();
+    expect(screen.queryByRole('button', { name: 'Ver exemplo' })).not.toBeInTheDocument();
+  });
+
+  it('o aviso fica logo abaixo do cabeçalho, fora das abas, visível nas duas', async () => {
+    simularLargura(false);
+    renderizar(vi.fn(), undefined, <section aria-label="Aviso de teste">aviso</section>);
+    const aviso = screen.getByRole('region', { name: 'Aviso de teste' });
+    const cabecalho = screen.getByRole('banner');
+    expect(
+      cabecalho.compareDocumentPosition(aviso) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      aviso.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(aviso).toBeVisible();
+    await userEvent.click(screen.getByRole('tab', { name: 'Documento' }));
+    expect(aviso).toBeVisible();
   });
 
   it('rodapé: autoria com link seguro para o LinkedIn e licença', () => {

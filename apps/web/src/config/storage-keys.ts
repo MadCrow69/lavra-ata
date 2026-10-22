@@ -17,3 +17,10 @@ export const PREFERENCIAS = 'lavra:preferencias:v1';
  * `localStorage` só com "Lembrar logo neste navegador". Formato: `{ versao: 1, dataUrl, largura, altura }`.
  */
 export const LOGO = 'lavra:logo:v1';
+
+/**
+ * Marca do modo exemplo, só em `sessionStorage` (some ao fechar a aba). Formato:
+ * `{ versao: 1, tipoId }` — o tipo do exemplo que está no rascunho desta aba. Recarregar com a marca
+ * igual ao tipo do rascunho recuperado volta ao modo exemplo.
+ */
+export const EXEMPLO = 'lavra:exemplo:v1';

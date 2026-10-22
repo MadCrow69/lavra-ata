@@ -27,6 +27,20 @@ export function criarRascunho(tipoId: string = TIPO_PADRAO_ID, tom: Tom = 'forma
   };
 }
 
+/**
+ * O rascunho tem algo que a pessoa escreveu (um rascunho só com tipo e tom não é "recuperado" nem
+ * tem o que perder ao ser trocado).
+ */
+export function temConteudo(d: AtaDraft): boolean {
+  return (
+    Object.values(d.dados).some((v) => v.trim() !== '') ||
+    d.pauta.length > 0 ||
+    d.participantes.length > 0 ||
+    d.transcricao.trim() !== '' ||
+    d.resultado !== null
+  );
+}
+
 function novoParticipante(
   nome: string,
   complemento: string,
@@ -157,5 +171,7 @@ export function draftReducer(state: AtaDraft, action: DraftAction): AtaDraft {
     }
     case 'novaAta':
       return criarRascunho(state.tipoId, state.tom);
+    case 'substituirRascunho':
+      return action.rascunho;
   }
 }
