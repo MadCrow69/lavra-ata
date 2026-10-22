@@ -465,25 +465,52 @@ describe('dadosAoTrocarDeTipo', () => {
 
   it('a plataforma da corporativa remota vai para `plataforma` e o local deixa de existir no novo tipo', () => {
     const depois = dadosAoTrocarDeTipo(remota, corporativa, cipa);
-    expect(depois).toEqual({ ...remota, local: '', plataforma: 'videoconferência' });
+    expect(depois).toEqual({
+      modalidade: 'remota',
+      organizacao: 'Empresa Exemplo',
+      plataforma: 'videoconferência',
+    });
+    expect(depois).not.toHaveProperty('local');
   });
 
-  it('na volta, a plataforma regressa ao `local` da corporativa (ida e volta não perdem o texto)', () => {
-    const ida = dadosAoTrocarDeTipo(remota, corporativa, condominio);
-    expect(dadosAoTrocarDeTipo(ida, condominio, corporativa)).toEqual({
-      ...remota,
-      plataforma: '',
+  it('de um tipo com `plataforma` para a corporativa, a plataforma vira o `local`', () => {
+    const depois = dadosAoTrocarDeTipo(
+      { modalidade: 'remota', plataforma: 'Teams' },
+      condominio,
+      corporativa,
+    );
+    expect(depois).toEqual({ modalidade: 'remota', local: 'Teams' });
+  });
+
+  it('com `local` e `plataforma` preenchidos, os dois trocam de lugar nas duas direções', () => {
+    const ambos = { modalidade: 'remota', local: 'Sede', plataforma: 'Teams' };
+    expect(dadosAoTrocarDeTipo(ambos, corporativa, cipa)).toEqual({
+      modalidade: 'remota',
+      local: 'Teams',
+      plataforma: 'Sede',
+    });
+    expect(dadosAoTrocarDeTipo(ambos, cipa, corporativa)).toEqual({
+      modalidade: 'remota',
+      local: 'Teams',
+      plataforma: 'Sede',
     });
   });
 
-  it('o destino já preenchido vence e a origem é esvaziada', () => {
-    const depois = dadosAoTrocarDeTipo(
-      { ...remota, plataforma: 'Outra sala virtual' },
-      corporativa,
-      cipa,
-    );
-    expect(depois.plataforma).toBe('Outra sala virtual');
-    expect(depois.local).toBe('');
+  it('ida e volta devolvem exatamente os mesmos dados (com um campo, com os dois e sem nenhum)', () => {
+    const casos = [
+      remota,
+      { modalidade: 'remota', local: 'Sede', plataforma: 'Teams' },
+      { modalidade: 'remota', plataforma: 'Teams' },
+      { modalidade: 'remota', local: '  ', plataforma: '' },
+    ];
+    for (const dados of casos) {
+      for (const outro of [cipa, condominio]) {
+        const ida = dadosAoTrocarDeTipo(dados, corporativa, outro);
+        expect(dadosAoTrocarDeTipo(ida, outro, corporativa)).toEqual(dados);
+        const idaDeOutro = dadosAoTrocarDeTipo(dados, outro, corporativa);
+        expect(dadosAoTrocarDeTipo(idaDeOutro, corporativa, outro)).toEqual(dados);
+      }
+    }
   });
 
   it('só vale na modalidade remota: presencial e híbrida mantêm o local', () => {
@@ -499,7 +526,7 @@ describe('dadosAoTrocarDeTipo', () => {
     expect(dadosAoTrocarDeTipo(remota, corporativa, corporativa)).toBe(remota);
   });
 
-  it('origem vazia ou só com espaços não mexe nos dados', () => {
+  it('sem texto em nenhum dos dois campos, os dados são devolvidos como vieram', () => {
     const dados = { modalidade: 'remota', local: '  ' };
     expect(dadosAoTrocarDeTipo(dados, corporativa, cipa)).toBe(dados);
   });

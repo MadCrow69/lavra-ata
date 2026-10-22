@@ -213,7 +213,6 @@ export async function colarParticipantes(page: Page, linhas: string[], aviso?: s
   if (aviso !== undefined) await expect(page.getByText(aviso, { exact: true })).toBeVisible();
 }
 
-/** Rótulo de campo obrigatório = texto + asterisco `aria-hidden`: o `getByLabel` lê o texto do `<label>`. */
 const escaparRegExp = (texto: string) => texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
@@ -272,7 +271,7 @@ export const TRANSCRICAO_BASICA = [
 export async function preencherReuniao(page: Page) {
   await preencherDados(page);
   await colarParticipantes(page, PARTICIPANTES_BASICOS);
-  await page.getByLabel('Transcrição da reunião').fill(TRANSCRICAO_BASICA);
+  await campo(page, 'Transcrição da reunião').fill(TRANSCRICAO_BASICA);
 }
 
 /**
@@ -344,6 +343,11 @@ export async function afirmarLimpo(page: Page, rede: Rede) {
   expect(rede.errosDePagina).toEqual([]);
 }
 
+/** O botão "Gerar ata" (o ícone é `aria-hidden`: o nome acessível é só o texto). */
+export function botaoGerar(page: Page): Locator {
+  return page.getByRole('button', { name: 'Gerar ata', exact: true });
+}
+
 /** Chaves + dados + clique em "Gerar ata"; espera a folha mostrar os encaminhamentos. */
 export async function gerarAta(
   page: Page,
@@ -351,7 +355,7 @@ export async function gerarAta(
 ) {
   await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
   await preencher();
-  await page.getByRole('button', { name: /Gerar ata/ }).click();
+  await botaoGerar(page).click();
   await expect(page.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible({
     timeout: FOLGA_FALLBACK_MS,
   });
@@ -388,7 +392,7 @@ export async function baixar(
   ]);
   // Quem perder a corrida não pode virar rejeição solta quando a página fechar.
   decisao.catch(() => undefined);
-  await page.getByRole('button', { name: botao }).click();
+  await page.getByRole('button', { name: botao, exact: true }).click();
   if ((await decisao) === 'modal') {
     await aoConfirmar?.(modal);
     await modal.getByRole('button', { name: 'Baixar mesmo assim' }).click();

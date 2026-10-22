@@ -18,6 +18,9 @@ import type { CampoDef } from './types';
 export const VALORES_MODALIDADE = ['presencial', 'remota', 'hibrida'] as const;
 export type Modalidade = (typeof VALORES_MODALIDADE)[number];
 
+/** A modalidade em que a reunião acontece só por meio eletrônico (verificado contra `Modalidade`). */
+export const MODALIDADE_REMOTA = 'remota' satisfies Modalidade;
+
 /** Campo `modalidade` com as opções que têm rótulo, sempre na ordem de `VALORES_MODALIDADE`. */
 export function campoModalidade(
   rotulos: Partial<Record<Modalidade, string>>,

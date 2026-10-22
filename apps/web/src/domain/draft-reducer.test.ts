@@ -98,13 +98,26 @@ describe('draftReducer', () => {
 
     it('a plataforma da corporativa não vira o local da CIPA e volta ao `local` ao retornar', () => {
       const naCipa = draftReducer(remotaComPlataforma(), { type: 'definirTipo', tipoId: 'cipa' });
-      expect(naCipa.dados.local).toBe('');
+      expect(naCipa.dados.local).toBeUndefined();
       expect(naCipa.dados.plataforma).toBe('videoconferência');
       expect(naCipa.dados.modalidade).toBe('remota');
 
       const devolta = draftReducer(naCipa, { type: 'definirTipo', tipoId: 'corporativa' });
-      expect(devolta.dados.local).toBe('videoconferência');
-      expect(devolta.dados.plataforma).toBe('');
+      expect(devolta.dados).toEqual(remotaComPlataforma().dados);
+    });
+
+    it('local e plataforma preenchidos (Ltda: sede e Teams) trocam de campo sem perder nenhum', () => {
+      let d = criarRascunho('socios-ltda');
+      d = draftReducer(d, { type: 'definirCampo', campo: 'modalidade', valor: 'remota' });
+      d = draftReducer(d, { type: 'definirCampo', campo: 'local', valor: 'Sede' });
+      d = draftReducer(d, { type: 'definirCampo', campo: 'plataforma', valor: 'Teams' });
+
+      const naCorporativa = draftReducer(d, { type: 'definirTipo', tipoId: 'corporativa' });
+      expect(naCorporativa.dados.local).toBe('Teams');
+      expect(naCorporativa.dados.plataforma).toBe('Sede');
+
+      const devolta = draftReducer(naCorporativa, { type: 'definirTipo', tipoId: 'socios-ltda' });
+      expect(devolta.dados).toEqual(d.dados);
     });
   });
 

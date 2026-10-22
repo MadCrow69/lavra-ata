@@ -6,6 +6,7 @@ import {
   FOLGA_FALLBACK_MS,
   afirmarLimpo,
   baixar,
+  botaoGerar,
   campo,
   colarParticipantes,
   comeca,
@@ -41,11 +42,48 @@ const ABRIR_GERACAO = 'Ata gerada por OpenAI · gpt-6-luna';
 
 const CNPJ_EXEMPLO = '11.222.333/0001-81';
 
+/** Quantos condôminos o cenário de volume cola; todo número esperado deriva daqui. */
+const CONDOMINOS = 200;
+const PRIMEIRA_UNIDADE = 101;
+const LINHAS_DA_CIPA = [
+  'Marcos Ferraz — Gerente de produção',
+  'Joana Prado — Técnica de segurança',
+  'Helena Duarte — Operadora de empilhadeira',
+  'Rafael Moura — Almoxarife',
+];
+const LINHAS_DA_LTDA = ['Ana Souza — 50', 'Bruno Lima — 37,5', 'Carla Dias — 12,5'];
+
+const adicionados = (quantos: number) => `${String(quantos)} participantes adicionados.`;
+
 /** O único corpo de requisição de geração que chegou à OpenAI. */
 function corpoDaGeracao(rede: Rede): string {
   const geracoes = rede.chamadas.filter((c) => c.metodo === 'POST' && c.provedor === 'openai');
   expect(geracoes).toHaveLength(1);
   return geracoes[0]?.corpo ?? '';
+}
+
+/** Unidade do `i`-ésimo condômino (todas distintas, para a busca por unidade achar uma só). */
+const unidadeDe = (i: number) => PRIMEIRA_UNIDADE + i;
+
+/**
+ * O resumo do capital da Ltda aparece duas vezes: à vista e na região `status` (leitor de tela).
+ * Os dois têm de mostrar o MESMO texto vigente (o anúncio sai depois de uma pequena espera).
+ */
+async function afirmarResumoDoCapital(page: Page, texto: string | null) {
+  const anunciado = page.getByRole('status').filter({ hasText: 'Capital presente informado' });
+  const visivel = page.locator('p:not([role])').filter({ hasText: 'Capital presente informado' });
+  if (texto === null) {
+    await expect(visivel).toHaveCount(0);
+    await expect(
+      page
+        .locator('section[data-bloco="participantes"]')
+        .getByRole('status')
+        .filter({ hasText: /\S/ }),
+    ).toHaveCount(0);
+    return;
+  }
+  await expect(visivel).toHaveText(texto);
+  await expect(anunciado).toHaveText(texto);
 }
 
 function listaDeLinhas(modelo: (i: number) => string, quantos: number): string[] {
@@ -79,37 +117,26 @@ test.describe('CIPA no build com CSP ativa', () => {
       'Secretário(a) designado(a)': 'Joana Prado',
       Pauta: 'Acidente no corredor de carga\nSinalização do piso',
     });
-    await colarParticipantes(
-      page,
-      [
-        'Marcos Ferraz — Gerente de produção',
-        'Joana Prado — Técnica de segurança',
-        'Helena Duarte — Operadora de empilhadeira',
-        'Rafael Moura — Almoxarife',
-      ],
-      '4 participantes adicionados.',
-    );
+    await colarParticipantes(page, LINHAS_DA_CIPA, adicionados(LINHAS_DA_CIPA.length));
     await page
       .getByLabel('Representação do participante 1', { exact: true })
       .selectOption({ label: 'Representante da organização' });
     await preencherVazios(page, 'Representação', 'Representante dos empregados');
-    await page
-      .getByLabel('Transcrição da reunião')
-      .fill(
-        `Marcos Ferraz: Abrimos a reunião por causa do acidente no corredor de carga. O documento do envolvido é o CPF ${CPF}.\nJoana Prado: Precisamos sinalizar o piso.`,
-      );
+    await campo(page, 'Transcrição da reunião').fill(
+      `Marcos Ferraz: Abrimos a reunião por causa do acidente no corredor de carga. O documento do envolvido é o CPF ${CPF}.\nJoana Prado: Precisamos sinalizar o piso.`,
+    );
 
     // Extraordinária sem motivo: a geração fica bloqueada e a barra diz o que falta.
     await expect(
       page.getByText('Falta: Motivo da reunião extraordinária', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: /Gerar ata/ })).toBeDisabled();
+    await expect(botaoGerar(page)).toBeDisabled();
 
     await preencherCampos(page, {
       'Motivo da reunião extraordinária': 'Acidente do trabalho grave ou fatal',
     });
-    await expect(page.getByRole('button', { name: /Gerar ata/ })).toBeEnabled();
-    await page.getByRole('button', { name: /Gerar ata/ }).click();
+    await expect(botaoGerar(page)).toBeEnabled();
+    await botaoGerar(page).click();
     await expect(page.getByText(ABRIR_GERACAO)).toBeVisible({ timeout: FOLGA_FALLBACK_MS });
 
     const documento = folha(page);
@@ -121,7 +148,7 @@ test.describe('CIPA no build com CSP ativa', () => {
     );
     await expect(documento).toContainText(CPF);
     const assinaturas = documento.getByRole('group', { name: 'Assinaturas', exact: true });
-    await expect(pessoasQueAssinam(assinaturas)).toHaveCount(4);
+    await expect(pessoasQueAssinam(assinaturas)).toHaveCount(LINHAS_DA_CIPA.length);
     await expect(assinaturas).toContainText('Representante da organização');
     await expect(assinaturas).toContainText('Representante dos empregados');
     await expect(documento.getByRole('note').filter({ hasText: '5.6.3.2' })).toBeVisible();
@@ -178,37 +205,41 @@ test.describe('condomínio no build com CSP ativa', () => {
     await colarParticipantes(
       page,
       listaDeLinhas(
-        (i) => `Condômino de volume nº ${String(i + 1).padStart(3, '0')} — Apto ${String(101 + i)}`,
-        200,
+        (i) =>
+          `Condômino de volume nº ${String(i + 1).padStart(3, '0')} — Apto ${String(unidadeDe(i))}`,
+        CONDOMINOS,
       ),
-      '200 participantes adicionados.',
+      adicionados(CONDOMINOS),
     );
     await preencherVazios(page, 'Vínculo', 'Proprietário(a)');
     await expect(
-      page.getByText('Vínculo “Proprietário(a)” aplicado a 200 participantes sem valor.', {
-        exact: true,
-      }),
+      page.getByText(
+        `Vínculo “Proprietário(a)” aplicado a ${String(CONDOMINOS)} participantes sem valor.`,
+        { exact: true },
+      ),
     ).toBeVisible();
 
     // Busca pela unidade: sobra uma linha.
     const linhas = page.getByRole('region', { name: 'Lista de participantes' }).locator('tbody tr');
-    await expect(linhas).toHaveCount(200);
-    await page.getByLabel('Buscar participante', { exact: true }).fill('Apto 150');
+    await expect(linhas).toHaveCount(CONDOMINOS);
+    await page
+      .getByLabel('Buscar participante', { exact: true })
+      .fill(`Apto ${String(unidadeDe(CONDOMINOS / 4))}`);
     await expect(linhas).toHaveCount(1);
     await page.getByLabel('Buscar participante', { exact: true }).fill('');
-    await expect(linhas).toHaveCount(200);
+    await expect(linhas).toHaveCount(CONDOMINOS);
 
     await preencherCampos(page, { 'Quem assina a ata': 'A mesa e os condôminos presentes' });
-    await page
-      .getByLabel('Transcrição da reunião')
-      .fill('Joana Prado: Abrimos a assembleia. A síndica apresentou as contas.');
-    await page.getByRole('button', { name: /Gerar ata/ }).click();
+    await campo(page, 'Transcrição da reunião').fill(
+      'Joana Prado: Abrimos a assembleia. A síndica apresentou as contas.',
+    );
+    await botaoGerar(page).click();
     await expect(page.getByText(ABRIR_GERACAO)).toBeVisible({ timeout: FOLGA_FALLBACK_MS });
 
     const condominos = folha(page).getByRole('group', {
       name: 'Assinaturas — Condôminos presentes',
     });
-    await expect(pessoasQueAssinam(condominos)).toHaveCount(200);
+    await expect(pessoasQueAssinam(condominos)).toHaveCount(CONDOMINOS);
     await expect(folha(page).getByRole('group', { name: 'Assinaturas — Mesa' })).toBeVisible();
 
     // A unidade (e a fração) nunca vão para a IA.
@@ -267,26 +298,18 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
       'Declaração de formalidades': 'A mesa declara atendidas as formalidades legais',
       'Ordem do dia': 'Mudança do endereço da sede',
     });
-    await colarParticipantes(
-      page,
-      ['Ana Souza — 50', 'Bruno Lima — 37,5', 'Carla Dias — 12,5'],
-      '3 participantes adicionados.',
-    );
-    // Todos presentes: 100% (anunciado quando a lista muda); a sócia ausente tira 12,5.
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Capital presente informado: 100%' }),
-    ).toHaveCount(1);
+    await colarParticipantes(page, LINHAS_DA_LTDA, adicionados(LINHAS_DA_LTDA.length));
+    // Todos presentes: 100%; a sócia ausente tira 12,5, e o anúncio acompanha sem mudar a lista.
+    await afirmarResumoDoCapital(page, 'Capital presente informado: 100%');
     await page
       .getByLabel('Presença de Carla Dias', { exact: true })
       .selectOption({ label: 'Ausente' });
-    await expect(
-      page.getByText('Capital presente informado: 87,5%', { exact: true }),
-    ).toBeVisible();
+    await afirmarResumoDoCapital(page, 'Capital presente informado: 87,5%');
 
-    await page
-      .getByLabel('Transcrição da reunião')
-      .fill('Joana Prado: Abrimos a reunião. Marcos Ferraz propôs mudar o endereço da sede.');
-    await page.getByRole('button', { name: /Gerar ata/ }).click();
+    await campo(page, 'Transcrição da reunião').fill(
+      'Joana Prado: Abrimos a reunião. Marcos Ferraz propôs mudar o endereço da sede.',
+    );
+    await botaoGerar(page).click();
     await expect(page.getByText(ABRIR_GERACAO)).toBeVisible({ timeout: FOLGA_FALLBACK_MS });
 
     // Nenhuma participação vai para a IA (nem a soma).
@@ -309,6 +332,7 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
     await expect(
       page.getByRole('note').filter({ hasText: 'As participações informadas somam 110%' }),
     ).toBeVisible();
+    await afirmarResumoDoCapital(page, null);
     await expect(documento).toContainText(
       '[PREENCHER: capital social representado pelos presentes]',
     );
@@ -316,6 +340,7 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
     await expect(
       page.getByRole('note').filter({ hasText: 'As participações informadas somam' }),
     ).toHaveCount(0);
+    await afirmarResumoDoCapital(page, 'Capital presente informado: 87,5%');
     await expect(documento).not.toContainText(
       '[PREENCHER: capital social representado pelos presentes]',
     );
@@ -328,7 +353,7 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
           'Você indicou que todos os sócios compareceram, mas 1 sócio está marcado como ausente.',
       }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: /Gerar ata/ })).toBeEnabled();
+    await expect(botaoGerar(page)).toBeEnabled();
 
     // Digital com boletim de voto a distância: o parágrafo cita o art. 1.080-A.
     await preencherCampos(page, {
@@ -425,7 +450,7 @@ test.describe('troca de tipo no build com CSP ativa', () => {
 
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
     await preencherReuniao(page);
-    await page.getByRole('button', { name: /Gerar ata/ }).click();
+    await botaoGerar(page).click();
 
     const grupo = page.getByRole('group', { name: 'Tipo de ata', exact: true });
     await expect(grupo.getByText(MOTIVO_IA_OCUPADA)).toBeVisible();
@@ -500,10 +525,7 @@ test.describe('celular (360×740) no build com CSP ativa', () => {
       'Sócio de Sobrenome Muito Comprido Segundo — 30',
       'Sócia de Sobrenome Muito Comprido Terceira — 20',
     ]);
-    // O resumo aparece uma vez para quem enxerga e outra, só para leitor de tela, no `status`.
-    await expect(
-      page.getByText('Capital presente informado: 100%', { exact: true }).first(),
-    ).toBeVisible();
+    await afirmarResumoDoCapital(page, 'Capital presente informado: 100%');
     await participantesEmCartoes(page);
     await semRolagemHorizontal(page);
 
@@ -512,6 +534,7 @@ test.describe('celular (360×740) no build com CSP ativa', () => {
     await expect(
       page.getByRole('note').filter({ hasText: 'As participações informadas somam 110%' }),
     ).toBeVisible();
+    await afirmarResumoDoCapital(page, null);
     await semRolagemHorizontal(page);
     await afirmarLimpo(page, rede);
   });

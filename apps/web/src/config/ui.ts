@@ -5,6 +5,12 @@ export const DURACAO_TOAST_MS = 6_000;
 export const ESPERA_SALVAR_RASCUNHO_MS = 500;
 
 /**
+ * Espera, em ms, sem mudança no resumo dos participantes antes de o leitor de tela o anunciar
+ * (a região `aria-live` do bloco de participantes).
+ */
+export const ESPERA_ANUNCIO_RESUMO_MS = 600;
+
+/**
  * Largura máxima (rem) em que a tabela de participantes vira cartões, um por pessoa. Espelha o
  * `@media (max-width: 40rem)` de `features/form/form.module.css` (CSS não importa constante JS):
  * mudar um exige mudar o outro.

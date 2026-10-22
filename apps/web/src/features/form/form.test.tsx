@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
@@ -826,12 +826,12 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
       expect(screen.getByRole('note')).toHaveTextContent('Menos de dois membros presentes.');
     });
 
-    it('o resumo é anunciado só ao adicionar ou remover, não a cada tecla digitada', async () => {
+    it('o resumo anunciado acompanha o texto vigente, mas só depois de parar de digitar', async () => {
       const user = userEvent.setup();
       const tipo: AtaTypeDefinition = {
         ...TIPO_DE_TESTE,
         resumoDosParticipantes: ({ participantes }) => ({
-          texto: `Unidades: ${participantes.map((p) => p.extras.unidade ?? '').join(' / ')}`,
+          texto: `Unidades: ${participantes.map((p) => p.extras.unidade ?? '').join(' / ')} · Presentes: ${String(participantes.filter((p) => p.presenca === 'presente').length)}`,
           alertas: [],
         }),
       };
@@ -841,14 +841,28 @@ describe('formulário guiado pelo tipo de ata (tipo de teste)', () => {
           .getAllByRole('status')
           .map((el) => el.textContent)
           .filter((t) => t.startsWith('Unidades:'));
-      expect(anunciado()).toEqual(['Unidades: Apto 101']);
+      expect(anunciado()).toEqual(['Unidades: Apto 101 · Presentes: 1']);
 
+      // Muda o texto SEM mudar a quantidade de participantes: à vista na hora, anunciado depois.
       await user.type(screen.getByLabelText('Unidade do participante 1'), '0');
-      expect(screen.getByText('Unidades: Apto 1010', { selector: 'p:not([role])' })).toBeVisible();
-      expect(anunciado()).toEqual(['Unidades: Apto 101']);
+      expect(
+        screen.getByText('Unidades: Apto 1010 · Presentes: 1', { selector: 'p:not([role])' }),
+      ).toBeVisible();
+      expect(anunciado()).toEqual(['Unidades: Apto 101 · Presentes: 1']);
+      await waitFor(() => {
+        expect(anunciado()).toEqual(['Unidades: Apto 1010 · Presentes: 1']);
+      });
+
+      // Mudar a presença também (a quantidade continua a mesma).
+      await user.selectOptions(screen.getByLabelText('Presença de Pessoa 1'), 'ausente');
+      await waitFor(() => {
+        expect(anunciado()).toEqual(['Unidades: Apto 1010 · Presentes: 0']);
+      });
 
       await user.type(screen.getByLabelText(/^Nome do novo participante/), 'Bia{Enter}');
-      expect(anunciado()).toEqual(['Unidades: Apto 1010 / ']);
+      await waitFor(() => {
+        expect(anunciado()).toEqual(['Unidades: Apto 1010 /  · Presentes: 1']);
+      });
     });
 
     it('tipo sem coluna de papel e sem campo de complemento mantém “Nome — X” no nome', async () => {

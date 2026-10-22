@@ -2,6 +2,7 @@ import { PESOS_COLUNA } from '../config/documento';
 import { LIMITE_TRANSCRICAO } from '../config/limits';
 import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
 import { cipa } from './cipa';
+import { MODALIDADE_REMOTA } from './campos-comuns';
 import { condominio } from './condominio';
 import { corporativa } from './corporativa';
 import { sociosLtda } from './socios-ltda';
@@ -29,12 +30,16 @@ export function obterTipo(id: string): AtaTypeDefinition {
   return ATA_TYPES[id] ?? corporativa;
 }
 
+/** Ids dos campos que trocam de lugar entre a corporativa e os demais tipos (exceção D2). */
+const ID_LOCAL = 'local';
+const ID_PLATAFORMA = 'plataforma';
+
 /**
  * Dados do rascunho depois de trocar `de` por `para`. Tudo é mantido, salvo a exceção D2: na
  * modalidade remota, o tipo com `plataformaNoLocal` (corporativa) guarda a plataforma em `local`,
  * e os demais, em `plataforma`. Sem esta passagem, a plataforma da corporativa viraria o "Local"
- * da CIPA. Vale nos dois sentidos, para a ida e a volta não perderem o texto; o destino já
- * preenchido vence, e a origem é esvaziada para o texto não aparecer sob o rótulo errado.
+ * da CIPA. Os dois valores TROCAM de campo: nada se perde, e trocar de novo devolve exatamente o
+ * que havia (a operação é uma involução, inclusive nas chaves ausentes).
  */
 export function dadosAoTrocarDeTipo(
   dados: Record<string, string>,
@@ -43,15 +48,13 @@ export function dadosAoTrocarDeTipo(
 ): Record<string, string> {
   const sai = de.plataformaNoLocal === true;
   const entra = para.plataformaNoLocal === true;
-  if (dados.modalidade !== 'remota' || sai === entra) return dados;
-  const origem = sai ? 'local' : 'plataforma';
-  const destino = sai ? 'plataforma' : 'local';
-  const texto = textoLimpo(dados[origem]);
-  if (texto === '') return dados;
+  if (dados.modalidade !== MODALIDADE_REMOTA || sai === entra) return dados;
+  const { [ID_LOCAL]: local, [ID_PLATAFORMA]: plataforma, ...resto } = dados;
+  if (textoLimpo(local) === '' && textoLimpo(plataforma) === '') return dados;
   return {
-    ...dados,
-    [origem]: '',
-    [destino]: textoLimpo(dados[destino]) === '' ? texto : (dados[destino] ?? ''),
+    ...resto,
+    ...(plataforma === undefined ? {} : { [ID_LOCAL]: plataforma }),
+    ...(local === undefined ? {} : { [ID_PLATAFORMA]: local }),
   };
 }
 

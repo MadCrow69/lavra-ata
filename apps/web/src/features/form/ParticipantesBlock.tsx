@@ -12,7 +12,7 @@ import {
 import { textoLimpo } from '../../ata-types/texto-modelo';
 import type { AtaTypeDefinition, CampoDef } from '../../ata-types/types';
 import { PARTICIPANTES_ATE_ROLAGEM } from '../../config/limits';
-import { LARGURA_CARTOES_REM } from '../../config/ui';
+import { ESPERA_ANUNCIO_RESUMO_MS, LARGURA_CARTOES_REM } from '../../config/ui';
 import { useDraft } from '../../domain/DraftContext';
 import { calcularAdicao } from '../../domain/participantes';
 import {
@@ -35,6 +35,7 @@ import {
   normalizarBusca,
   type LinhaParticipante,
 } from './lista-participantes';
+import { useTextoAdiado } from './useTextoAdiado';
 import styles from './form.module.css';
 
 const CONSULTA_CARTOES = `(max-width: ${String(LARGURA_CARTOES_REM)}rem)`;
@@ -405,12 +406,9 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     [tipo, dados, participantes],
   );
 
-  // O resumo fica à vista sempre, mas só é ANUNCIADO quando a quantidade de participantes muda
-  // (adicionar, colar, remover): o texto de alguns tipos muda a cada tecla (ex.: somas).
-  const [anuncio, setAnuncio] = useState({ total: participantes.length, texto: resumo?.texto });
-  if (anuncio.total !== participantes.length) {
-    setAnuncio({ total: participantes.length, texto: resumo?.texto });
-  }
+  // O resumo fica à vista sempre; o leitor de tela ouve o texto VIGENTE, mas só depois de a pessoa
+  // parar de mexer (o texto de alguns tipos muda a cada tecla, ex.: somas).
+  const resumoAnunciado = useTextoAdiado(resumo?.texto, ESPERA_ANUNCIO_RESUMO_MS);
 
   if (aviso) {
     if (aviso.base === null) setAviso({ ...aviso, base: participantes });
@@ -573,7 +571,7 @@ export function ParticipantesBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       {resumo?.texto ? <p className={styles.resumoTexto}>{resumo.texto}</p> : null}
       {resumo !== null ? (
         <p role="status" className={styles.somenteLeitor}>
-          {anuncio.texto}
+          {resumoAnunciado}
         </p>
       ) : null}
       {resumo?.alertas.map((alerta) => (
