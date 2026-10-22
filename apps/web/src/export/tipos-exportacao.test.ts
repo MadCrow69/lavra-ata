@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { cipa } from '../ata-types/cipa';
 import { presentes } from '../ata-types/comum-formal';
 import { condominio } from '../ata-types/condominio';
+import { sociosLtda } from '../ata-types/socios-ltda';
 import type { AtaTypeDefinition } from '../ata-types/types';
 import type { DocumentModel } from '../document/model';
 import { modeloDeVolume, rascunhoDeVolume, type OpcoesVolume } from '../test/documento-volume';
@@ -24,6 +25,10 @@ interface Caso {
   extras: (i: number) => Record<string, string>;
   /** Trechos que o PDF precisa trazer, além do título de cada seção do tipo. */
   noPdf: string[];
+  /** Trechos que o PDF NÃO pode trazer (ex.: o resumo, que é só do formulário). */
+  foraDoPdf?: string[];
+  /** Linhas de participantes do gerador de volume (padrão 12). */
+  participantes?: number;
   /** Aviso final do tipo, conferido no `document.xml`. */
   aviso: string;
 }
@@ -74,6 +79,39 @@ const CASOS: Caso[] = [
     noPdf: ['Assembleia Geral Ordinária', 'Unidade', 'Vínculo', 'Fração ideal', 'Mesa'],
     aviso: condominio.textosFixos?.avisoConvencao ?? 'aviso ausente',
   },
+  {
+    tipo: sociosLtda,
+    participantes: 8,
+    dados: {
+      razao_social: 'Empresa Exemplo Ltda.',
+      cnpj: '11.222.333/0001-81',
+      nire: '35212345678',
+      sede: 'Rua das Flores, 100, Centro, Cidade Exemplo/SP',
+      forma: 'assembleia',
+      data: '2026-10-14',
+      inicio: '10:00',
+      fim: '11:30',
+      modalidade: 'presencial',
+      local: 'Sala de reuniões da sede',
+      convocacao: 'ciencia_escrita',
+      presidente: 'Carla Mendes',
+      secretario: 'Diego Faria',
+      modo_capital: 'percentual',
+      declaracao_formalidades: 'sim',
+    },
+    extras: (i) => ({
+      participacao: '10',
+      ...(i % 3 === 0 ? { procurador: `Procuradora de volume nº ${String(i)}` } : {}),
+    }),
+    noPdf: [
+      'do capital social, conforme as participações informadas',
+      'nos 20 dias seguintes',
+      'Sócios presentes',
+      'Participação (%)',
+    ],
+    foraDoPdf: ['Capital presente informado'],
+    aviso: sociosLtda.textosFixos?.avisoArquivamento ?? 'aviso ausente',
+  },
 ];
 
 const espacos = (texto: string) => texto.replace(/\s+/g, ' ');
@@ -96,7 +134,7 @@ describe.each(CASOS)('exportação · $tipo.id com volume', (caso) => {
       avisosInesperados.push(args);
     });
     modelo = modeloDeVolume({
-      participantes: 12,
+      participantes: caso.participantes ?? 12,
       encaminhamentos: 5,
       tipo: caso.tipo,
       dados: caso.dados,
@@ -124,6 +162,7 @@ describe.each(CASOS)('exportação · $tipo.id com volume', (caso) => {
     for (const trecho of [...caso.noPdf, ...caso.tipo.secoes.map((s) => s.titulo)]) {
       expect(textoPdf, trecho).toContain(trecho);
     }
+    for (const trecho of caso.foraDoPdf ?? []) expect(textoPdf, trecho).not.toContain(trecho);
     expect(avisosInesperados).toEqual([]);
   });
 

@@ -55,6 +55,14 @@ function rascunhoDeTeste(sobrescrever: Partial<AtaDraft> = {}): AtaDraft {
   };
 }
 
+describe('registro final do Plano 05 (piso)', () => {
+  it('tem exatamente os quatro tipos, sem problemas, três deles formais', () => {
+    expect(Object.keys(ATA_TYPES)).toEqual(['corporativa', 'cipa', 'condominio', 'socios-ltda']);
+    expect(problemasDoRegistro(Object.values(ATA_TYPES))).toEqual([]);
+    expect(Object.values(ATA_TYPES).filter((t) => t.textosFixos !== undefined)).toHaveLength(3);
+  });
+});
+
 describe('problemasDoRegistro', () => {
   it('o registro real mais o tipo de teste não têm problemas', () => {
     const tipos = [...Object.values(ATA_TYPES), TIPO_DE_TESTE];

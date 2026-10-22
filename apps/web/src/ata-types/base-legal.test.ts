@@ -4,6 +4,7 @@ import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { cipa } from './cipa';
 import { condominio } from './condominio';
 import { ATA_TYPES } from './registry';
+import { sociosLtda } from './socios-ltda';
 import { verificarBaseLegal } from './verificar-base-legal';
 
 describe('docs/base-legal.md', () => {
@@ -42,6 +43,16 @@ describe('docs/base-legal.md', () => {
     const semLinha = linhas.filter((l) => !daChave(l)).join('\n');
     expect(verificarBaseLegal(semLinha, Object.values(ATA_TYPES))).toEqual([
       `${condominio.rotulo}: o texto fixo “meioEletronico” não tem linha com a norma.`,
+    ]);
+  });
+
+  it('a guarda morde no registro real: sem as linhas de um texto fixo da Ltda, reprova', () => {
+    const linhas = md.split(/\r?\n/);
+    const daChave = (l: string) => /^\|\s*`capitalPresente`\s*\|/.test(l);
+    expect(linhas.filter(daChave).length).toBeGreaterThanOrEqual(1);
+    const semLinha = linhas.filter((l) => !daChave(l)).join('\n');
+    expect(verificarBaseLegal(semLinha, Object.values(ATA_TYPES))).toEqual([
+      `${sociosLtda.rotulo}: o texto fixo “capitalPresente” não tem linha com a norma.`,
     ]);
   });
 

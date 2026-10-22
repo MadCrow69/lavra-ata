@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { cipa } from '../ata-types/cipa';
 import { condominio } from '../ata-types/condominio';
 import { corporativa } from '../ata-types/corporativa';
+import { sociosLtda } from '../ata-types/socios-ltda';
 import { TIPO_DE_TESTE } from '../test/tipo-de-teste';
 import { ErroCadeia, ErroProvedor, erroProvedor } from '../ai/errors';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../ai/types';
@@ -714,6 +715,80 @@ describe('regerarSecao: condomínio (extras que ficam no navegador num tipo regi
     const dadosEnviados = usuario.slice(0, usuario.indexOf('\nSeção: '));
     expect(dadosEnviados).toContain('Participantes (nome — vínculo — presença)');
     expect(dadosEnviados).not.toMatch(/\[CPF_\d+\]/);
+    expect(r.blocos).toEqual([par(`Item 1: correção de ${CPF}.`)]);
+  });
+});
+
+describe('regerarSecao: sócios de Ltda (extra de texto livre enviado à IA)', () => {
+  it('envia o procurador mascarado; participação, total de quotas e dados da sociedade nunca saem', async () => {
+    const d0: AtaDraft = {
+      ...rascunho(),
+      tipoId: sociosLtda.id,
+      dados: {
+        razao_social: 'Empresa Exemplo Ltda.',
+        cnpj: '11.222.333/0001-81',
+        nire: '35212345678',
+        sede: 'Rua das Flores, 100',
+        forma: 'reuniao',
+        data: '2026-10-14',
+        modalidade: 'presencial',
+        local: 'Sala de reuniões',
+        convocacao: 'contrato',
+        convocacao_detalhe: 'e-mail de 01/10/2026',
+        presidente: 'Ana Souza',
+        secretario: 'Bruno Lima',
+        modo_capital: 'quotas',
+        total_quotas: '8.000',
+      },
+      participantes: [
+        { ...ANA, papel: '', extras: { participacao: '4.375' } },
+        // Procurador digitado com o CPF: segue mascarado, como o resto do texto livre.
+        {
+          ...ANA,
+          id: 'p2',
+          nome: 'Bruno Lima',
+          papel: '',
+          extras: { participacao: '3.625', procurador: `Carla Dias, CPF ${CPF_2}` },
+        },
+      ],
+      transcricao: `Ana: o CPF ${CPF} foi corrigido no contrato.`,
+    };
+    const mapa = mask(d0.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(
+      d0,
+      {
+        secoes: {
+          deliberacoes: [
+            par(`Item 1: correção do CPF ${CPF}. [PREENCHER: votos e quórum de aprovação]`),
+          ],
+        },
+      },
+      mapa,
+    );
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve({ blocos: [par('Item 1: correção de [CPF_1].')] }),
+    });
+    const r = await regerarSecao(d, sociosLtda, 'deliberacoes', null, CADEIA, sinal(), opcoes);
+    const usuario = pedidos[0]?.usuario ?? '';
+    expect(usuario).toContain('Participantes (nome — representado(a) por — presença)');
+    expect(usuario).toContain('Ana Souza — presente');
+    expect(usuario).toMatch(/Bruno Lima — Carla Dias, CPF \[CPF_\d+\] — presente/);
+    expect(usuario).toContain('[PREENCHER: votos e quórum de aprovação]');
+    for (const vazado of [
+      CPF,
+      CPF_2,
+      '4.375',
+      '3.625',
+      '8.000',
+      'Empresa Exemplo',
+      '11.222.333',
+      '35212345678',
+      'Rua das Flores',
+      'Sala de reuniões',
+      'e-mail de 01/10/2026',
+    ]) {
+      expect(usuario).not.toContain(vazado);
+    }
     expect(r.blocos).toEqual([par(`Item 1: correção de ${CPF}.`)]);
   });
 });

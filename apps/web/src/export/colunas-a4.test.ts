@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cipa } from '../ata-types/cipa';
 import { corporativa } from '../ata-types/corporativa';
 import { ATA_TYPES, colunasDeParticipantes } from '../ata-types/registry';
+import { sociosLtda } from '../ata-types/socios-ltda';
 import type { AtaTypeDefinition, CampoDef } from '../ata-types/types';
 import { LARGURA_UTIL_PT, RESPIRO_CELULA_PT, TIPOGRAFIA_DOCUMENTO } from '../config/documento';
 import { largurasPorPeso } from '../document/larguras';
@@ -158,6 +159,18 @@ describe('colunas de participantes cabem no A4 (PDF e DOCX)', () => {
     expect(violacoes.some((v) => v.includes(PALAVRA_LONGA))).toBe(true);
     // Limite: só natureza e modalidade são lidas (3 × 3 com o vazio); `codigo` etc. ficam fora.
     expect(variacoesDeDados(combinado)).toHaveLength(9);
+  });
+
+  it('Ltda: as variações cobrem os rótulos em percentual e em quotas (o modo muda a coluna)', () => {
+    const variacoes = variacoesDeDados(sociosLtda);
+    expect(variacoes.map((d) => d.modo_capital ?? '').sort()).toEqual(['', 'percentual', 'quotas']);
+    const rotulos = new Set(
+      variacoes.flatMap((d) => colunasDeParticipantes(sociosLtda, d).map((c) => c.rotulo)),
+    );
+    for (const rotulo of ['Participação (%)', 'Quotas', 'Representado(a) por']) {
+      expect(rotulos.has(rotulo), rotulo).toBe(true);
+    }
+    expect(conferirTipo(sociosLtda).violacoes).toEqual([]);
   });
 
   it('limite do produto: tipo cujas colunas não dependem dos dados tem uma variação só', () => {

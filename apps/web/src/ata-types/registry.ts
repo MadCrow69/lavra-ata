@@ -4,6 +4,7 @@ import type { AtaDraft, EntradaDoDocumento } from '../domain/draft';
 import { cipa } from './cipa';
 import { condominio } from './condominio';
 import { corporativa } from './corporativa';
+import { sociosLtda } from './socios-ltda';
 import { ehVisivel, rotuloDaOpcao, rotuloDoCampo, textoLimpo } from './texto-modelo';
 import type { AtaTypeDefinition, CampoDef, CampoFaltando } from './types';
 
@@ -20,6 +21,7 @@ export const ATA_TYPES: Record<string, AtaTypeDefinition> = {
   [corporativa.id]: corporativa,
   [cipa.id]: cipa,
   [condominio.id]: condominio,
+  [sociosLtda.id]: sociosLtda,
 };
 
 /** Tipo pelo id; id desconhecido (rascunho antigo, sessão corrompida) cai no padrão. */
