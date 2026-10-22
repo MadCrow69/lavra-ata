@@ -125,6 +125,11 @@ export function ComoVerificarModal({
                 Biblioteca @lavra/pii-br (detecção e máscara)
               </LinkExterno>
             </li>
+            <li>
+              <LinkExterno href={urlDoCodigo(CAMINHOS_CODIGO.deploy, commit)}>
+                Workflow que publica o site
+              </LinkExterno>
+            </li>
           </ul>
           <p>
             O site publicado fica em <code>{SITE.demo}</code>.

@@ -11,8 +11,8 @@ const caminhos = JSON.parse(
 describe('caminhos-codigo.json', () => {
   const entradas = Object.entries(caminhos);
 
-  it('tem ao menos 3 entradas (piso de sanidade: o teste não passa por varrer nada)', () => {
-    expect(entradas.length).toBeGreaterThanOrEqual(3);
+  it('tem ao menos 4 entradas (piso de sanidade: o teste não passa por varrer nada)', () => {
+    expect(entradas.length).toBeGreaterThanOrEqual(4);
   });
 
   it.each(entradas)('"%s" existe na raiz do repositório: %s', (_chave, caminho) => {

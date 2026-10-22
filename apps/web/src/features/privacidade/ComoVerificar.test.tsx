@@ -89,6 +89,10 @@ describe('Privacidade: como verificar (modal)', () => {
       'href',
       `${SITE.repositorio}/blob/${SHA}/apps/web/csp.config.js`,
     );
+    expect(screen.getByRole('link', { name: /^Workflow que publica o site/ })).toHaveAttribute(
+      'href',
+      urlDoCodigo(CAMINHOS_CODIGO.deploy, SHA),
+    );
   });
 
   it('em desenvolvimento: avisa e aponta para a main', () => {

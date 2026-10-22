@@ -1,5 +1,6 @@
 {
   "adaptadores": "apps/web/src/ai/providers",
   "piiBr": "packages/pii-br/src",
-  "csp": "apps/web/csp.config.js"
+  "csp": "apps/web/csp.config.js",
+  "deploy": ".github/workflows/deploy.yml"
 }

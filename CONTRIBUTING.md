@@ -46,6 +46,10 @@ Rode sempre `pnpm test`, que já limita a 4 workers (`--maxWorkers=4`). Se invoc
 3. Abra um Pull Request preenchendo o [template](.github/pull_request_template.md).
 4. Após a aprovação, o PR é integrado com **squash merge**. O título do PR, em Conventional Commits, vira a mensagem do commit.
 
+## Publicação
+
+Todo push na `main` publica o site no GitHub Pages pelo workflow `.github/workflows/deploy.yml`; no PR, o mesmo workflow só roda o build, sem publicar. Para conferir a versão no ar, compare o hash do commit exibido no rodapé do site (ou em "Privacidade: como verificar") com o último commit da `main`.
+
 ## Commits
 
 Seguimos [Conventional Commits](https://www.conventionalcommits.org/pt-br/), com a descrição em português e com acentuação correta.

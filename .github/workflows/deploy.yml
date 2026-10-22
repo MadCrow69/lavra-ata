@@ -1,0 +1,77 @@
+name: Deploy
+
+# O job `build` roda também em pull request (sem publicar): qualquer falha de build, de
+# configuração do Pages ou de artefato aparece no PR, antes do merge. Só o push na `main`
+# (e o disparo manual, também restrito à `main`) executa o job `deploy`.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }} # na main, um grupo só; cada PR no seu
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }} # nunca cortar uma publicação em andamento
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # O configure-pages consulta GET /repos/{dono}/{repo}/pages, que exige Pages: read.
+      pages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A versão do pnpm vem do campo packageManager do package.json.
+      - name: Configurar pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      # Sem cache do pnpm: o workflow que publica não restaura cache (envenenamento de cache).
+      - name: Configurar Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      # O vite.config lê GITHUB_SHA (definida pelo GitHub) e grava o commit no rodapé do site.
+      - name: Build
+        run: pnpm --filter @lavra/web build
+
+      # Falha se o Pages não estiver habilitado com origem "GitHub Actions".
+      - name: Configurar Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Enviar o artefato do site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: apps/web/dist
+          retention-days: 1
+
+  deploy:
+    name: deploy
+    needs: build
+    # Nunca em pull request; só a main publica.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
