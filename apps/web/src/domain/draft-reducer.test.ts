@@ -176,6 +176,52 @@ describe('draftReducer', () => {
     expect(d.transcricao).toBe('fala');
   });
 
+  describe('duração da transcrição (vem do .vtt; serve para sugerir o término)', () => {
+    it('definirTranscricao com duracaoMin grava; null apaga', () => {
+      let d = draftReducer(criarRascunho(), {
+        type: 'definirTranscricao',
+        texto: 'Ana: oi',
+        duracaoMin: 72,
+      });
+      expect(d.duracaoTranscricaoMin).toBe(72);
+      d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi', duracaoMin: null });
+      expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+    });
+
+    it('editar o texto à mão mantém a duração; esvaziar o texto a apaga', () => {
+      let d = draftReducer(criarRascunho(), {
+        type: 'definirTranscricao',
+        texto: 'Ana: oi',
+        duracaoMin: 72,
+      });
+      d = draftReducer(d, { type: 'definirTranscricao', texto: 'Ana: oi, gente' });
+      expect(d.duracaoTranscricaoMin).toBe(72);
+      d = draftReducer(d, { type: 'definirTranscricao', texto: '   ' });
+      expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+    });
+
+    it('duração inválida (zero, negativa, fracionada) não é gravada', () => {
+      for (const ruim of [0, -3, 1.5, Number.NaN]) {
+        const d = draftReducer(criarRascunho(), {
+          type: 'definirTranscricao',
+          texto: 'x',
+          duracaoMin: ruim,
+        });
+        expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+      }
+    });
+
+    it('novaAta apaga a duração', () => {
+      let d = draftReducer(criarRascunho(), {
+        type: 'definirTranscricao',
+        texto: 'x',
+        duracaoMin: 10,
+      });
+      d = draftReducer(d, { type: 'novaAta' });
+      expect(d).not.toHaveProperty('duracaoTranscricaoMin');
+    });
+  });
+
   describe('participantes', () => {
     it('adiciona com id único e valores padrão, ignorando linhas vazias', () => {
       const d = draftReducer(criarRascunho(), {

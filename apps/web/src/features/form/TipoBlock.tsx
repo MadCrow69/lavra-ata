@@ -12,6 +12,7 @@ import { useToast } from '../../ui/Toast';
 import { MOTIVO_TIPO_NO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
 import { DestaqueField } from './DestaqueField';
 import { FormBlock } from './FormBlock';
+import { NUMERO_BLOCO } from './numero-bloco';
 import { LembrarPreferencias } from './LembrarPreferencias';
 import { LogoField } from './LogoField';
 import styles from './form.module.css';
@@ -56,7 +57,7 @@ export function TipoBlock() {
   };
 
   return (
-    <FormBlock numero={1} titulo="Tipo de ata e logo" faltando={[]}>
+    <FormBlock numero={NUMERO_BLOCO.tipo} titulo="Tipo de ata e logo" faltando={[]}>
       <fieldset className={styles.grupo}>
         <legend className={styles.grupoLegenda}>Tipo de ata</legend>
         {Object.values(ATA_TYPES).map((tipo) => (

@@ -10,7 +10,7 @@ Gerador de atas de reunião brasileiras a partir da transcrição, direto no nav
 
 ## Como funciona
 
-1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição.
+1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição. Se a transcrição traz quem falou ("Nome: fala" ou o `.vtt` da ferramenta de reunião), o app sugere essas pessoas como participantes; com o `.vtt`, sugere também o término a partir do início e da duração da gravação. Nada entra sem o seu clique.
 2. O app **mascara os identificadores pessoais** (CPF, CNPJ, telefone, e-mail, cartão etc.) com [`@lavra/pii-br`](packages/pii-br/README.md) e mostra, antes do envio, o que vai para a IA ("Original" × "Enviado à IA").
 3. A chamada vai **direto do navegador ao provedor**, sem passar por servidor do Lavra. Se um provedor falhar, o app tenta o próximo da sua lista de prioridade e registra a troca na seção (ex.: "Gerado por Gemini · gemini-3.8-flash — OpenAI falhou (limite de uso)").
 4. A IA devolve JSON validado por schema; o app põe os dados originais de volta **neste navegador** e monta a ata em uma folha A4, em texto puro (nunca HTML vindo da IA). Você revisa seção por seção: edita à mão, regera ou ajusta com uma instrução.

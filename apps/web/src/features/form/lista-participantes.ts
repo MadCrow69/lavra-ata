@@ -86,10 +86,11 @@ export function descreverAdicao(
     }
     partes.push(`${frase}.`);
   }
-  if (ignorados > 0) {
-    partes.push(
-      `${String(ignorados)} ${plural(ignorados, 'nome ignorado', 'nomes ignorados')}: o limite é ${String(LIMITE_PARTICIPANTES)} ${pessoa.plural}.`,
-    );
-  }
+  if (ignorados > 0) partes.push(fraseDoLimite(ignorados, pessoa));
   return partes.join(' ');
+}
+
+/** Quantos nomes ficaram de fora por causa de `LIMITE_PARTICIPANTES` (fonte única do texto). */
+export function fraseDoLimite(ignorados: number, pessoa: RotuloPessoa): string {
+  return `${String(ignorados)} ${plural(ignorados, 'nome ignorado', 'nomes ignorados')}: o limite é ${String(LIMITE_PARTICIPANTES)} ${pessoa.plural}.`;
 }

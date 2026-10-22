@@ -140,6 +140,9 @@ describe('persistência do rascunho', () => {
     ],
     ['avisos com número', comResultado({ avisos: { resumo: [1] } })],
     ['editadas que não é lista', comResultado({ editadas: 'resumo' })],
+    ['duração da transcrição não numérica', { ...rascunhoCompleto(), duracaoTranscricaoMin: '72' }],
+    ['duração da transcrição zero', { ...rascunhoCompleto(), duracaoTranscricaoMin: 0 }],
+    ['duração da transcrição fracionada', { ...rascunhoCompleto(), duracaoTranscricaoMin: 1.5 }],
     ['valor que não é objeto', 42],
     ['null', null],
   ])('formato inválido (%s) → null', (_nome, valor) => {
@@ -226,6 +229,18 @@ describe('persistência do rascunho', () => {
       resumo: { provedor: 'gemini', modelo: 'm', falhas: [{ provedor: 'openai' }] },
       decisoes: { provedor: 'openai', modelo: 'm', falhas: [] },
     });
+  });
+
+  it('a duração da transcrição faz ida e volta (só na sessão, como o resto do rascunho)', () => {
+    const d = draftReducer(rascunhoCompleto(), {
+      type: 'definirTranscricao',
+      texto: 'Ana: bom dia.',
+      duracaoMin: 72,
+    });
+    salvarRascunho(d);
+    expect(carregarRascunho()).toEqual(d);
+    expect(carregarRascunho()?.duracaoTranscricaoMin).toBe(72);
+    expect(localStorage.length).toBe(0);
   });
 
   it('a chave de API nunca aparece no JSON salvo', () => {

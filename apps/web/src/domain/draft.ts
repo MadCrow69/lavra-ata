@@ -11,6 +11,11 @@ export const ROTULO_PRESENCA: Record<Presenca, string> = {
   justificado: 'Ausência justificada',
 };
 
+/** Duração da transcrição gravável: minutos inteiros e positivos (o reducer e a persistência usam esta regra). */
+export function ehDuracaoValida(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0;
+}
+
 export const TONS = ['formal', 'conciso', 'detalhado'] as const;
 export type Tom = (typeof TONS)[number];
 
@@ -95,6 +100,11 @@ export interface AtaDraft {
   pauta: string[];
   participantes: Participante[];
   transcricao: string;
+  /**
+   * Duração da gravação em minutos inteiros (> 0), lida do .vtt enviado; ausente sem .vtt. Serve só
+   * para sugerir o término: o .vtt não traz data nem hora de início.
+   */
+  duracaoTranscricaoMin?: number;
   /** Mesmo mapa de mascaramento durante todo o rascunho. */
   mapa: MaskMap | null;
   resultado: ResultadoAta | null;
@@ -126,7 +136,11 @@ export type DraftAction =
   | { type: 'limparExtra'; campo: string; ids: string[] }
   | { type: 'atualizarParticipante'; id: string; patch: Partial<Participante> }
   | { type: 'removerParticipante'; id: string }
-  | { type: 'definirTranscricao'; texto: string }
+  /**
+   * `duracaoMin` (do .vtt) grava a duração; `null` a apaga; ausente a mantém (edição à mão), salvo
+   * se o texto ficar vazio.
+   */
+  | { type: 'definirTranscricao'; texto: string; duracaoMin?: number | null }
   | { type: 'registrarResultado'; resultado: ResultadoAta; mapa: MaskMap }
   | {
       type: 'substituirSecao';

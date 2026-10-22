@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatarData, formatarDataPorExtenso, formatarHora } from './dates';
+import {
+  formatarData,
+  formatarDataPorExtenso,
+  formatarDuracao,
+  formatarHora,
+  somarMinutos,
+} from './dates';
 import fonteDates from './dates.ts?raw';
 
 describe('formatarData', () => {
@@ -116,6 +122,48 @@ describe('formatarHora', () => {
   it('lança RangeError para hora inválida', () => {
     for (const ruim of ['24:00', '12:60', '9:00', '', '12h30']) {
       expect(() => formatarHora(ruim)).toThrow(RangeError);
+    }
+  });
+});
+
+describe('somarMinutos', () => {
+  it.each([
+    ['14:00', 72, '15:12'],
+    ['09:50', 15, '10:05'],
+    ['00:00', 0, '00:00'],
+    ['22:30', 89, '23:59'],
+  ])('%s + %i min → %s', (inicio, minutos, esperado) => {
+    expect(somarMinutos(inicio, minutos)).toBe(esperado);
+  });
+
+  it('passar de 23:59 devolve null (não vira o dia seguinte)', () => {
+    expect(somarMinutos('22:30', 90)).toBeNull();
+    expect(somarMinutos('23:59', 1)).toBeNull();
+  });
+
+  it('hora inválida ou minutos negativos/fracionados lançam RangeError', () => {
+    expect(() => somarMinutos('24:00', 1)).toThrow(RangeError);
+    expect(() => somarMinutos('', 1)).toThrow(RangeError);
+    expect(() => somarMinutos('10:00', -1)).toThrow(RangeError);
+    expect(() => somarMinutos('10:00', 1.5)).toThrow(RangeError);
+  });
+});
+
+describe('formatarDuracao', () => {
+  it.each([
+    [72, '1h12'],
+    [60, '1h'],
+    [125, '2h05'],
+    [45, '45 min'],
+    [1, '1 min'],
+    [1500, '25h'],
+  ])('%i min → %s', (minutos, esperado) => {
+    expect(formatarDuracao(minutos)).toBe(esperado);
+  });
+
+  it('zero, negativo ou fracionado lança RangeError', () => {
+    for (const ruim of [0, -5, 1.5, Number.NaN]) {
+      expect(() => formatarDuracao(ruim)).toThrow(RangeError);
     }
   });
 });

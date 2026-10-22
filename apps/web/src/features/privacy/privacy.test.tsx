@@ -6,6 +6,7 @@ import { corporativa } from '../../ata-types/corporativa';
 import { DEBOUNCE_DETECCAO_MS, LIMITE_TRANSCRICAO } from '../../config/limits';
 import { DraftProvider } from '../../domain/DraftContext';
 import { TranscricaoBlock } from '../form/TranscricaoBlock';
+import { ToastProvider } from '../../ui/Toast';
 
 // `mask` real, mas espionado: o teste de volume prova que ele só roda depois do debounce.
 vi.mock('@lavra/pii-br', async (original) => {
@@ -20,9 +21,11 @@ const TEXTO = `Maria informou o CPF ${CPF_A}. João informou o CPF ${CPF_B}. Con
 
 function renderizar() {
   return render(
-    <DraftProvider>
-      <TranscricaoBlock tipo={corporativa} />
-    </DraftProvider>,
+    <ToastProvider>
+      <DraftProvider>
+        <TranscricaoBlock tipo={corporativa} />
+      </DraftProvider>
+    </ToastProvider>,
   );
 }
 

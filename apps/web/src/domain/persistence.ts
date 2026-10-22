@@ -5,6 +5,7 @@ import {
   STATUS_ENCAMINHAMENTO,
   TIPOS_BLOCO,
   TONS,
+  ehDuracaoValida,
   type AtaDraft,
   type Atribuicao,
 } from './draft';
@@ -138,6 +139,7 @@ function ehRascunho(v: unknown): v is AtaDraft {
     Array.isArray(v.participantes) &&
     v.participantes.every(ehParticipante) &&
     ehTexto(v.transcricao) &&
+    (v.duracaoTranscricaoMin === undefined || ehDuracaoValida(v.duracaoTranscricaoMin)) &&
     (v.mapa === null || ehMapa(v.mapa)) &&
     (v.resultado === null || ehResultado(v.resultado))
   );

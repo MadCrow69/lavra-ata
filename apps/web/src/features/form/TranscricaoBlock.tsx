@@ -11,9 +11,12 @@ import { BotaoArquivo } from '../../ui/BotaoArquivo';
 import { Button } from '../../ui/Button';
 import { Field } from '../../ui/Field';
 import { PrivacyPreview } from '../privacy/PrivacyPreview';
-import { vttParaTexto } from '../transcript/vtt';
+import { lerVtt } from '../transcript/vtt';
+import { minutosDaDuracao } from './fim-pela-duracao';
 import { marcarCampo } from './focar-campo';
 import { FormBlock } from './FormBlock';
+import { SugestaoDeFalantes } from './SugestaoDeFalantes';
+import { NUMERO_BLOCO } from './numero-bloco';
 import styles from './transcricao.module.css';
 
 const NUMERO = new Intl.NumberFormat('pt-BR');
@@ -36,10 +39,16 @@ const TEXTO_DO_NIVEL: Record<Nivel, string> = {
   excedido: ' · ⚠ Acima do limite',
 };
 
+interface Conteudo {
+  texto: string;
+  /** Duração do .vtt de onde o texto veio (`null` = sem duração). */
+  duracaoMin: number | null;
+}
+
 interface Status {
   texto: string;
-  /** Texto que havia antes da ação, para "Desfazer". */
-  anterior: string | null;
+  /** O que havia antes da ação, para "Desfazer". */
+  anterior: Conteudo | null;
 }
 
 export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
@@ -54,9 +63,15 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     .filter((f) => f.bloco === 'transcricao')
     .map((f) => f.rotulo);
 
-  const definir = (novo: string) => {
-    dispatch({ type: 'definirTranscricao', texto: novo });
+  /** Sem `duracaoMin`: a duração do .vtt continua valendo (edição à mão do mesmo texto). */
+  const definir = (novo: string, duracaoMin?: number | null) => {
+    dispatch({
+      type: 'definirTranscricao',
+      texto: novo,
+      ...(duracaoMin === undefined ? {} : { duracaoMin }),
+    });
   };
+  const atual: Conteudo = { texto, duracaoMin: state.duracaoTranscricaoMin ?? null };
 
   const aoDigitar = (e: ChangeEvent<HTMLTextAreaElement>) => {
     definir(e.target.value);
@@ -94,7 +109,9 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       return;
     }
 
-    const novo = ehVtt ? vttParaTexto(conteudo) : conteudo;
+    // Só o .vtt tem tempos (relativos ao começo da gravação): dão a duração, nunca o início.
+    const lido = ehVtt ? lerVtt(conteudo) : { texto: conteudo, duracaoMs: null };
+    const novo = lido.texto;
     if (novo.trim() === '') {
       setErro(
         ehVtt
@@ -104,8 +121,8 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       return;
     }
 
-    const anterior = texto.trim() === '' ? null : texto;
-    definir(novo);
+    const anterior = texto.trim() === '' ? null : atual;
+    definir(novo, minutosDaDuracao(lido.duracaoMs));
     const partes = [
       `Arquivo “${nome}” carregado: ${NUMERO.format(novo.length)} caracteres.`,
       anterior === null ? '' : 'O texto anterior foi substituído.',
@@ -118,17 +135,22 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
 
   const limpar = () => {
     setErro(null);
-    setStatus({ texto: 'Transcrição apagada.', anterior: texto });
+    setStatus({ texto: 'Transcrição apagada.', anterior: atual });
     definir('');
   };
 
   const desfazer = () => {
-    if (status?.anterior != null) definir(status.anterior);
+    if (status?.anterior != null) definir(status.anterior.texto, status.anterior.duracaoMin);
     setStatus(null);
   };
 
   return (
-    <FormBlock numero={4} titulo="Transcrição" bloco="transcricao" faltando={faltando}>
+    <FormBlock
+      numero={NUMERO_BLOCO.transcricao}
+      titulo="Transcrição"
+      bloco="transcricao"
+      faltando={faltando}
+    >
       <div className={styles.acoes}>
         <BotaoArquivo
           accept={ACEITA}
@@ -179,6 +201,8 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
       <p className={styles.contador} data-nivel={nivel} data-testid="contador-transcricao">
         {`${NUMERO.format(texto.length)} de ${NUMERO.format(LIMITE_TRANSCRICAO)} caracteres${TEXTO_DO_NIVEL[nivel]}`}
       </p>
+
+      <SugestaoDeFalantes tipo={tipo} />
 
       <PrivacyPreview texto={texto} />
     </FormBlock>
