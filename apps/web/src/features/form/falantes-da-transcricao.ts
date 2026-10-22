@@ -1,5 +1,6 @@
 import type { RotuloPessoa } from '../../ata-types/types';
 import {
+  MAX_CARACTERES_NOME_SUGERIDO,
   ROTULOS_DE_CAMPO,
   ROTULOS_FALANTE_GENERICO,
   SUFIXOS_DE_CONVIDADO,
@@ -52,7 +53,9 @@ export function sugerirFalantes(
 ): SugestaoDeFalantes {
   const vistos = new Set<string>();
   const falantes: string[] = [];
-  for (const bruto of [...falantesDasTags, ...falantesDoTexto(texto)]) {
+  // A regra "Nome: fala" do texto já limita o nome; a marca <v> aceita qualquer comprimento.
+  const tags = falantesDasTags.filter((nome) => nome.trim().length <= MAX_CARACTERES_NOME_SUGERIDO);
+  for (const bruto of [...tags, ...falantesDoTexto(texto)]) {
     const nome = nomeParaGravar(semSufixoDeConvidado(bruto));
     const chave = chaveDeNome(nome);
     if (chave === '' || vistos.has(chave) || ehRotuloGenerico(nome)) continue;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
 import {
+  MAX_CARACTERES_NOME_SUGERIDO,
   ROTULOS_DE_CAMPO,
   ROTULOS_FALANTE_GENERICO,
   SUFIXOS_DE_CONVIDADO,
@@ -179,6 +180,19 @@ describe('ehRotuloGenerico', () => {
     expect(ehRotuloGenerico('Ana Souza')).toBe(false);
     expect(ehRotuloGenerico('Speaker Ana')).toBe(false);
     expect(ehRotuloGenerico('Pessoa Física')).toBe(false);
+  });
+});
+
+describe('nome de marca <v> comprido demais', () => {
+  it(`acima de MAX_CARACTERES_NOME_SUGERIDO não é sugerido; no limite, é`, () => {
+    const noLimite = `Ana ${'a'.repeat(MAX_CARACTERES_NOME_SUGERIDO - 4)}`;
+    const acima = `Rui ${'r'.repeat(MAX_CARACTERES_NOME_SUGERIDO - 3)}`;
+    expect(noLimite).toHaveLength(MAX_CARACTERES_NOME_SUGERIDO);
+    expect(acima).toHaveLength(MAX_CARACTERES_NOME_SUGERIDO + 1);
+    expect(sugerirFalantes('', [], [acima, noLimite, 'Iva Reis']).falantes).toEqual([
+      noLimite,
+      'Iva Reis',
+    ]);
   });
 });
 

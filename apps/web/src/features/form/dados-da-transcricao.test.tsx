@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { corporativa } from '../../ata-types/corporativa';
@@ -189,6 +189,34 @@ describe('participantes a partir de quem falou', () => {
         'Encontramos 2 pessoas que falaram: Souza, Ana e Rui Matos.',
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe('colagem que não muda o texto não deixa marca para depois', () => {
+  it('uma edição posterior (sem tecla ou com tecla) mantém a duração do .vtt', async () => {
+    const { user, container } = montar({ dados: { inicio: '14:00' } });
+    await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
+    const dados = within(blocoDados());
+    expect(await dados.findByText('A transcrição dura 27 min.')).toBeInTheDocument();
+    const campo =
+      within(blocoTranscricao()).getByLabelText<HTMLTextAreaElement>(/^Transcrição da reunião/);
+    await user.click(campo);
+
+    // Tudo selecionado, `paste` sem `change` (ex.: colou o mesmo texto ou a colagem foi cancelada).
+    campo.setSelectionRange(0, campo.value.length);
+    fireEvent.paste(campo);
+    await new Promise((resolver) => setTimeout(resolver, 0));
+    // Edição sem tecla (ditado, arrastar texto) no ciclo seguinte.
+    fireEvent.change(campo, { target: { value: `${campo.value} ditado` } });
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
+
+    // De novo, agora com uma tecla logo depois: a tecla zera a marca antes do `change`.
+    campo.setSelectionRange(0, campo.value.length);
+    fireEvent.paste(campo);
+    campo.setSelectionRange(campo.value.length, campo.value.length);
+    await user.keyboard('!');
+    expect(campo.value.endsWith('!')).toBe(true);
+    expect(dados.getByText('A transcrição dura 27 min.')).toBeInTheDocument();
   });
 });
 

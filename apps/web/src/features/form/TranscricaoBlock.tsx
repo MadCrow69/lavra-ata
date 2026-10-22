@@ -79,6 +79,16 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
     const campo = e.currentTarget;
     colagemSubstituiRef.current =
       campo.value !== '' && campo.selectionStart === 0 && campo.selectionEnd === campo.value.length;
+    // O `change` da colagem chega na mesma tarefa. Se não chegar (texto colado igual ao que havia,
+    // colagem cancelada), a marca cai no próximo ciclo: uma tecla depois nunca apaga o .vtt.
+    setTimeout(() => {
+      colagemSubstituiRef.current = false;
+    }, 0);
+  };
+
+  /** Segunda barreira: tecla nova (inclusive o Ctrl+V, que vem antes do `paste`) zera a marca. */
+  const aoTeclar = () => {
+    colagemSubstituiRef.current = false;
   };
 
   const aoDigitar = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -211,6 +221,7 @@ export function TranscricaoBlock({ tipo }: { tipo: AtaTypeDefinition }) {
             spellCheck={false}
             value={texto}
             onPaste={aoColar}
+            onKeyDown={aoTeclar}
             onChange={aoDigitar}
           />
         )}

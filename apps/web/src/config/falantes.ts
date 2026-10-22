@@ -67,5 +67,11 @@ export const SUFIXOS_DE_CONVIDADO: readonly string[] = [
   'external',
 ];
 
+/**
+ * Nome de marca `<v>` acima deste comprimento não é sugerido: é marcação quebrada ou fala dentro
+ * da marca, não o nome de alguém.
+ */
+export const MAX_CARACTERES_NOME_SUGERIDO = 120;
+
 /** Quantos nomes a sugestão de participantes mostra antes de resumir em "e mais N". */
 export const MAX_NOMES_NA_SUGESTAO = 6;
