@@ -40,9 +40,9 @@ describe('validarCnpj', () => {
     expect(validarCnpj('00.000.000/0000-00')).toBe(MENSAGEM_CNPJ_INVALIDO);
   });
 
-  it('a mensagem diz a causa e a ação', () => {
+  it('a mensagem diz a causa e a ação, e vale também para o tamanho errado', () => {
     expect(MENSAGEM_CNPJ_INVALIDO).toBe(
-      'CNPJ inválido: os dígitos verificadores não conferem. Confira o número.',
+      'CNPJ inválido. Confira os 14 caracteres e os dígitos verificadores.',
     );
   });
 });

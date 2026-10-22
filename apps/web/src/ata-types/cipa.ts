@@ -43,11 +43,14 @@ const TEXTOS = Object.freeze({
     'Disponibilize esta ata a todos os integrantes da CIPA (NR-5, item 5.6.3.1) e divulgue as deliberações e os encaminhamentos a todos os empregados, em quadro de aviso ou por meio eletrônico (NR-5, item 5.6.3.2).',
 });
 
-/** Texto do preâmbulo para cada motivo de reunião extraordinária (NR-5, 5.6.4). */
-const TEXTO_DO_MOTIVO: Readonly<Record<string, string>> = {
-  acidente: TEXTOS.motivoAcidente,
-  solicitacao: TEXTOS.motivoSolicitacao,
-};
+/**
+ * Texto do preâmbulo para cada motivo de reunião extraordinária (NR-5, 5.6.4). `Map`, e não objeto:
+ * um valor como "constructor" não pode achar propriedade herdada.
+ */
+const TEXTO_DO_MOTIVO: ReadonlyMap<string, string> = new Map([
+  ['acidente', TEXTOS.motivoAcidente],
+  ['solicitacao', TEXTOS.motivoSolicitacao],
+]);
 
 const NUMERO_MAXIMO = 999;
 const MENSAGEM_NUMERO = 'Use só o número da reunião (ex.: 3).';
@@ -60,7 +63,10 @@ function numeroOuNulo(valor: string | undefined): string | null {
   return n >= 1 && n <= NUMERO_MAXIMO ? String(n) : null;
 }
 
-const ehExtraordinaria = (dados: Dados): boolean => dados.natureza === 'extraordinaria';
+/** Valor da natureza como o tipo inteiro o lê (a mesma regra de `naturezaOuNulo`). */
+const naturezaLida = (dados: Dados): string => textoLimpo(dados.natureza);
+const ehExtraordinaria = (dados: Dados): boolean => naturezaLida(dados) === 'extraordinaria';
+const ehOrdinaria = (dados: Dados): boolean => naturezaLida(dados) === 'ordinaria';
 
 const CAMPOS: CampoDef[] = [
   campoTexto('empresa', 'Empresa', {
@@ -93,7 +99,7 @@ const CAMPOS: CampoDef[] = [
     rotulo: 'Motivo da reunião extraordinária',
     tipo: 'escolha',
     obrigatorio: false,
-    opcoes: Object.entries(TEXTO_DO_MOTIVO).map(([valor, texto]) => ({
+    opcoes: [...TEXTO_DO_MOTIVO].map(([valor, texto]) => ({
       valor,
       rotulo: comMaiuscula(texto),
     })),
@@ -210,7 +216,7 @@ const campo = (id: string): CampoDef | undefined => CAMPOS.find((c) => c.id === 
 
 /** Rótulo da natureza ("Ordinária"/"Extraordinária") ou `null` se vazia ou inválida. */
 const naturezaOuNulo = (dados: Dados): string | null =>
-  rotuloDaOpcao(campo('natureza'), textoLimpo(dados.natureza));
+  rotuloDaOpcao(campo('natureza'), naturezaLida(dados));
 
 function titulo(dados: Dados): string {
   const numero = numeroOuNulo(dados.numero);
@@ -249,7 +255,7 @@ function participacao(dados: Dados): string {
 function convocacao(dados: Dados): string {
   if (!ehExtraordinaria(dados)) return '';
   const motivo =
-    TEXTO_DO_MOTIVO[textoLimpo(dados.motivo)] ?? preencher('motivo da reunião extraordinária');
+    TEXTO_DO_MOTIVO.get(textoLimpo(dados.motivo)) ?? preencher('motivo da reunião extraordinária');
   const detalhe = textoLimpo(dados.motivo_detalhe);
   return `, convocada em razão de ${motivo}${detalhe === '' ? '' : `: ${detalhe}`}`;
 }
@@ -263,7 +269,7 @@ function preambulo(d: EntradaDoDocumento): string {
   const reuniao = numero === null ? `reunião ${natureza}` : `a ${numero}ª reunião ${natureza}`;
   const estabelecimento = textoLimpo(dados.estabelecimento);
   // NR-5, 5.6.2: só a reunião ORDINÁRIA é, por norma, realizada na organização.
-  const naOrganizacao = dados.natureza === 'ordinaria' ? `${TEXTOS.localNaOrganizacao}, ` : '';
+  const naOrganizacao = ehOrdinaria(dados) ? `${TEXTOS.localNaOrganizacao}, ` : '';
 
   return [
     `${data}, às ${hora}, ${naOrganizacao}em ${ou(dados.local, 'local')}${participacao(dados)}, `,

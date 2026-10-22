@@ -9,7 +9,7 @@ import { preencher, textoLimpo } from './texto-modelo';
 
 /** Dono único da mensagem: os tipos que pedem CNPJ só a consomem (via `validarCnpj`). */
 export const MENSAGEM_CNPJ_INVALIDO =
-  'CNPJ inválido: os dígitos verificadores não conferem. Confira o número.';
+  'CNPJ inválido. Confira os 14 caracteres e os dígitos verificadores.';
 
 /**
  * `validar` de um campo de CNPJ: aceita com ou sem máscara e o formato alfanumérico (letras em

@@ -300,6 +300,25 @@ describe('CIPA: preâmbulo', () => {
     );
   });
 
+  it('natureza lida pela mesma regra do título (com espaços nas pontas, ainda é ordinária)', () => {
+    const local = cipa.textosFixos?.localNaOrganizacao ?? '?';
+    const texto = cipa.preambulo(rascunho({ natureza: ' ordinaria ' }));
+    expect(texto).toContain('3ª reunião ordinária');
+    expect(texto).toContain(`às 14h30, ${local}, em Sala de Treinamento 2`);
+    const extra = cipa.preambulo(rascunho({ natureza: ' extraordinaria ', motivo: 'acidente' }));
+    expect(extra).toContain('convocada em razão de');
+  });
+
+  it('motivo que não é opção (nem propriedade herdada, como “constructor”) vira lacuna', () => {
+    for (const motivo of ['constructor', 'toString', '__proto__', 'outro']) {
+      const texto = cipa.preambulo(rascunho({ natureza: 'extraordinaria', motivo }));
+      expect(texto, motivo).toContain(
+        'convocada em razão de [PREENCHER: motivo da reunião extraordinária]',
+      );
+      expect(texto, motivo).not.toMatch(/function|\[object/);
+    }
+  });
+
   it('dados ausentes viram [PREENCHER: …] e nunca lançam', () => {
     const texto = cipa.preambulo({
       ...criarRascunho(cipa.id),
