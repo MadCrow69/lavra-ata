@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/MadCrow69/lavra-ata/compare/v0.1.0...v0.2.0) (2026-10-22)
+
+
+### Novidades
+
+* **web:** participantes e término a partir da transcrição, .vtt colado e Gemini primeiro ([#11](https://github.com/MadCrow69/lavra-ata/issues/11)) ([1793952](https://github.com/MadCrow69/lavra-ata/commit/179395242c9554f82a665589dbb1d452d82eb368))
+
 ## 0.1.0 (2026-10-22)
 
 
