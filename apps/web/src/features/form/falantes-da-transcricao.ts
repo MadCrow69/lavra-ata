@@ -27,7 +27,6 @@ export function ehRotuloGenerico(nome: string): boolean {
   return NAO_PESSOAS.has(chaveDeNome(nome).replace(NUMERO_FINAL, ''));
 }
 
-/** Tira o sufixo de convidado da lista em config ("Ana Souza (Convidada)" → "Ana Souza"). */
 const LOCALE = 'pt-BR';
 const PARTICULAS = new Set(PARTICULAS_DO_NOME);
 /** Partículas que são prefixo da palavra ("d'"), da mais longa para a mais curta. */
@@ -81,6 +80,7 @@ export function padronizarCaixaDoNome(nome: string): string {
     .join('');
 }
 
+/** Tira o sufixo de convidado da lista em config ("Ana Souza (Convidada)" → "Ana Souza"). */
 export function semSufixoDeConvidado(nome: string): string {
   const sufixo = SUFIXO_FINAL.exec(nome);
   if (sufixo?.[1] === undefined || !CONVIDADO.has(chaveDeNome(sufixo[1]))) return nome;

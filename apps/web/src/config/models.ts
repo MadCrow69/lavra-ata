@@ -58,7 +58,6 @@ export const ROTULO_CURTO: Record<ProviderId, string> = {
   anthropic: 'Anthropic',
 };
 
-/** Página oficial onde a pessoa cria a própria chave de API de cada provedor. */
 /**
  * Ordem PADRÃO da fila de provedores, para quem ainda não escolheu a sua: Gemini primeiro (a maioria
  * tem chave gratuita dele). A ordem que a pessoa define (na sessão ou lembrada) sempre vence; nas
@@ -66,6 +65,7 @@ export const ROTULO_CURTO: Record<ProviderId, string> = {
  */
 export const ORDEM_PADRAO_PROVEDORES: readonly ProviderId[] = ['gemini', 'openai', 'anthropic'];
 
+/** Página oficial onde a pessoa cria a própria chave de API de cada provedor. */
 export const URL_CHAVE: Record<ProviderId, string> = {
   openai: 'https://platform.openai.com/api-keys',
   gemini: 'https://aistudio.google.com/apikey',
