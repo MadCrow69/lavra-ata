@@ -238,7 +238,9 @@ describe('conteúdo cru de .vtt colado no campo vale como enviar o arquivo', () 
 
     const valor = campoTranscricao().value;
     expect(valor.startsWith('Ana Souza: Bom dia a todos')).toBe(true);
-    expect(valor).not.toMatch(/-->|0f3c2a9e|WEBVTT|<\/?v/);
+    for (const resto of ['-->', '0f3c2a9e', 'WEBVTT', '<v', '</v']) {
+      expect(valor).not.toContain(resto);
+    }
     const transcricao = within(blocoTranscricao());
     expect(transcricao.getByRole('status')).toHaveTextContent(
       'Transcrição .vtt colada convertida: 36 falas e 4 pessoas que falaram — veja a sugestão abaixo.',

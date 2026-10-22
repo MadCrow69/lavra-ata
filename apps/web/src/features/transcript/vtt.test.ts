@@ -284,7 +284,8 @@ describe('.vtt no formato exportado por ferramentas de reunião (fixture fictíc
     expect(linhas[1]).toBe(
       'Bruno Lima: Bom dia. O fornecedor confirmou a entrega para a próxima semana.',
     );
-    expect(lerVtt(vtt).texto).not.toMatch(/0f3c2a9e|-->|<\/?v/);
+    const texto = lerVtt(vtt).texto;
+    for (const resto of ['0f3c2a9e', '-->', '<v', '</v']) expect(texto).not.toContain(resto);
   });
 
   it('a duração é o fim do último cue menos o início do primeiro (≈ 27 min), sem data nem hora', () => {

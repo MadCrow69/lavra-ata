@@ -93,7 +93,8 @@ test.describe('dados tirados da transcrição', () => {
     expect(await colarComoPessoa(page, transcricao, VTT_REUNIAO)).toBe('clipboard');
 
     await expect(transcricao).toHaveValue(/^Marina Teles: Bom dia/);
-    await expect(transcricao).not.toHaveValue(/-->|WEBVTT|<v /);
+    const convertido = await transcricao.inputValue();
+    for (const resto of ['-->', 'WEBVTT', '<v ']) expect(convertido).not.toContain(resto);
     const bloco4 = page.getByRole('region', { name: 'Transcrição' });
     await expect(
       bloco4.getByText(
