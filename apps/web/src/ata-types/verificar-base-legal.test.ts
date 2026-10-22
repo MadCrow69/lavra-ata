@@ -66,7 +66,7 @@ describe('verificarBaseLegal', () => {
   it('link https:// fora de www.planalto.gov.br e www.gov.br → problema', () => {
     const md = documento([linha('a'), linha('b', '21/10/2026', '[x](https://www.exemplo.com.br)')]);
     const problemas = verificarBaseLegal(md, [TIPO_FALSO]);
-    expect(problemas.some((p) => p.includes('https://www.exemplo.com.br'))).toBe(true);
+    expect(problemas.join('\n')).toContain('https://www.exemplo.com.br');
     // Subdomínio parecido também não vale.
     const parecido = documento([linha('a'), linha('b')], ['[x](https://www.gov.br.exemplo.com)']);
     expect(verificarBaseLegal(parecido, [TIPO_FALSO])).not.toEqual([]);
