@@ -89,7 +89,7 @@ export const exemplo: Exemplo = {
   ]),
   transcricao: falas([
     `${CARLOS}: Bom dia. Vamos abrir a sétima reunião ordinária da CIPA. A Fernanda está de férias e justificou a ausência. A Patrícia secretaria hoje. Patrícia, pode ler a ata anterior?`,
-    `${PATRICIA}: Posso. Na sexta reunião tratamos da sinalização do pátio, da troca das luvas e da inspeção na solda. Alguém tem correção?`,
+    `${PATRICIA}: Posso. Na sexta reunião tratamos da sinalização do pátio, da troca das luvas e da inspeção. Alguém tem correção?`,
     `${MARCOS}: Tenho uma. Na parte da inspeção está escrito estamparia, mas a inspeção foi na solda.`,
     `${CARLOS}: Bem lembrado. Com essa correção, todos de acordo com a ata? Então a ata da sexta reunião está aprovada por consenso.`,
     `${CARLOS}: Pendências da reunião passada. Eduardo, e a sinalização?`,
@@ -134,7 +134,7 @@ export const exemplo: Exemplo = {
           'Quase-acidente na prensa hidráulica 3. João Batista Rocha relatou que, no dia 2, no segundo turno, a prensa fez um ciclo com a cortina de luz desligada após um ajuste da manutenção, com um empregado ainda próximo da área de prensagem; não houve lesão. Sandra Ribeiro apresentou a análise feita com a manutenção: a cortina de luz não foi religada ao fim do ajuste, o procedimento de bloqueio e etiquetagem não foi seguido até o fim e não há conferência antes da devolução da máquina à produção. João Batista Rocha acrescentou que não havia aviso no painel. Sandra Ribeiro propôs um checklist de liberação, assinado pela manutenção e pelo operador, sempre que a máquina retornar de manutenção, e o retreinamento das duas equipes em bloqueio e etiquetagem.',
         ),
         paragrafo(
-          'Inspeção no setor de estamparia. Marcos Vieira relatou óleo no piso próximo à prensa 5, um extintor obstruído por caixas e iluminação insuficiente no corredor do fundo. Eduardo Campos informou que as caixas pertencem à logística e que providenciaria a retirada e a limpeza do piso; Sandra Ribeiro informou que a iluminação entra no pedido de manutenção elétrica do mês.',
+          'Inspeção no setor de estamparia. Marcos Vieira relatou óleo no piso próximo à prensa 5, um extintor obstruído por caixas e iluminação insuficiente no corredor do fundo. Eduardo Campos informou que as caixas pertencem à logística, que as retiraria no mesmo dia e que pediria a limpeza do óleo; Sandra Ribeiro informou que a iluminação entra no pedido de manutenção elétrica do mês.',
         ),
         paragrafo(
           'Campanha de prevenção ao assédio. Luciana Freitas propôs realizar a campanha em novembro, com uma conversa por turno e cartazes sobre o canal de denúncia, que aceita denúncias anônimas.',
@@ -166,11 +166,11 @@ export const exemplo: Exemplo = {
       {
         acao: 'Retreinar as equipes de manutenção e de produção em bloqueio e etiquetagem',
         responsavel: CARLOS,
-        prazo: '2026-10-30',
+        prazo: '2026-10-31',
         status: 'pendente',
       },
       {
-        acao: 'Desobstruir o extintor e limpar o óleo do piso da estamparia',
+        acao: 'Retirar as caixas que bloqueiam o extintor da estamparia e pedir a limpeza do óleo do piso',
         responsavel: EDUARDO,
         prazo: '2026-10-08',
         status: 'pendente',
@@ -184,7 +184,7 @@ export const exemplo: Exemplo = {
       {
         acao: 'Corrigir o cadastro de Marcos Vieira na plataforma do curso da CIPA',
         responsavel: PATRICIA,
-        prazo: 'próxima semana',
+        prazo: 'semana que vem',
         status: 'pendente',
       },
     ],

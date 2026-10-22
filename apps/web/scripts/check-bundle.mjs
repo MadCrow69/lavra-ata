@@ -1,5 +1,6 @@
 // Falha o build se um módulo sob demanda (gerador de PDF/DOCX, fontes ou dados dos exemplos) entrar
-// na carga inicial, ou se ela passar do orçamento. Imprime o tamanho de cada chunk sob demanda (para registrar no PR).
+// na carga inicial, ou se ela passar do orçamento. Imprime o tamanho de cada chunk sob demanda
+// (para registrar no PR).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

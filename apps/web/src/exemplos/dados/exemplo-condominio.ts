@@ -26,7 +26,8 @@ const OTAVIO = 'Otávio Reis';
 
 const PROPRIETARIO = 'proprietario';
 const PROCURADOR = 'procurador';
-const FRACAO_TIPO = '0,0833';
+/** Edifício de 24 unidades iguais (6 andares, 4 por andar): fração ideal como na convenção. */
+const FRACAO_TIPO = '0,0417';
 
 export const exemplo: Exemplo = {
   tipoId: TIPO,
@@ -51,27 +52,27 @@ export const exemplo: Exemplo = {
     'Instalação de câmeras na garagem',
   ],
   participantes: participantesDoExemplo(TIPO, [
-    { nome: ANTONIO, extras: { unidade: 'Apto 11', vinculo: PROPRIETARIO, fracao: FRACAO_TIPO } },
     { nome: CLAUDIA, extras: { unidade: 'Apto 12', vinculo: PROPRIETARIO, fracao: FRACAO_TIPO } },
+    { nome: ANTONIO, extras: { unidade: 'Apto 13', vinculo: PROPRIETARIO, fracao: FRACAO_TIPO } },
     { nome: DEBORA, extras: { unidade: 'Apto 21', vinculo: PROPRIETARIO, fracao: FRACAO_TIPO } },
-    { nome: GUSTAVO, extras: { unidade: 'Apto 22', vinculo: PROPRIETARIO } },
-    { nome: HELENA, extras: { unidade: 'Apto 31', vinculo: PROPRIETARIO } },
-    { nome: IGOR, extras: { unidade: 'Apto 32', vinculo: PROPRIETARIO } },
+    { nome: GUSTAVO, extras: { unidade: 'Apto 24', vinculo: PROPRIETARIO } },
+    { nome: HELENA, extras: { unidade: 'Apto 32', vinculo: PROPRIETARIO } },
+    { nome: IGOR, extras: { unidade: 'Apto 34', vinculo: PROPRIETARIO } },
     { nome: LIVIA, extras: { unidade: 'Apto 41', vinculo: PROPRIETARIO } },
-    { nome: SERGIO, extras: { unidade: 'Apto 42', vinculo: PROCURADOR } },
+    { nome: SERGIO, extras: { unidade: 'Apto 43', vinculo: PROCURADOR } },
     { nome: ROBERTO, extras: { unidade: 'Apto 51', vinculo: PROPRIETARIO, fracao: FRACAO_TIPO } },
-    { nome: NELSON, extras: { unidade: 'Apto 52', vinculo: PROPRIETARIO } },
-    { nome: OTAVIO, extras: { unidade: 'Apto 61', vinculo: PROPRIETARIO } },
-    { nome: VERA, extras: { unidade: 'Apto 62', vinculo: PROPRIETARIO } },
+    { nome: NELSON, extras: { unidade: 'Apto 54', vinculo: PROPRIETARIO } },
+    { nome: OTAVIO, extras: { unidade: 'Apto 63', vinculo: PROPRIETARIO } },
+    { nome: VERA, extras: { unidade: 'Apto 64', vinculo: PROPRIETARIO } },
   ]),
   transcricao: falas([
-    `${VERA}: Boa noite. Como síndica, abro os trabalhos. Temos doze condôminos na lista de presença. Antes de tudo, precisamos escolher quem preside e quem secretaria.`,
+    `${VERA}: Boa noite. Como síndica, abro os trabalhos. Temos doze das vinte e quatro unidades na lista de presença. Antes de tudo, precisamos escolher quem preside e quem secretaria.`,
     `${HELENA}: Indico o Roberto, do 51, para presidir.`,
     `${VERA}: Alguém se opõe? Ninguém. Roberto, a palavra é sua.`,
     `${ROBERTO}: Obrigado. Convido a Cláudia, do 12, para secretariar. Antes de começar, Cláudia, as procurações conferem?`,
-    `${CLAUDIA}: Só tem uma, do Sérgio, pelo apartamento 42. A firma está reconhecida e o CPF dele confere com a procuração: ${CPF_EXEMPLO}.`,
+    `${CLAUDIA}: Só tem uma, do Sérgio, pelo apartamento 43. A firma está reconhecida e o CPF dele confere com a procuração: ${CPF_EXEMPLO}.`,
     `${ROBERTO}: Então, com doze condôminos presentes, declaro atingido o quórum de instalação e abro a assembleia. Primeiro item: a laje da cobertura.`,
-    `${VERA}: A laje tem infiltração há dois invernos e já molhou o teto do 61 e do 62. Pedimos três orçamentos. O menor é de 96 mil reais, com garantia de cinco anos, pago em seis parcelas. O rateio seguiria a fração ideal, como manda a convenção.`,
+    `${VERA}: A laje tem infiltração há dois invernos e já molhou o teto do 63 e do 64. Pedimos três orçamentos. O menor é de 96 mil reais, com garantia de cinco anos, pago em seis parcelas. O rateio seguiria a fração ideal, como manda a convenção.`,
     `${ANTONIO}: Acho caro e acho que dá para esperar o fundo de reserva crescer. Sou contra fazer agora.`,
     `${OTAVIO}: Esperar não dá. A água já entrou no meu apartamento duas vezes este ano.`,
     `${HELENA}: As seis parcelas começam quando?`,
@@ -83,8 +84,8 @@ export const exemplo: Exemplo = {
     `${GUSTAVO}: A ideia é só a síndica acessar, e só quando houver ocorrência.`,
     `${NELSON}: E quanto custa?`,
     `${VERA}: O orçamento que temos é de 7 mil e 800 reais, com instalação, pago com o fundo de reserva.`,
-    `${ROBERTO}: Vamos votar o item 2. Quem é a favor levante a mão. Cláudia, anota a contagem. Com a procuração no meio, a gente confere com calma e divulga o resultado no comunicado.`,
-    `${CLAUDIA}: Anotado. Confiro com a procuração e passo o resultado no comunicado da semana que vem.`,
+    `${ROBERTO}: Vamos votar o item 2. Quem é a favor levante a mão. Agora quem é contra. A contagem ficou apertada; Cláudia, anota os números, vamos conferir pela lista de presença e o resultado sai no comunicado.`,
+    `${CLAUDIA}: Anotado. Confiro pela lista de presença e passo o resultado no comunicado da semana que vem.`,
     `${VERA}: Antes de encerrar, um aviso: quem quiser acompanhar a obra da laje pode falar com a administradora pelo ${TELEFONE_EXEMPLO}.`,
     `${ROBERTO}: Nada mais a tratar, agradeço a presença de todos.`,
   ]),
@@ -92,7 +93,7 @@ export const exemplo: Exemplo = {
     secoes: {
       abertura_instalacao: [
         paragrafo(
-          'A síndica, Vera Lúcia Santos, abriu os trabalhos e informou que doze condôminos assinaram a lista de presença. Depois da escolha da mesa, o presidente declarou atingido o quórum de instalação, com doze condôminos presentes. A secretária informou que havia uma procuração, de Sérgio Pacheco, pelo Apto 42, com firma reconhecida e conferida.',
+          'A síndica, Vera Lúcia Santos, abriu os trabalhos e informou que doze das vinte e quatro unidades estavam na lista de presença. Depois da escolha da mesa, o presidente declarou atingido o quórum de instalação, com doze condôminos presentes. A secretária informou que havia uma única procuração, outorgada a Sérgio Pacheco pelo Apto 43, com firma reconhecida e CPF conferido.',
         ),
       ],
       eleicao_mesa: [
@@ -102,10 +103,10 @@ export const exemplo: Exemplo = {
       ],
       ordem_do_dia: [
         paragrafo(
-          'Item 1 — Impermeabilização da laje da cobertura e rateio extra. A síndica relatou infiltrações na laje há dois invernos, que já atingiram os Aptos 61 e 62, e apresentou o menor de três orçamentos: R$ 96.000,00, com garantia de cinco anos, em seis parcelas, com rateio pela fração ideal, conforme a convenção, a partir do boleto de novembro; a obra começaria na primeira semana de novembro, com duração aproximada de quarenta dias. Antônio Ferraz manifestou-se contra a realização da obra neste momento, por considerar o valor alto e preferir aguardar o crescimento do fundo de reserva. Otávio Reis defendeu a obra imediata, relatando duas entradas de água em seu apartamento neste ano. Submetida a matéria à votação, o presidente declarou 9 votos a favor, 2 votos contra e 1 abstenção, e declarou aprovada a impermeabilização nos termos apresentados.',
+          'Item 1 — Impermeabilização da laje da cobertura e rateio extra. A síndica relatou infiltrações na laje há dois invernos, que já atingiram os Aptos 63 e 64, e apresentou o menor de três orçamentos: R$ 96.000,00, com garantia de cinco anos, em seis parcelas, com rateio pela fração ideal, conforme a convenção, a partir do boleto de novembro; a obra começaria na primeira semana de novembro, com duração aproximada de quarenta dias. Antônio Ferraz manifestou-se contra a realização da obra neste momento, por considerar o valor alto e preferir aguardar o crescimento do fundo de reserva. Otávio Reis defendeu a obra imediata, relatando duas entradas de água em seu apartamento neste ano. Submetida a matéria à votação, o presidente declarou 9 votos a favor, 2 votos contra e 1 abstenção, e declarou aprovada a impermeabilização nos termos apresentados.',
         ),
         paragrafo(
-          'Item 2 — Instalação de câmeras na garagem. Gustavo Lima propôs instalar quatro câmeras na garagem, com gravação em equipamento na portaria, em razão de dois retrovisores danificados neste ano sem autoria conhecida. Débora Quintana manifestou-se a favor e pediu que o acesso às imagens fosse restrito; Gustavo Lima esclareceu que a proposta prevê acesso apenas da síndica e somente em caso de ocorrência. A síndica informou o orçamento de R$ 7.800,00, com instalação, a ser pago com o fundo de reserva. Submetida a matéria à votação, a contagem foi anotada pela secretária para conferência com a procuração. Resultado: [PREENCHER: resultado da votação].',
+          'Item 2 — Instalação de câmeras na garagem. Gustavo Lima propôs instalar quatro câmeras na garagem, com gravação em equipamento na portaria, em razão de dois retrovisores danificados neste ano sem autoria conhecida. Débora Quintana manifestou-se a favor e pediu que o acesso às imagens fosse restrito; Gustavo Lima esclareceu que a proposta prevê acesso apenas da síndica e somente em caso de ocorrência. A síndica informou o orçamento de R$ 7.800,00, com instalação, a ser pago com o fundo de reserva. Submetida a matéria à votação, o presidente informou que a contagem ficou apertada e pediu à secretária que a anotasse para conferência pela lista de presença, com divulgação do resultado em comunicado. Resultado: [PREENCHER: resultado da votação].',
         ),
       ],
       encerramento: [
@@ -122,7 +123,7 @@ export const exemplo: Exemplo = {
         status: 'pendente',
       },
       {
-        acao: 'Conferir a contagem da votação do item 2 com a procuração e divulgar o resultado em comunicado',
+        acao: 'Conferir a contagem da votação do item 2 pela lista de presença e divulgar o resultado em comunicado',
         responsavel: CLAUDIA,
         prazo: 'semana que vem',
         status: 'pendente',

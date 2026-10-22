@@ -26,6 +26,24 @@ const LACUNAS_ESPERADAS: Record<string, number> = {
   'socios-ltda': 0,
 };
 
+/**
+ * Seções com blocos em cada exemplo, na ordem do tipo. A corporativa tem as 6 (riscos incluído,
+ * pelo brief); nos demais, toda seção do tipo tem conteúdo dito na transcrição.
+ */
+const SECOES_COM_CONTEUDO: Record<string, string[]> = {
+  corporativa: ['resumo', 'discussao', 'decisoes', 'pendencias', 'riscos', 'proxima_reuniao'],
+  cipa: [
+    'abertura',
+    'ata_anterior',
+    'pendencias_anteriores',
+    'discussao',
+    'deliberacoes',
+    'encerramento',
+  ],
+  condominio: ['abertura_instalacao', 'eleicao_mesa', 'ordem_do_dia', 'encerramento'],
+  'socios-ltda': ['instalacao', 'deliberacoes', 'encerramento'],
+};
+
 /** Termos que só podem estar no resultado se foram ditos na transcrição. */
 const TERMOS_DECLARADOS = /qu[óo]rum|un[âa]nim|maioria|consenso|\d+\s+votos?/gi;
 
@@ -107,10 +125,24 @@ describe.each(IDS)('exemplo %s', (id) => {
 
     expect(validarSchema(ex.saida, schemaDaAta(tipo))).toEqual([]);
     expect(Object.keys(ex.saida.secoes).every((c) => chaves.includes(c))).toBe(true);
-    expect(
-      Object.values(ex.saida.secoes).filter((b) => b.length > 0).length,
-    ).toBeGreaterThanOrEqual(3);
     expect(ex.saida.encaminhamentos.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('todo prazo em texto livre foi dito na transcrição (data ISO: conferida à mão)', () => {
+    const transcricao = ex.transcricao.toLowerCase();
+    const livres = ex.saida.encaminhamentos
+      .map((e) => e.prazo)
+      .filter((prazo) => !/^\d{4}-\d{2}-\d{2}$/.test(prazo));
+
+    for (const prazo of livres) expect(transcricao).toContain(prazo.toLowerCase());
+  });
+
+  it('as seções com conteúdo são exatamente as esperadas para o tipo', () => {
+    const comConteudo = Object.entries(ex.saida.secoes)
+      .filter(([, blocos]) => blocos.length > 0)
+      .map(([chave]) => chave);
+
+    expect(comConteudo).toEqual(SECOES_COM_CONTEUDO[id]);
   });
 
   it('a saída passa na validação de marcadores (nenhum identificador novo)', () => {

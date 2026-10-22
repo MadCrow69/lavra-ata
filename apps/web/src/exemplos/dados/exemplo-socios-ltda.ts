@@ -54,8 +54,7 @@ export const exemplo: Exemplo = {
     `${BRUNO}: Trouxe. São 210 mil reais em 36 parcelas no Banco Exemplo, com o próprio veículo como garantia. O gerente da conta pediu os documentos dos sócios. Ana, o seu CPF no cadastro do banco está como ${CPF_EXEMPLO}, confere?`,
     `${ANA}: Confere.`,
     `${BRUNO}: Ótimo. Qualquer dúvida sobre a proposta, o gerente atende pelo ${TELEFONE_EXEMPLO}.`,
-    `${CARLA}: Esse eu apoio. Com o veículo próprio a gente deixa de pagar frete terceirizado. Só precisamos de seguro antes de ele começar a rodar.`,
-    `${CARLA}: Eu cuido dos orçamentos de seguro.`,
+    `${CARLA}: Esse eu apoio. Com o veículo próprio a gente deixa de pagar frete terceirizado. Só precisamos de seguro antes de o veículo começar a rodar. Eu cuido dos orçamentos de seguro.`,
     `${ANA}: Vamos votar o financiamento. Todos a favor? Aprovado por unanimidade. Bruno, você assina e manda a documentação ao banco até o dia 30.`,
     `${BRUNO}: Combinado.`,
     `${CARLA}: Antes de encerrar: o cardápio de fim de ano precisa ser fechado até a primeira semana de novembro, para dar tempo de comprar os insumos.`,
@@ -70,10 +69,10 @@ export const exemplo: Exemplo = {
       ],
       deliberacoes: [
         paragrafo(
-          'Item 1 — Investimento na reforma da cozinha industrial. A presidente apresentou o orçamento de R$ 180.000,00, a ser pago com recursos de caixa da sociedade, com a obra prevista para janeiro. Bruno Tavares defendeu a reforma para ampliar a capacidade de produção. Carla Mendonça considerou o valor alto para o exercício e propôs trocar apenas a coifa neste momento. Ana Carolina Ramos e Bruno Tavares votaram a favor; Carla Mendonça votou contra e pediu o registro de sua dissidência. A presidente declarou aprovada a reforma.',
+          'Item 1 — Investimento na reforma da cozinha industrial. A presidente apresentou o orçamento de R$ 180.000,00, a ser pago com recursos de caixa da sociedade, com a obra prevista para janeiro. Bruno Tavares defendeu a reforma para ampliar a capacidade de produção. Carla Mendonça considerou o valor alto para este ano e propôs trocar apenas a coifa agora, deixando a reforma completa para o segundo semestre. Ana Carolina Ramos e Bruno Tavares votaram a favor; Carla Mendonça votou contra e pediu o registro de sua dissidência. A presidente declarou aprovada a reforma.',
         ),
         paragrafo(
-          'Item 2 — Financiamento para a compra de um veículo refrigerado. Bruno Tavares apresentou as condições: R$ 210.000,00 em 36 parcelas no Banco Exemplo, com o próprio veículo em garantia. Carla Mendonça manifestou apoio, por eliminar o custo de frete terceirizado, e ressaltou a necessidade de contratar seguro antes de o veículo entrar em uso. Submetida a matéria à votação, a presidente declarou o financiamento aprovado por unanimidade.',
+          'Item 2 — Financiamento para a compra de um veículo refrigerado. Bruno Tavares apresentou as condições: R$ 210.000,00 em 36 parcelas no Banco Exemplo, com o próprio veículo em garantia. Carla Mendonça manifestou apoio, por eliminar o custo de frete terceirizado, e ressaltou a necessidade de seguro antes de o veículo começar a rodar. Submetida a matéria à votação, a presidente declarou o financiamento aprovado por unanimidade.',
         ),
       ],
       encerramento: [
@@ -98,7 +97,7 @@ export const exemplo: Exemplo = {
       {
         acao: 'Levantar orçamentos de seguro para o veículo refrigerado',
         responsavel: CARLA,
-        prazo: 'antes de o veículo entrar em uso',
+        prazo: 'antes de o veículo começar a rodar',
         status: 'pendente',
       },
     ],
