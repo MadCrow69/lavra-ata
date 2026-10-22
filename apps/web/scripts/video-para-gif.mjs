@@ -20,6 +20,23 @@ export const ORCAMENTO_GIF_BYTES = 3_000_000;
  */
 export const OPCOES_GIF = Object.freeze({ fps: 10, largura: 960, cores: 24 });
 
+/**
+ * @param {number} bytes
+ * @returns {string} megabytes com duas casas (ex.: "2.56")
+ */
+function megabytes(bytes) {
+  return (bytes / 1_000_000).toFixed(2);
+}
+
+/**
+ * O que dizer quando o GIF passa do orçamento: o tamanho e as saídas (as mesmas do CONTRIBUTING).
+ * @param {number} bytes tamanho do GIF gerado
+ * @returns {string}
+ */
+export function mensagemForaDoOrcamento(bytes) {
+  return `O GIF tem ${megabytes(bytes)} MB e o orçamento é ${String(ORCAMENTO_GIF_BYTES / 1_000_000)} MB: reduza fps, largura, cores ou duração.`;
+}
+
 /** Pasta onde o Playwright grava os vídeos da demonstração (`outputDir` da config do GIF). */
 export const PASTA_VIDEOS = fileURLToPath(new URL('../test-results/gif/', import.meta.url));
 
@@ -99,16 +116,13 @@ function main() {
     }
 
     const bytes = statSync(gif).size;
-    const mb = (bytes / 1_000_000).toFixed(2);
     if (bytes > ORCAMENTO_GIF_BYTES) {
-      console.error(
-        `O GIF tem ${mb} MB e o orçamento é ${String(ORCAMENTO_GIF_BYTES / 1_000_000)} MB: reduza fps, largura ou duração.`,
-      );
+      console.error(mensagemForaDoOrcamento(bytes));
       process.exitCode = 1;
       return;
     }
     copyFileSync(gif, DESTINO_GIF);
-    console.log(`GIF gravado em ${DESTINO_GIF} (${mb} MB, a partir de ${entrada}).`);
+    console.log(`GIF gravado em ${DESTINO_GIF} (${megabytes(bytes)} MB, a partir de ${entrada}).`);
   } finally {
     rmSync(temporaria, { recursive: true, force: true });
   }

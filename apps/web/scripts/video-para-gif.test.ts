@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 const { execFileSync } = vi.hoisted(() => ({ execFileSync: vi.fn() }));
 vi.mock('node:child_process', () => ({ execFileSync }));
 
-const { argumentosFfmpeg, ORCAMENTO_GIF_BYTES, OPCOES_GIF } = await import('./video-para-gif.mjs');
+const { argumentosFfmpeg, mensagemForaDoOrcamento, ORCAMENTO_GIF_BYTES, OPCOES_GIF } =
+  await import('./video-para-gif.mjs');
 
 describe('video-para-gif', () => {
   it('importar o módulo não chama o ffmpeg (guarda de CLI)', () => {
@@ -16,6 +17,12 @@ describe('video-para-gif', () => {
     expect(ORCAMENTO_GIF_BYTES).toBe(3_000_000);
     expect(OPCOES_GIF).toEqual({ fps: 10, largura: 960, cores: 24 });
     expect(Object.isFrozen(OPCOES_GIF)).toBe(true);
+  });
+
+  it('acima do orçamento, a mensagem diz o tamanho e as quatro saídas do CONTRIBUTING (com cores)', () => {
+    expect(mensagemForaDoOrcamento(3_456_789)).toBe(
+      'O GIF tem 3.46 MB e o orçamento é 3 MB: reduza fps, largura, cores ou duração.',
+    );
   });
 
   it('primeira passada gera a paleta a partir do vídeo', () => {
