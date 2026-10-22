@@ -23,6 +23,7 @@ Pontos de projeto:
 - **Modelos padrão econômicos** (o menor de cada provedor: `gpt-6-luna`, `gemini-3.8-flash`, `claude-haiku-5-5`); você troca no modal de chaves.
 - **Unidade, fração ideal e participação no capital não vão para a IA.** Esses campos (condomínio e sócios de Ltda) ficam neste navegador e só entram no documento.
 - **Rascunho na sessão** (`sessionStorage`): recarregar a aba recupera o formulário; a transcrição e a ata gerada não vão para o `localStorage`.
+- **Logo e preferências só por opção.** A logo e as preferências (uma lista fechada de campos: tipo de ata, tom, cor de destaque, ordem e modelo dos provedores; nunca transcrição, ata, participantes nem chave) só vão para o `localStorage` se você marcar "Lembrar logo neste navegador" ou "Lembrar preferências neste navegador".
 - **PDF e DOCX nascem no navegador, sem rede.** Os geradores ([pdfmake](https://pdfmake.github.io/docs/) e [docx](https://docx.js.org/), ambos MIT) só são carregados no primeiro clique em "Baixar", da mesma origem do site; as fontes ([Inter](https://fontsource.org/fonts/inter) e [Source Serif 4](https://fontsource.org/fonts/source-serif-4), sob a [SIL Open Font License 1.1](https://openfontlicense.org/)) vão embutidas no app, sem CDN.
 - **A logo nunca vai para a IA.** PNG, JPEG, WebP ou SVG (até 2 MB), conferido pelo conteúdo antes de decodificar; o SVG sempre vira PNG e nunca entra como marcação.
 - **Antes de baixar, o app avisa** se restam campos `[PREENCHER]`, se há um editor de seção aberto e, no PDF, quais caracteres as fontes embutidas não desenham.

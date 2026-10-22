@@ -44,6 +44,15 @@ O mesmo vale para `apps/web/src/test/metricas-inter.gerada.ts` (avanço de cada 
 - O orçamento é de **3 MB**: acima disso o script falha sem tocar no `docs/demo.gif` atual. Para caber, reduza fps, largura ou cores em `OPCOES_GIF` (`apps/web/scripts/video-para-gif.mjs`) ou encurte as pausas do roteiro.
 - Regrave o GIF quando a interface mostrada nele mudar de forma visível, e confira os quadros antes de commitar.
 
+### Exemplo de um tipo de ata novo
+
+Todo tipo de ata tem de ter o seu exemplo para o botão "Ver exemplo". O teste `apps/web/src/exemplos/exemplos.test.ts` percorre `ATA_TYPES` e **reprova o tipo sem exemplo**. Para adicionar:
+
+1. Crie `apps/web/src/exemplos/dados/exemplo-<tipo>.ts` exportando `exemplo` (formato `Exemplo`, em `apps/web/src/exemplos/tipos.ts`), com os auxiliares de `montar.ts` e os identificadores fictícios de `ficticios.ts`. Dados e pessoas inventados, organização com "Exemplo" no nome, e-mails `@example.com`, e a transcrição escrita do zero.
+2. Registre o carregador em `CARREGADORES_EXEMPLO`, em `apps/web/src/exemplos/carregar.ts`, com `import()` dinâmico: o exemplo vira um chunk próprio (`exemplo-<tipo>`) e não pode entrar na carga inicial; o `check-bundle` reprova o build se entrar.
+3. Todo texto legal fixo vem do tipo de ata. O resultado do exemplo só traz votos, quórum e unanimidade se estiverem ditos na transcrição; o que não foi dito fica como `[PREENCHER: …]`.
+4. Atualize as tabelas de expectativas no topo de `exemplos.test.ts` (lacunas e seções com conteúdo) e, no E2E, `ROTULOS_TIPO` e `EXEMPLOS_E2E` em `apps/web/e2e/apoio.ts` e os fixtures de `apps/web/e2e/fixtures/respostas.ts`.
+
 ### Testes com teto de workers
 
 Rode sempre `pnpm test`, que já limita a 4 workers (`--maxWorkers=4`). Se invocar o Vitest diretamente, mantenha o teto e não execute duas suítes ao mesmo tempo: em máquinas com pouca memória, a suíte sem limite esgota os recursos.
