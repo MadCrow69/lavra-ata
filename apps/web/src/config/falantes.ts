@@ -73,5 +73,12 @@ export const SUFIXOS_DE_CONVIDADO: readonly string[] = [
  */
 export const MAX_CARACTERES_NOME_SUGERIDO = 120;
 
+/**
+ * Partículas que ficam minúsculas ao padronizar um nome escrito todo em maiúsculas ou todo em
+ * minúsculas ("MARIA DE ALMEIDA" → "Maria de Almeida"), salvo quando abrem o nome. `d'` vale como
+ * prefixo da palavra ("PEDRO D'AVILA" → "Pedro d'Avila").
+ */
+export const PARTICULAS_DO_NOME: readonly string[] = ['de', 'da', 'do', 'das', 'dos', 'e', "d'"];
+
 /** Quantos nomes a sugestão de participantes mostra antes de resumir em "e mais N". */
 export const MAX_NOMES_NA_SUGESTAO = 6;

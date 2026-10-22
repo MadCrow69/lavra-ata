@@ -1,6 +1,7 @@
 import type { RotuloPessoa } from '../../ata-types/types';
 import {
   MAX_CARACTERES_NOME_SUGERIDO,
+  PARTICULAS_DO_NOME,
   ROTULOS_DE_CAMPO,
   ROTULOS_FALANTE_GENERICO,
   SUFIXOS_DE_CONVIDADO,
@@ -27,6 +28,59 @@ export function ehRotuloGenerico(nome: string): boolean {
 }
 
 /** Tira o sufixo de convidado da lista em config ("Ana Souza (Convidada)" → "Ana Souza"). */
+const LOCALE = 'pt-BR';
+const PARTICULAS = new Set(PARTICULAS_DO_NOME);
+/** Partículas que são prefixo da palavra ("d'"), da mais longa para a mais curta. */
+const PREFIXOS = PARTICULAS_DO_NOME.filter((p) => p.endsWith("'")).sort(
+  (a, b) => b.length - a.length,
+);
+
+/** Primeira letra maiúscula, o resto como veio (já em minúsculas). */
+function capitalizar(parte: string): string {
+  const [primeira = '', ...resto] = Array.from(parte);
+  return primeira.toLocaleUpperCase(LOCALE) + resto.join('');
+}
+
+/** "ana-maria" → "Ana-Maria"; "d'avila" → "D'Avila"; "j." → "J.". */
+function capitalizarPorParte(palavra: string): string {
+  return palavra
+    .split(/([-'’])/u)
+    .map((parte, i) => (i % 2 === 1 ? parte : capitalizar(parte)))
+    .join('');
+}
+
+function palavraPadronizada(palavra: string, primeira: boolean): string {
+  const minuscula = palavra.toLocaleLowerCase(LOCALE);
+  if (primeira) return capitalizarPorParte(minuscula);
+  if (PARTICULAS.has(minuscula)) return minuscula;
+  const prefixo = PREFIXOS.find((p) => minuscula.replace('’', "'").startsWith(p));
+  return prefixo === undefined || minuscula.length === prefixo.length
+    ? capitalizarPorParte(minuscula)
+    : minuscula.slice(0, prefixo.length) + capitalizarPorParte(minuscula.slice(prefixo.length));
+}
+
+/**
+ * Nome escrito todo em maiúsculas ou todo em minúsculas (olhando só as letras) → cada palavra com
+ * inicial maiúscula, partículas de `PARTICULAS_DO_NOME` em minúsculas (salvo a primeira palavra).
+ * Nome em caixa mista fica como a pessoa escreveu ("McDonald", "DiCaprio"). Só para o nome sugerido:
+ * a transcrição não muda.
+ */
+export function padronizarCaixaDoNome(nome: string): string {
+  const tudoIgual =
+    nome === nome.toLocaleUpperCase(LOCALE) || nome === nome.toLocaleLowerCase(LOCALE);
+  if (!tudoIgual) return nome;
+  let primeira = true;
+  return nome
+    .split(/(\s+)/u)
+    .map((pedaco) => {
+      if (pedaco.trim() === '') return pedaco;
+      const saida = palavraPadronizada(pedaco, primeira);
+      primeira = false;
+      return saida;
+    })
+    .join('');
+}
+
 export function semSufixoDeConvidado(nome: string): string {
   const sufixo = SUFIXO_FINAL.exec(nome);
   if (sufixo?.[1] === undefined || !CONVIDADO.has(chaveDeNome(sufixo[1]))) return nome;
@@ -56,7 +110,7 @@ export function sugerirFalantes(
   // A regra "Nome: fala" do texto já limita o nome; a marca <v> aceita qualquer comprimento.
   const tags = falantesDasTags.filter((nome) => nome.trim().length <= MAX_CARACTERES_NOME_SUGERIDO);
   for (const bruto of [...tags, ...falantesDoTexto(texto)]) {
-    const nome = nomeParaGravar(semSufixoDeConvidado(bruto));
+    const nome = padronizarCaixaDoNome(nomeParaGravar(semSufixoDeConvidado(bruto)));
     const chave = chaveDeNome(nome);
     if (chave === '' || vistos.has(chave) || ehRotuloGenerico(nome)) continue;
     vistos.add(chave);

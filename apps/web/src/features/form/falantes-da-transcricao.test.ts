@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
 import {
   MAX_CARACTERES_NOME_SUGERIDO,
+  PARTICULAS_DO_NOME,
   ROTULOS_DE_CAMPO,
   ROTULOS_FALANTE_GENERICO,
   SUFIXOS_DE_CONVIDADO,
@@ -11,6 +12,7 @@ import {
   descreverAdicaoDeFalantes,
   ehRotuloGenerico,
   listarNomes,
+  padronizarCaixaDoNome,
   semSufixoDeConvidado,
   sugerirFalantes,
 } from './falantes-da-transcricao';
@@ -39,7 +41,7 @@ describe('sugerirFalantes', () => {
     const texto = [`${nfd}: oi`, 'helena duarte: oi', 'Íris Melo: oi'].join('\n');
     const existentes = nomes('João Prado', ' Helena   Duarte ', 'iris melo');
     expect(sugerirFalantes(texto, existentes)).toEqual({
-      falantes: [nfd.normalize('NFC'), 'helena duarte', 'Íris Melo'],
+      falantes: [nfd.normalize('NFC'), 'Helena Duarte', 'Íris Melo'],
       novos: [],
     });
   });
@@ -180,6 +182,58 @@ describe('ehRotuloGenerico', () => {
     expect(ehRotuloGenerico('Ana Souza')).toBe(false);
     expect(ehRotuloGenerico('Speaker Ana')).toBe(false);
     expect(ehRotuloGenerico('Pessoa Física')).toBe(false);
+  });
+});
+
+describe('padronizarCaixaDoNome', () => {
+  it.each([
+    ['MARIA DE ALMEIDA PRADO', 'Maria de Almeida Prado'],
+    ['maria de almeida prado', 'Maria de Almeida Prado'],
+    ['JOÃO DA SILVA', 'João da Silva'],
+    ['ÍRIS DOS SANTOS E SOUZA', 'Íris dos Santos e Souza'],
+    ['MARIA DAS DORES DO VALE', 'Maria das Dores do Vale'],
+  ])('todo maiúsculo ou minúsculo: "%s" → "%s"', (entrada, esperado) => {
+    expect(padronizarCaixaDoNome(entrada)).toBe(esperado);
+  });
+
+  it('partícula na primeira palavra ganha maiúscula', () => {
+    expect(padronizarCaixaDoNome('DE SOUZA')).toBe('De Souza');
+    expect(padronizarCaixaDoNome('das neves')).toBe('Das Neves');
+  });
+
+  it("hífen e apóstrofo: cada parte com maiúscula; d' no meio fica minúsculo", () => {
+    expect(padronizarCaixaDoNome('ana-maria')).toBe('Ana-Maria');
+    expect(padronizarCaixaDoNome("D'AVILA")).toBe("D'Avila");
+    expect(padronizarCaixaDoNome("PEDRO D'AVILA")).toBe("Pedro d'Avila");
+    expect(padronizarCaixaDoNome('PEDRO D’AVILA')).toBe('Pedro d’Avila');
+    expect(padronizarCaixaDoNome('ANA-MARIA DE OLIVEIRA-SOUZA')).toBe(
+      'Ana-Maria de Oliveira-Souza',
+    );
+  });
+
+  it('inicial com ponto continua com o ponto', () => {
+    expect(padronizarCaixaDoNome('J. SOUZA')).toBe('J. Souza');
+    expect(padronizarCaixaDoNome('MARIA J. SOUZA')).toBe('Maria J. Souza');
+  });
+
+  it('caixa mista fica como a pessoa escreveu', () => {
+    for (const nome of ['Ana Souza', 'McDonald', 'DiCaprio', 'ana Souza', 'Souza, Ana']) {
+      expect(padronizarCaixaDoNome(nome)).toBe(nome);
+    }
+  });
+
+  it('PARTICULAS_DO_NOME em config está normalizada e sem repetição', () => {
+    for (const p of PARTICULAS_DO_NOME) expect(normalizarBusca(p)).toBe(p);
+    expect(new Set(PARTICULAS_DO_NOME).size).toBe(PARTICULAS_DO_NOME.length);
+  });
+
+  it('na sugestão: "MARIA SILVA" e "Maria Silva" viram uma pessoa só, com a caixa padrão', () => {
+    expect(sugerirFalantes('MARIA SILVA: oi\nMaria Silva: de novo', []).falantes).toEqual([
+      'Maria Silva',
+    ]);
+    expect(
+      sugerirFalantes('', nomes('maria de almeida prado'), ['MARIA DE ALMEIDA PRADO', 'Ana Souza']),
+    ).toEqual({ falantes: ['Maria de Almeida Prado', 'Ana Souza'], novos: ['Ana Souza'] });
   });
 });
 

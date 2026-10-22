@@ -150,6 +150,38 @@ describe('participantes a partir de quem falou', () => {
     ).toBeInTheDocument();
   });
 
+  it('nome em MAIÚSCULAS entra no bloco 3 com a caixa padrão; a transcrição não muda', async () => {
+    const { user, container } = montar();
+    const conteudo = [
+      'WEBVTT',
+      '',
+      '00:00:01.000 --> 00:00:04.000',
+      '<v MARIA DE ALMEIDA PRADO>Bom dia.</v>',
+      '',
+      '00:00:05.000 --> 00:00:08.000',
+      '<v Ana Souza>Olá.</v>',
+    ].join('\n');
+    await user.upload(campoArquivo(container), vtt(conteudo));
+    const transcricao = within(blocoTranscricao());
+    expect(
+      await transcricao.findByText(
+        'Encontramos 2 pessoas que falaram: Maria de Almeida Prado e Ana Souza.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(transcricao.getByRole('button', { name: 'Adicionar como participantes' }));
+    const lista = within(blocoParticipantes()).getByRole('region', {
+      name: 'Lista de participantes',
+    });
+    expect(
+      within(lista)
+        .getAllByLabelText(/^Nome do participante/)
+        .map((el) => (el as HTMLInputElement).value),
+    ).toEqual(['Maria de Almeida Prado', 'Ana Souza']);
+    expect(transcricao.getByLabelText(/^Transcrição da reunião/)).toHaveValue(
+      'MARIA DE ALMEIDA PRADO: Bom dia.\nAna Souza: Olá.',
+    );
+  });
+
   it('o aviso do upload cita quem falou; os textos da sugestão não são aria-live (sem anúncio repetido)', async () => {
     const { user, container } = montar();
     await user.upload(campoArquivo(container), vtt(vttFicticio(36)));
