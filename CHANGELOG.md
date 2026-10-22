@@ -23,5 +23,3 @@
 
 * adiciona documento de design do Lavra ([debb085](https://github.com/MadCrow69/lavra-ata/commit/debb0858a1a255c6ed25c6ca1c2f96118eda8253))
 * registra resultado do spike de conectividade com os provedores ([#6](https://github.com/MadCrow69/lavra-ata/issues/6)) ([dfc8d3b](https://github.com/MadCrow69/lavra-ata/commit/dfc8d3bd5c4f07e9092228376f73ef21074ec566))
-
-## Changelog

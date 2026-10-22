@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LIMITE_PARTICIPANTES } from '../../config/limits';
 import {
   MAX_CARACTERES_NOME_SUGERIDO,
+  NUMERAIS_DO_NOME,
   PARTICULAS_DO_NOME,
   ROTULOS_DE_CAMPO,
   ROTULOS_FALANTE_GENERICO,
@@ -222,9 +223,20 @@ describe('padronizarCaixaDoNome', () => {
     }
   });
 
-  it('PARTICULAS_DO_NOME em config está normalizada e sem repetição', () => {
-    for (const p of PARTICULAS_DO_NOME) expect(normalizarBusca(p)).toBe(p);
-    expect(new Set(PARTICULAS_DO_NOME).size).toBe(PARTICULAS_DO_NOME.length);
+  it.each([
+    ['PARTICULAS_DO_NOME', PARTICULAS_DO_NOME],
+    ['NUMERAIS_DO_NOME', NUMERAIS_DO_NOME],
+  ])('%s em config está normalizada e sem repetição', (_nome, lista) => {
+    for (const p of lista) expect(normalizarBusca(p)).toBe(p);
+    expect(new Set(lista).size).toBe(lista.length);
+  });
+
+  it('numeral romano no fim fica maiúsculo; sobrenome parecido, não', () => {
+    expect(padronizarCaixaDoNome('JOÃO PAULO II')).toBe('João Paulo II');
+    expect(padronizarCaixaDoNome('pedro de alcântara iv')).toBe('Pedro de Alcântara IV');
+    expect(padronizarCaixaDoNome('JOSÉ SOUZA III')).toBe('José Souza III');
+    expect(padronizarCaixaDoNome('ANA LI')).toBe('Ana Li');
+    expect(padronizarCaixaDoNome('IVO SOUZA')).toBe('Ivo Souza');
   });
 
   it('na sugestão: "MARIA SILVA" e "Maria Silva" viram uma pessoa só, com a caixa padrão', () => {
