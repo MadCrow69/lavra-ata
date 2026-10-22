@@ -190,7 +190,7 @@ Formatação brasileira: datas no corpo formal por extenso ("Aos catorze dias do
 
 **b) CIPA — reunião ordinária/extraordinária (NR-5, Portaria MTP 422/2021)**
 
-- Campos: empresa*, estabelecimento, gestão/mandato*, número da reunião, natureza* (ordinária / extraordinária — se extraordinária, motivo: acidente grave ou fatal, ou solicitação de representação, item 5.6.4), data*, horário*, local*, modalidade*, presidente*, secretário designado* (5.6.5); participantes: nome*, representação* (empregador/empregados), condição* (titular/suplente), presença* + justificativa.
+- Campos: empresa*, estabelecimento, gestão/mandato*, número da reunião, natureza* (ordinária / extraordinária — se extraordinária, motivo: acidente grave ou fatal, ou solicitação de representação, item 5.6.4), data*, horário*, local*, modalidade*, presidente*, secretário designado* (5.6.5); participantes: nome*, representação* (organização/empregados), condição* (titular/suplente), presença* + justificativa.
 - Seções da IA: abertura; leitura/aprovação da ata anterior (se houve); acompanhamento de pendências anteriores; discussão por item de pauta (acidentes, riscos, inspeções, assédio etc. conforme a conversa); deliberações — **registrar se foi por consenso ou votação conforme dito; sem consenso explícito, `[PREENCHER: forma de deliberação]`** (5.6.8); encaminhamentos; encerramento.
 - Assinaturas: **todos os presentes** (5.6.3). Nota no rodapé da ata: disponibilizar aos membros e divulgar deliberações aos empregados (5.6.3.1/5.6.3.2) **[decisão do Claude]**.
 - Ata de eleição/posse **não** é coberta (documento diferente).
