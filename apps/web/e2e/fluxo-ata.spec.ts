@@ -95,6 +95,14 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     await expect(documento).toContainText(CPF);
     await expect(documento).not.toContainText(MARCADOR_CPF);
 
+    // A cor de destaque chega à folha pela propriedade no `style` (CSSOM): sem violação de CSP.
+    await expect(documento).toHaveCSS('--cor-folha-destaque', '#1a1a1a');
+    await expect(documento.getByRole('heading', { name: 'Resumo' })).toHaveCSS(
+      'color',
+      'rgb(26, 26, 26)',
+    );
+    expect(await violacoesDeCsp(page)).toEqual([]);
+
     // O que saiu para os provedores: marcador no lugar do CPF, chave só em header.
     const geracoes = rede.chamadas.filter((c) => c.metodo === 'POST');
     expect(geracoes.filter((c) => c.provedor === 'openai')).toHaveLength(2);

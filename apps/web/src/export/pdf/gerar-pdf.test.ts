@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { extractText } from 'unpdf';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AVISO_MINUTA, RODAPE_INTERNO_IA, RODAPE_PAGINADO } from '../../config/documento';
+import {
+  AVISO_MINUTA,
+  COR_TEXTO_DOCUMENTO,
+  RODAPE_INTERNO_IA,
+  RODAPE_PAGINADO,
+} from '../../config/documento';
 import type { DocBloco, DocumentModel } from '../../document/model';
 import { modeloDeVolume } from '../../test/documento-volume';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
@@ -222,6 +227,7 @@ describe('gerarPdf: título de seção nunca fica sozinho no pé da página', ()
     cabecalho: { logo: null, linhas: ['Organização de teste'] },
     rodape: RODAPE_PAGINADO,
     rodapeInterno: null,
+    corDestaque: COR_TEXTO_DOCUMENTO,
     blocos: [
       ...Array.from({ length: paragrafos }, (_, i): DocBloco => ({
         tipo: 'paragrafo',

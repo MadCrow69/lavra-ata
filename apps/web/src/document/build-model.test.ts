@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { corporativa } from '../ata-types/corporativa';
 import type { AtaTypeDefinition } from '../ata-types/types';
-import { AVISO_MINUTA, RODAPE_PAGINADO, TEXTO_SECOES_PENDENTES } from '../config/documento';
+import {
+  AVISO_MINUTA,
+  COR_TEXTO_DOCUMENTO,
+  RODAPE_PAGINADO,
+  TEXTO_SECOES_PENDENTES,
+} from '../config/documento';
 import {
   ROTULO_PRESENCA,
   ROTULO_STATUS,
@@ -260,6 +265,16 @@ describe('construirDocumento sem resultado (prévia ao vivo)', () => {
     expect(tabela?.linhas[0]).toEqual(['Pessoa 1', '—', ROTULO_PRESENCA.presente]);
     expect(tabela?.colunaPresenca).toBe(2);
     expect(tabela?.larguras).toEqual(largurasPorPeso([3, 2, 2]));
+  });
+});
+
+describe('construirDocumento: cor de destaque', () => {
+  it('sem o 4º argumento, a cor é a tinta do documento', () => {
+    expect(construirDocumento(rascunho(), corporativa).corDestaque).toBe(COR_TEXTO_DOCUMENTO);
+  });
+
+  it('com um destaque, a cor dele', () => {
+    expect(construirDocumento(rascunho(), corporativa, null, 'vinho').corDestaque).toBe('#7b1e3a');
   });
 });
 
@@ -610,7 +625,10 @@ describe('construirDocumento: a corporativa não muda (paridade)', () => {
       expect(larguras).toEqual([43, 29, 28]);
       return resto;
     });
-    return JSON.stringify({ ...modelo, blocos });
+    // `corDestaque` (Plano 06) é o único campo novo: no padrão é a tinta, e o resto é idêntico.
+    const { corDestaque, ...resto } = modelo;
+    expect(corDestaque).toBe(COR_TEXTO_DOCUMENTO);
+    return JSON.stringify({ ...resto, blocos });
   }
 
   it('antes de gerar: idêntico ao modelo gravado antes da mudança', () => {

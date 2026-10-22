@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AVISO_MINUTA, RODAPE_INTERNO_IA } from '../../config/documento';
+import {
+  AVISO_MINUTA,
+  COR_TEXTO_DOCUMENTO,
+  LINHAS_TABELA,
+  RODAPE_INTERNO_IA,
+} from '../../config/documento';
 import { logoNoDocumentoPx } from '../../document/medidas';
 import type { DocBloco, DocumentModel } from '../../document/model';
 import {
@@ -296,5 +301,52 @@ describe('gerarDocx · casos de borda', () => {
     const corpo = /<w:body>(.*)<\/w:body>/s.exec(xml)?.[1] ?? '';
     const semSecao = corpo.replace(/<w:sectPr>.*<\/w:sectPr>\s*$/s, '');
     expect(semSecao.trimEnd().endsWith('</w:p>')).toBe(true);
+  });
+});
+
+describe('gerarDocx · cor de destaque', () => {
+  const semHash = (cor: string) => cor.replace(/^#/, '');
+  const TINTA = semHash(COR_TEXTO_DOCUMENTO).toUpperCase();
+
+  /** Valores de todo `w:color w:val` dos arquivos, em maiúsculas (o XML pode vir em qualquer caixa). */
+  const coresEm = (...xmls: string[]) =>
+    xmls.flatMap((xml) =>
+      [...xml.matchAll(/<w:color w:val="([^"]+)"/g)].map((m) => (m[1] ?? '').toUpperCase()),
+    );
+
+  const estilo = (styles: string, id: string) =>
+    new RegExp(`<w:style [^>]*w:styleId="${id}".*?</w:style>`, 's').exec(styles)?.[0] ?? '';
+
+  it('com o padrão, só a tinta, "auto" e a linha da tabela aparecem (saída idêntica à de antes)', async () => {
+    const partes = await xmlDoDocx(
+      await gerarDocx(modeloDeVolume({ participantes: 3, encaminhamentos: 3 })),
+    );
+    const styles = partes.get('word/styles.xml') ?? '';
+    // A biblioteca traz estilos que o documento não usa (Heading3.., Hyperlink) com cores próprias.
+    const usados = styles.replace(
+      /<w:style [^>]*w:styleId="(?!Title"|Heading1"|Heading2")[^"]*".*?<\/w:style>/gs,
+      '',
+    );
+    const cores = coresEm(partes.get('word/document.xml') ?? '', usados);
+    const permitidas = new Set([TINTA, 'AUTO', semHash(LINHAS_TABELA.corPadrao).toUpperCase()]);
+    expect(cores.length).toBeGreaterThan(0);
+    expect(cores.filter((c) => !permitidas.has(c))).toEqual([]);
+    for (const id of ['Title', 'Heading1', 'Heading2'])
+      expect(coresEm(estilo(styles, id)), id).toEqual([TINTA]);
+  });
+
+  it('com Vinho, Title, Heading1 e Heading2 levam a cor e o estilo padrão segue na tinta', async () => {
+    const modelo = {
+      ...modeloDeVolume({ participantes: 3, encaminhamentos: 3 }),
+      corDestaque: '#7b1e3a',
+    };
+    const partes = await xmlDoDocx(await gerarDocx(modelo));
+    const styles = partes.get('word/styles.xml') ?? '';
+    for (const id of ['Title', 'Heading1', 'Heading2']) {
+      expect(coresEm(estilo(styles, id)), id).toEqual(['7B1E3A']);
+    }
+    const padrao = /<w:docDefaults>.*?<\/w:docDefaults>/s.exec(styles)?.[0] ?? '';
+    expect(coresEm(padrao)).toEqual([TINTA]);
+    expect(coresEm(partes.get('word/document.xml') ?? '')).not.toContain('7B1E3A');
   });
 });

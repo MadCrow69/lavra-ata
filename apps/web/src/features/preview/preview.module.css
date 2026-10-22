@@ -124,12 +124,14 @@
   margin: 0 0 var(--espaco-6);
   padding-bottom: var(--espaco-3);
   border-bottom: 2px solid var(--cor-folha-tinta);
+  color: var(--cor-folha-destaque, var(--cor-folha-tinta));
   font-size: 1.5em;
   text-align: center;
 }
 
 .subtitulo {
   margin: var(--espaco-6) 0 var(--espaco-2);
+  color: var(--cor-folha-destaque, var(--cor-folha-tinta));
   font-size: 1.1em;
 }
 

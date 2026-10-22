@@ -428,10 +428,10 @@ function rodape(modelo: string): Footer {
   });
 }
 
-/** Estilo dos títulos: serifado, na cor do texto e sem o azul/negrito padrão do Word. */
-function estiloDeTitulo(tamanhoPt: number) {
+/** Estilo dos títulos: serifado, na cor de destaque e sem o azul/negrito padrão do Word. */
+function estiloDeTitulo(tamanhoPt: number, cor: string) {
   return {
-    run: { font: FONTES_DOCX.titulo, size: meioPonto(tamanhoPt), bold: false, color: COR_TEXTO },
+    run: { font: FONTES_DOCX.titulo, size: meioPonto(tamanhoPt), bold: false, color: semHash(cor) },
   };
 }
 
@@ -463,9 +463,9 @@ export async function gerarDocx(modelo: DocumentModel): Promise<Blob> {
             language: { value: 'pt-BR' },
           },
         },
-        title: estiloDeTitulo(T.tituloPt),
-        heading1: estiloDeTitulo(T.secaoPt),
-        heading2: estiloDeTitulo(T.subtituloPt),
+        title: estiloDeTitulo(T.tituloPt, modelo.corDestaque),
+        heading1: estiloDeTitulo(T.secaoPt, modelo.corDestaque),
+        heading2: estiloDeTitulo(T.subtituloPt, modelo.corDestaque),
       },
     },
     numbering: {

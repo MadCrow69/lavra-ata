@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RODAPE_PAGINADO } from '../../config/documento';
+import { COR_TEXTO_DOCUMENTO, RODAPE_PAGINADO } from '../../config/documento';
 import type { DocumentModel } from '../../document/model';
 import { modeloDeVolume, NOME_DECOMPOSTO } from '../../test/documento-volume';
 import {
@@ -28,6 +28,7 @@ function modeloCom(texto: string, extras: Partial<DocumentModel> = {}): Document
     blocos: [{ tipo: 'paragrafo', partes: [{ texto }] }],
     rodape: RODAPE_PAGINADO,
     rodapeInterno: null,
+    corDestaque: COR_TEXTO_DOCUMENTO,
     ...extras,
   };
 }

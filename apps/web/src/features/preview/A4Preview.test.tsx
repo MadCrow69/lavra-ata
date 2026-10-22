@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AVISO_MINUTA, TEXTO_SECOES_PENDENTES } from '../../config/documento';
+import { AVISO_MINUTA, COR_TEXTO_DOCUMENTO, TEXTO_SECOES_PENDENTES } from '../../config/documento';
 import {
   ROTULO_PRESENCA,
   ROTULO_STATUS,
@@ -76,6 +76,14 @@ function rascunho(parcial: Partial<AtaDraft> = {}): AtaDraft {
 function renderizar(inicial: AtaDraft) {
   return renderizarComProvedores(<A4Preview />, { inicial });
 }
+
+describe('A4Preview: cor de destaque', () => {
+  it('a folha declara a cor de destaque (padrão: a tinta do documento)', () => {
+    renderizar(rascunho());
+    const folha = screen.getByRole('article', { name: 'Prévia da ata' });
+    expect(folha.style.getPropertyValue('--cor-folha-destaque')).toBe(COR_TEXTO_DOCUMENTO);
+  });
+});
 
 describe('A4Preview antes de gerar', () => {
   it('mostra título, cabeçalho, participantes, pauta e o placeholder das seções', () => {

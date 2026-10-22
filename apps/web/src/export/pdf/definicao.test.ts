@@ -96,6 +96,35 @@ describe('definicaoPdf: página e estilo', () => {
   });
 });
 
+describe('definicaoPdf: cor de destaque', () => {
+  const VINHO = '#7b1e3a';
+  const comVinho = definicaoPdf({ ...volume, corDestaque: VINHO });
+  const titulos = (d: TDocumentDefinitions) =>
+    [...objetos(d.content)].filter(
+      (o) => o.headlineLevel === 1 || o.fontSize === TIPOGRAFIA_DOCUMENTO.tituloPt,
+    );
+
+  it('o título da ata e todo subtítulo/título de seção levam a cor', () => {
+    const nos = titulos(comVinho);
+    expect(nos.length).toBeGreaterThan(5);
+    expect(nos.every((o) => o.color === VINHO)).toBe(true);
+  });
+
+  it('o corpo segue na tinta do documento', () => {
+    expect(comVinho.defaultStyle).toMatchObject({ color: COR_TEXTO_DOCUMENTO });
+    const cores = new Set(
+      [...objetos(comVinho.content)].flatMap((o) => (o.color ? [o.color] : [])),
+    );
+    expect([...cores]).toEqual([VINHO]);
+  });
+
+  it('com o padrão, nenhuma cor diferente da tinta aparece na definição', () => {
+    const cores = [...objetos(def)].flatMap((o) => (typeof o.color === 'string' ? [o.color] : []));
+    expect(cores.length).toBeGreaterThan(0);
+    expect(cores.every((c) => c === COR_TEXTO_DOCUMENTO)).toBe(true);
+  });
+});
+
 describe('definicaoPdf: tabelas', () => {
   it('encaminhamentos: cabeçalho repetido, linha que não se parte, larguras em %', () => {
     const { table, no } = tabelaComCabecalho(def, 'Ação');

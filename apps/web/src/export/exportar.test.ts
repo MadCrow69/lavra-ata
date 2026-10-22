@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { COR_TEXTO_DOCUMENTO } from '../config/documento';
 import type { DocumentModel } from '../document/model';
 import { ErroExportacao, gerarArquivo, type CarregadoresExportacao } from './exportar';
 
@@ -8,6 +9,7 @@ const MODELO: DocumentModel = {
   blocos: [],
   rodape: '',
   rodapeInterno: null,
+  corDestaque: COR_TEXTO_DOCUMENTO,
 };
 
 function carregadoresFalsos(): {

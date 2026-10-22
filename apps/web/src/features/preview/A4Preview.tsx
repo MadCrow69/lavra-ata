@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { LOGO_ACCEPT } from '../../config/logo';
@@ -558,6 +559,8 @@ export function A4Preview({ opcoesCadeia }: { opcoesCadeia?: OpcoesCadeia } = {}
         data-folha
         lang="pt-BR"
         aria-label="Prévia da ata"
+        // Via CSSOM (style do React): a CSP `style-src 'self'` segue sem 'unsafe-inline'.
+        style={{ '--cor-folha-destaque': modelo.corDestaque } as CSSProperties}
       >
         {/* Timbre da folha: `div` e não `header`, para não virar um segundo marco "banner". */}
         <div className={styles.cabecalho}>

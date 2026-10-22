@@ -92,19 +92,21 @@ function trechos(partes: Inline[], familia: FamiliaPdf = 'corpo', hifenInteiro =
 const texto = (s: string): Trecho[] => trechos(dividirPreencher(s));
 
 /** Subtítulo ou título de seção: serifado e marcado para não ficar sozinho no pé da página. */
-function tituloDeSecao(s: string, fontSize: number): Content {
+function tituloDeSecao(s: string, fontSize: number, color: string): Content {
   return {
     text: separarPorFonte(s, 'titulo'),
     fontSize,
+    color,
     headlineLevel: 1,
     margin: [0, E.antesDeSecaoPt, 0, E.aposSecaoPt],
   };
 }
 
-function tituloDaAta(s: string): Content {
+function tituloDaAta(s: string, color: string): Content {
   return {
     text: separarPorFonte(s, 'titulo'),
     fontSize: T.tituloPt,
+    color,
     alignment: 'center',
     margin: [0, 0, 0, E.aposTituloPt],
   };
@@ -216,12 +218,12 @@ function aviso(s: string): Content {
   };
 }
 
-function blocoPdf(bloco: DocBloco): Content[] {
+function blocoPdf(bloco: DocBloco, corDestaque: string): Content[] {
   switch (bloco.tipo) {
     case 'titulo':
-      return [tituloDaAta(bloco.texto)];
+      return [tituloDaAta(bloco.texto, corDestaque)];
     case 'subtitulo':
-      return [tituloDeSecao(bloco.texto, T.subtituloPt)];
+      return [tituloDeSecao(bloco.texto, T.subtituloPt, corDestaque)];
     case 'paragrafo':
       return [
         {
@@ -243,7 +245,10 @@ function blocoPdf(bloco: DocBloco): Content[] {
     case 'secao':
       // Achatada: o título fica no mesmo nível dos blocos seguintes, para `pageBreakBefore` ver o
       // que vem depois dele na página.
-      return [tituloDeSecao(bloco.titulo, T.secaoPt), ...bloco.blocos.flatMap(blocoPdf)];
+      return [
+        tituloDeSecao(bloco.titulo, T.secaoPt, corDestaque),
+        ...bloco.blocos.flatMap((filho) => blocoPdf(filho, corDestaque)),
+      ];
     case 'tabela':
       return [tabela(bloco)];
     case 'assinaturas':
@@ -292,8 +297,8 @@ export function definicaoPdf(modelo: DocumentModel): TDocumentDefinitions {
     },
     content: [
       ...timbre(modelo.cabecalho),
-      tituloDaAta(modelo.titulo),
-      ...modelo.blocos.flatMap(blocoPdf),
+      tituloDaAta(modelo.titulo, modelo.corDestaque),
+      ...modelo.blocos.flatMap((bloco) => blocoPdf(bloco, modelo.corDestaque)),
     ],
     footer: (atual, total) => ({
       id: ID_NO_RODAPE,
