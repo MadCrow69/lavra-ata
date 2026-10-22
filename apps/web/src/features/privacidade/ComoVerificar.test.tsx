@@ -143,9 +143,7 @@ describe('Privacidade: como verificar (modal)', () => {
 
   it('indica o site publicado', () => {
     renderizarModal();
-    expect(
-      screen.getByText(new RegExp(SITE.demo.replaceAll('.', String.raw`\.`))),
-    ).toBeInTheDocument();
+    expect(screen.getByText(SITE.demo, { selector: 'code' })).toBeInTheDocument();
   });
 
   it('diz o que não é protegido, sem prometer mais do que faz', () => {
