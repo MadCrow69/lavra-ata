@@ -42,8 +42,9 @@ test.describe('Privacidade: como verificar', () => {
       .getByRole('link', { name: 'Adaptadores de IA (as chamadas aos provedores)' })
       .getAttribute('href');
     // Prefixo literal: `config/site.ts` lê `__COMMIT_SHA__`, que não existe no Node do Playwright.
-    expect(href?.startsWith('https://github.com/MadCrow69/lavra-ata/tree/')).toBe(true);
-    expect(href?.endsWith('/apps/web/src/ai/providers')).toBe(true);
+    expect(href).toMatch(
+      /^https:\/\/github\.com\/MadCrow69\/lavra-ata\/tree\/.+\/apps\/web\/src\/ai\/providers$/,
+    );
 
     const medidas = await dialogo.evaluate((el) => ({
       painel: el.scrollWidth - el.clientWidth,

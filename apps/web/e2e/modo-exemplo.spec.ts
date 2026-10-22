@@ -4,6 +4,7 @@ import {
   CPF,
   EXEMPLOS_E2E,
   FRASE_BANNER_EXEMPLO,
+  PROVEDOR_POR_HOST,
   ROTULOS_TIPO,
   abrirPagina,
   afirmarLimpo,
@@ -18,6 +19,7 @@ import {
   test,
   textoDoPdf,
   verExemplo,
+  type Rede,
 } from './apoio';
 import type { TipoFixture } from './fixtures/respostas';
 
@@ -28,11 +30,6 @@ import type { TipoFixture } from './fixtures/respostas';
  */
 
 const TIPOS = Object.keys(EXEMPLOS_E2E) as TipoFixture[];
-const HOSTS_DOS_PROVEDORES = [
-  'api.openai.com',
-  'generativelanguage.googleapis.com',
-  'api.anthropic.com',
-];
 
 /** Texto do motivo dos botões de IA parados (`MOTIVO_EXEMPLO`; o `src/` não entra no Node do E2E). */
 const MOTIVO_EXEMPLO =
@@ -40,8 +37,10 @@ const MOTIVO_EXEMPLO =
 
 const chunkDoExemplo = (tipo: string) => new RegExp(`/assets/exemplo-${tipo}-[^/]+\\.js$`);
 
-function pedidosDoChunk(rede: { arquivosDoApp: string[] }, inicio: number, tipo: string) {
-  return rede.arquivosDoApp.slice(inicio).filter((caminho) => chunkDoExemplo(tipo).test(caminho));
+/** Os tipos cujo chunk `exemplo-<tipo>` o navegador pediu desde `inicio` (a lista acumula). */
+function tiposPedidos(rede: Rede, inicio: number): TipoFixture[] {
+  const recorte = rede.arquivosDoApp.slice(inicio);
+  return TIPOS.filter((tipo) => recorte.some((caminho) => chunkDoExemplo(tipo).test(caminho)));
 }
 
 test.describe('modo exemplo no build com CSP ativa', () => {
@@ -51,17 +50,25 @@ test.describe('modo exemplo no build com CSP ativa', () => {
   }) => {
     for (const tipo of TIPOS) {
       const { organizacao, arquivo } = EXEMPLOS_E2E[tipo];
-      const page = await abrirPagina(context, rede);
-      // A lista de arquivos acumula entre as páginas do contexto: só vale o que veio depois daqui.
+      // Antes de abrir a página: a lista acumula entre as páginas do contexto, e o recorte tem de
+      // incluir tudo o que ESTA página pedir, a carga inicial inclusive.
       const inicio = rede.arquivosDoApp.length;
-      expect(pedidosDoChunk(rede, inicio, tipo)).toEqual([]);
+      const page = await abrirPagina(context, rede);
+      // Com o app já na tela e antes do clique, nenhum exemplo foi pedido.
+      expect(tiposPedidos(rede, inicio)).toEqual([]);
 
       await verExemplo(page, ROTULOS_TIPO[tipo]);
-      await expect(page.getByText(FRASE_BANNER_EXEMPLO, { exact: true })).toBeVisible();
-      await expect(folha(page)).toContainText(organizacao);
-      // A logo é o SVG fictício rasterizado: só aparece se o canvas e a CSP deixaram.
-      await expect(folha(page).getByRole('img', { name: 'Logo da organização' })).toBeVisible();
-      expect(pedidosDoChunk(rede, inicio, tipo).length).toBeGreaterThan(0);
+      // Só o chunk do tipo escolhido veio; os outros três seguem sem ser pedidos.
+      expect(tiposPedidos(rede, inicio)).toEqual([tipo]);
+
+      await expect(folha(page).locator('[class*="cabecalho"]').first()).toContainText(organizacao);
+      // A logo é o SVG fictício rasterizado: só vale se o canvas e a CSP deixaram desenhar.
+      const logo = folha(page).getByRole('img', { name: 'Logo da organização' });
+      await expect(logo).toBeVisible();
+      expect(await logo.getAttribute('src')).toMatch(/^(data|blob):/);
+      expect(await logo.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(
+        0,
+      );
 
       // O condomínio sai com uma lacuna de propósito: `baixar` aceita o modal de confirmação.
       const pdf = await baixar(page, 'Baixar PDF');
@@ -136,7 +143,7 @@ test.describe('modo exemplo no build com CSP ativa', () => {
       await expect(page.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
       expect(rede.chamadas.length).toBeGreaterThan(0);
       for (const chamada of rede.chamadas) {
-        expect(HOSTS_DOS_PROVEDORES).toContain(new URL(chamada.url).hostname);
+        expect(Object.keys(PROVEDOR_POR_HOST)).toContain(new URL(chamada.url).hostname);
       }
       await afirmarLimpo(page, rede);
     });

@@ -42,7 +42,7 @@ export const FOLGA_FALLBACK_MS = 20_000;
 
 type Provedor = 'openai' | 'gemini' | 'anthropic';
 
-const PROVEDOR_POR_HOST: Record<string, Provedor> = {
+export const PROVEDOR_POR_HOST: Record<string, Provedor> = {
   'api.openai.com': 'openai',
   'generativelanguage.googleapis.com': 'gemini',
   'api.anthropic.com': 'anthropic',
@@ -258,11 +258,15 @@ export async function preencherVazios(page: Page, rotuloCampo: string, rotuloVal
 
 /** Marca o tipo de ata pelo rótulo exato (o nome do rádio inclui a descrição, por isso o `label`). */
 export async function escolherTipo(page: Page, rotulo: string) {
-  await page
+  await radioDoTipo(page, rotulo).click();
+}
+
+/** O rádio do tipo pelo rótulo exato (o nome acessível do rádio inclui a descrição). */
+export function radioDoTipo(page: Page, rotulo: string): Locator {
+  return page
     .locator('label')
     .filter({ has: page.getByText(rotulo, { exact: true }) })
-    .getByRole('radio')
-    .click();
+    .getByRole('radio');
 }
 
 /** Rótulo de cada tipo de ata como aparece nos rádios do formulário e no seletor "Ver exemplo". */

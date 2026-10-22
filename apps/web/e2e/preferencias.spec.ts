@@ -12,6 +12,8 @@ import {
   folha,
   gerarAta,
   preencherReuniao,
+  radioDoTipo,
+  ROTULOS_TIPO,
   semRolagemHorizontal,
   test,
 } from './apoio';
@@ -57,6 +59,21 @@ async function rgbDaOpcao(page: Page, rotulo: string): Promise<string> {
 
 const localDoNavegador = async (page: Page) => (await conteudoDosStorages(page)).local;
 
+/** Reunião preenchida + CIPA + tom conciso + cor Vinho + "Lembrar", esperando o aviso do app. */
+async function lembrarCipaConcisoVinho(page: Page) {
+  await preencherReuniao(page);
+  await radioDoTipo(page, ROTULOS_TIPO.cipa).check();
+  await page.getByLabel('Tom da redação').selectOption('conciso');
+  await page.getByRole('radio', { name: 'Vinho', exact: true }).check();
+  await page.getByRole('checkbox', { name: LEMBRAR }).check();
+  await expect(page.getByText('Preferências lembradas neste navegador.')).toBeVisible();
+}
+
+/** Nenhuma linha da transcrição digitada por `preencherReuniao` foi para o `localStorage`. */
+function expectSemTranscricao(guardado: string) {
+  for (const linha of TRANSCRICAO_BASICA.split('\n')) expect(guardado).not.toContain(linha);
+}
+
 test.describe('preferências lembradas no build com CSP ativa', () => {
   test.use({ cenario: { openai: 'ok' } });
 
@@ -99,12 +116,7 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
   }) => {
     const vinho = await rgbDaOpcao(page, 'Vinho');
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
-    await preencherReuniao(page);
-    await page.getByRole('radio', { name: /CIPA/ }).check();
-    await page.getByLabel('Tom da redação').selectOption('conciso');
-    await page.getByRole('radio', { name: 'Vinho' }).check();
-    await page.getByRole('checkbox', { name: LEMBRAR }).check();
-    await expect(page.getByText('Preferências lembradas neste navegador.')).toBeVisible();
+    await lembrarCipaConcisoVinho(page);
 
     const guardado = (await localDoNavegador(page)).join('\n');
     expect(guardado).toContain(CHAVE_PREFERENCIAS);
@@ -116,15 +128,10 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     });
     // Só as preferências no `localStorage`; nada da ata, dos participantes nem da chave de IA.
     expect(await localDoNavegador(page)).toHaveLength(1);
-    for (const proibido of [
-      CPF,
-      CHAVE_OPENAI,
-      'Marcos Ferraz',
-      'Instituto Horizonte',
-      TRANSCRICAO_BASICA.slice(0, 30),
-    ]) {
+    for (const proibido of [CPF, CHAVE_OPENAI, 'Marcos Ferraz', 'Instituto Horizonte']) {
       expect(guardado).not.toContain(proibido);
     }
+    expectSemTranscricao(guardado);
 
     // Outra visita: sessão vazia (o rascunho nem existe), só o `localStorage` sobrou.
     await page.evaluate(() => {
@@ -135,8 +142,8 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
       sessionStorage.removeItem('lavra:rascunho:v1');
     });
     await page.reload();
-    await expect(page.getByRole('radio', { name: 'Vinho' })).toBeChecked();
-    await expect(page.getByRole('radio', { name: /CIPA/ })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Vinho', exact: true })).toBeChecked();
+    await expect(radioDoTipo(page, ROTULOS_TIPO.cipa)).toBeChecked();
     await expect(page.getByLabel('Tom da redação')).toHaveValue('conciso');
     await expect(page.getByRole('checkbox', { name: LEMBRAR })).toBeChecked();
     expect(rgbDe(await destaqueDaFolha(page))).toBe(vinho);
@@ -152,28 +159,22 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     rede,
   }) => {
     const vinho = await rgbDaOpcao(primeira, 'Vinho');
-    await preencherReuniao(primeira);
-    await primeira.getByRole('radio', { name: /CIPA/ }).check();
-    await primeira.getByLabel('Tom da redação').selectOption('conciso');
-    await primeira.getByRole('radio', { name: 'Vinho' }).check();
-    await primeira.getByRole('checkbox', { name: LEMBRAR }).check();
-    await expect(primeira.getByText('Preferências lembradas neste navegador.')).toBeVisible();
+    await lembrarCipaConcisoVinho(primeira);
 
     // Só campos de preferência, e nada do que foi digitado na transcrição.
     const guardado = (await localDoNavegador(primeira)).join('\n');
-    const lembradas: unknown = JSON.parse(guardado.slice(`${CHAVE_PREFERENCIAS}=`.length));
-    expect(Object.keys(lembradas as object).sort()).toEqual(
-      expect.arrayContaining(['destaque', 'tipoId', 'tom', 'versao']),
-    );
-    for (const chave of Object.keys(lembradas as object)) {
+    const lembradas = JSON.parse(guardado.slice(`${CHAVE_PREFERENCIAS}=`.length)) as object;
+    const chaves = Object.keys(lembradas);
+    expect(chaves).toEqual(expect.arrayContaining(['destaque', 'tipoId', 'tom', 'versao']));
+    for (const chave of chaves) {
       expect(['versao', 'tipoId', 'tom', 'destaque', 'ordem', 'modelos']).toContain(chave);
     }
-    expect(guardado).not.toContain(TRANSCRICAO_BASICA.slice(0, 30));
+    expectSemTranscricao(guardado);
     await afirmarLimpo(primeira, rede);
 
     // Sessão nova, mesmo `localStorage`: a escolha chega sem rascunho e sem violar a CSP.
     const segunda = await abrirPagina(context, rede);
-    await expect(segunda.getByRole('radio', { name: /CIPA/ })).toBeChecked();
+    await expect(radioDoTipo(segunda, ROTULOS_TIPO.cipa)).toBeChecked();
     await expect(segunda.getByLabel('Tom da redação')).toHaveValue('conciso');
     expect(await coresCalculadas(folha(segunda).locator('h2').first())).toEqual([vinho]);
     await expect(campo(segunda, 'Transcrição da reunião')).toHaveValue('');
@@ -186,11 +187,14 @@ test.describe('preferências lembradas no build com CSP ativa', () => {
     // Depois de esquecer, uma sessão nova abre no padrão.
     const terceira = await abrirPagina(context, rede);
     const grafite = await rgbDaOpcao(terceira, 'Grafite (padrão)');
-    await expect(terceira.getByRole('radio', { name: 'Reunião corporativa' })).toBeChecked();
-    await expect(terceira.getByRole('radio', { name: 'Grafite (padrão)' })).toBeChecked();
+    await expect(radioDoTipo(terceira, ROTULOS_TIPO.corporativa)).toBeChecked();
+    await expect(
+      terceira.getByRole('radio', { name: 'Grafite (padrão)', exact: true }),
+    ).toBeChecked();
     expect(await coresCalculadas(folha(terceira).locator('h2').first())).toEqual([grafite]);
     expect(grafite).not.toBe(vinho);
     await afirmarLimpo(terceira, rede);
+    expect(rede.chamadas).toEqual([]);
 
     await segunda.close();
     await terceira.close();
