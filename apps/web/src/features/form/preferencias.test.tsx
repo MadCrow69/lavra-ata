@@ -53,7 +53,6 @@ describe('preferências lembradas no bloco 1', () => {
       await screen.findByText('Cor de destaque: Vinho. A folha, o PDF e o DOCX usam a nova cor.'),
     ).toBeInTheDocument();
     expect(corDaFolha()).toBe(corDoDestaque('vinho'));
-    expect(corDaFolha()).toBe(corDoDestaque('vinho'));
     expect(screen.getByRole('radio', { name: 'Vinho' })).toBeChecked();
   });
 

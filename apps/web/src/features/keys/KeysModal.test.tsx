@@ -18,6 +18,7 @@ import {
 import { KeysModal } from './KeysModal';
 
 const CHAVE = 'sk-teste-ficticia-9f3a7c21';
+const CHAVE_LONGA = 'segredo-ficticio-0123456789-abcdef';
 const CHAVE_2 = 'AIzaTesteFicticia8b4d6e10';
 
 function storageFalso() {
@@ -650,13 +651,77 @@ describe('KeysModal', () => {
     it('a chave do próprio cartão colada no modelo também é recusada', async () => {
       const preferencias = criarPreferenciasStore(null, null);
       const { user } = await montar({ preferencias });
-      await user.type(campoChave('OpenAI'), 'abc123segredo');
+      await user.type(campoChave('OpenAI'), CHAVE_LONGA);
       await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
       await user.click(within(cartao('OpenAI')).getByLabelText('Id do modelo'));
-      await user.paste('abc123segredo');
+      await user.paste(CHAVE_LONGA);
       expect(
         within(cartao('OpenAI')).getByText(/parece uma chave de API, não um id de modelo/),
       ).toBeVisible();
+      expect(preferencias.atual().modelos).toBeUndefined();
+    });
+
+    it('chave curta (menos de 20 caracteres) não dá alarme falso num id que a contém', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user } = await montar({ preferencias });
+      await user.type(campoChave('OpenAI'), 'gpt');
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      await user.type(within(cartao('OpenAI')).getByLabelText('Id do modelo'), 'gpt-6-luna-x');
+      expect(within(cartao('OpenAI')).queryByText(/parece uma chave/)).not.toBeInTheDocument();
+      expect(preferencias.atual().modelos).toEqual({ openai: 'gpt-6-luna-x' });
+    });
+
+    it('ordem inversa: id inválido no campo do modelo e SÓ DEPOIS a chave — o id nunca chega a storage nenhum', async () => {
+      const sessao = storageComItens();
+      const local = storageComItens();
+      const chaves = storageFalso();
+      const preferencias = criarPreferenciasStore(sessao.storage, local.storage);
+      preferencias.definirLembrar(true);
+      const { user, store } = await montar({ preferencias, storage: chaves.storage });
+      store.definirLembrar(true);
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      const colada = 'sk-proj-teste-ficticia-0a1b2c3d4e5f';
+      await user.click(campo);
+      await user.paste(colada);
+      expect(campo).toBeInvalid();
+
+      // Agora a chave: é salva normalmente, mas com o modelo padrão, nunca com o id inválido.
+      await user.type(campoChave('OpenAI'), CHAVE);
+      expect(store.listar()).toMatchObject([{ provedor: 'openai', chave: CHAVE }]);
+      expect(store.listar()[0]?.modelo).toBe(MODELOS.openai.padrao);
+      expect(campo).toBeInvalid();
+      expect(JSON.stringify(store.listar())).not.toContain(colada);
+      expect(chaves.dados.get(CHAVES) ?? '').toContain(CHAVE);
+      expect(chaves.dados.get(CHAVES) ?? '').not.toContain(colada);
+      expect(preferencias.atual().modelos).toBeUndefined();
+      for (const { itens } of [sessao, local]) {
+        expect(itens.get(PREFERENCIAS) ?? '').not.toContain(colada);
+      }
+    });
+
+    it('depois de um id inválido, o último id válido é o que acompanha a chave', async () => {
+      const { user, store } = await montar();
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      await user.type(campo, 'modelo-bom');
+      await user.type(campo, ' x');
+      expect(campo).toBeInvalid();
+      await user.type(campoChave('OpenAI'), CHAVE);
+      expect(store.listar()[0]?.modelo).toBe('modelo-bom');
+    });
+
+    it('a chave digitada DEPOIS de um id que a contém: o id deixa de valer e é esquecido', async () => {
+      const preferencias = criarPreferenciasStore(null, null);
+      const { user, store } = await montar({ preferencias });
+      await user.selectOptions(within(cartao('OpenAI')).getByLabelText('Modelo'), 'Outro modelo…');
+      const campo = within(cartao('OpenAI')).getByLabelText('Id do modelo');
+      await user.type(campo, CHAVE_LONGA);
+      expect(preferencias.atual().modelos).toEqual({ openai: CHAVE_LONGA });
+      await user.type(campoChave('OpenAI'), CHAVE_LONGA);
+      expect(campo).toBeInvalid();
+      expect(within(cartao('OpenAI')).getByText(/parece uma chave de API/)).toBeVisible();
+      expect(store.listar()[0]?.modelo).toBe(MODELOS.openai.padrao);
       expect(preferencias.atual().modelos).toBeUndefined();
     });
 

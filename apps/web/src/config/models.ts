@@ -83,6 +83,9 @@ const FORMATO_ID_MODELO = /^[A-Za-z0-9._:/-]+$/;
 /** Prefixos das chaves de API dos provedores: nenhum id de modelo começa assim. */
 const PARECE_CHAVE_DE_API = /^(sk-|AIza)/i;
 
+/** Só uma chave com este tamanho mínimo é procurada dentro do id digitado (a curta daria alarme falso). */
+export const CHAVE_MIN_PARA_CONFERIR = 20;
+
 export const MSG_ID_PARECE_CHAVE =
   'Isto parece uma chave de API, não um id de modelo. Cole a chave no campo “Chave de API” e escreva aqui só o nome do modelo.';
 
@@ -104,4 +107,14 @@ export function erroDoIdDeModelo(id: string): string | null {
     return 'O id do modelo só aceita letras, números e os símbolos . _ : / -. Remova os outros caracteres.';
   }
   return null;
+}
+
+/**
+ * Como `erroDoIdDeModelo`, e também recusa um id que contenha a chave de API digitada no mesmo
+ * cartão (quando ela tem pelo menos `CHAVE_MIN_PARA_CONFERIR` caracteres).
+ */
+export function erroDoIdDeModeloComChave(id: string, chave: string): string | null {
+  const trecho = chave.trim();
+  if (trecho.length >= CHAVE_MIN_PARA_CONFERIR && id.includes(trecho)) return MSG_ID_PARECE_CHAVE;
+  return erroDoIdDeModelo(id);
 }

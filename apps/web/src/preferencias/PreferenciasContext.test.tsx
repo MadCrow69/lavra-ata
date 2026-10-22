@@ -12,14 +12,14 @@ describe('PreferenciasContext', () => {
   it('usePreferencias lança erro claro fora do provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(() => renderHook(() => usePreferencias())).toThrow(
-      /precisa estar dentro de <PreferenciasProvider>/,
+      /^usePreferencias precisa estar dentro de <PreferenciasProvider>/,
     );
   });
 
   it('usePreferenciasStore também lança fora do provider (sem fallback silencioso)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     expect(() => renderHook(() => usePreferenciasStore())).toThrow(
-      /precisa estar dentro de <PreferenciasProvider>/,
+      /^usePreferenciasStore precisa estar dentro de <PreferenciasProvider>/,
     );
   });
 
