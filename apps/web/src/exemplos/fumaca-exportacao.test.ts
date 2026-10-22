@@ -9,17 +9,15 @@ import { gerarDocx } from '../export/docx/gerar-docx';
 import { caracteresSemFonte } from '../export/pdf/cobertura';
 import { gerarPdf } from '../export/pdf/gerar-pdf';
 import { xmlDoDocx } from '../test/docx-xml';
+import { espacos, vigiarAvisos } from '../test/pdfmake-node';
 import { TEMPO_VOLUME_MS } from '../test/tempos';
 import { carregarExemplo, rascunhoDoExemplo } from './carregar';
 
 /**
  * Fumaça do exemplo de cada tipo (spec 7.8): o que a pessoa vê ao clicar em "Ver exemplo" vira PDF
  * e DOCX sem aviso de caractere sem fonte e com os textos-chave. Tudo derivado do modelo; sem logo
- * (o Node não tem canvas). Só o aviso do pdfmake no Node é aceito (ver tipos-exportacao.test.ts).
+ * (o Node não tem canvas). Só o aviso do pdfmake no Node é aceito (`test/pdfmake-node.ts`).
  */
-const AVISO_ACESSO_LOCAL = 'No local access policy defined.';
-
-const espacos = (texto: string) => texto.replace(/\s+/g, ' ');
 const lerPdf = async (pdf: Blob) =>
   espacos((await extractText(new Uint8Array(await pdf.arrayBuffer()), { mergePages: true })).text);
 
@@ -33,10 +31,7 @@ describe.each(Object.keys(ATA_TYPES))('fumaça de exportação · exemplo %s', (
   const avisosInesperados: unknown[][] = [];
 
   beforeAll(async () => {
-    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
-      if (typeof args[0] === 'string' && args[0].startsWith(AVISO_ACESSO_LOCAL)) return;
-      avisosInesperados.push(args);
-    });
+    vigiarAvisos(avisosInesperados);
     const rascunho = rascunhoDoExemplo(await carregarExemplo(tipoId));
     modelo = construirDocumento(rascunho, tipo);
     const primeiraSecao = modelo.blocos.find((b) => b.tipo === 'secao' && b.gerada);

@@ -9,14 +9,13 @@ import {
 } from '../../config/documento';
 import type { DocBloco, DocumentModel } from '../../document/model';
 import { modeloDeVolume } from '../../test/documento-volume';
+import { espacos, vigiarAvisos } from '../../test/pdfmake-node';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
 import { caracteresSemFonte } from './cobertura';
 import { gerarPdf } from './gerar-pdf';
 
 /** Teto de tempo da geração de 200 participantes × 200 encaminhamentos (spec: volume). */
 const TEMPO_MAXIMO_VOLUME_MS = 15_000;
-
-const espacos = (texto: string) => texto.replace(/\s+/g, ' ');
 
 async function bytesDoPdf(modelo: DocumentModel): Promise<Uint8Array> {
   return new Uint8Array(await (await gerarPdf(modelo)).arrayBuffer());
@@ -31,9 +30,6 @@ async function paginas(bytes: Uint8Array): Promise<string[]> {
 const latin1 = (bytes: Uint8Array) => new TextDecoder('latin1').decode(bytes);
 
 const cp = (...pontos: number[]) => String.fromCodePoint(...pontos);
-
-/** Único aviso aceito: o pdfmake no Node pede política de acesso local (no navegador não há). */
-const AVISO_ACESSO_LOCAL = 'No local access policy defined.';
 
 /** Texto de IA/chat com o que as fontes não desenham ou o PDF descarta/troca. */
 const TEXTO_PROBLEMATICO = `Código D${cp(0x2011)}1 de ${cp(0x2068)}Nome Isolado${cp(0x2069)}, co${cp(0x00ad)}operação, Ж e ${cp(0x1f600)}.`;
@@ -87,13 +83,7 @@ let bytesLongas: Uint8Array;
 const avisosInesperados: unknown[][] = [];
 
 beforeAll(async () => {
-  // No Node, o pdfmake avisa que não há política de acesso a arquivos locais (no navegador o
-  // aviso não existe: ver `isServer` em pdfmake/src/base.js). Só ESSE aviso é aceito; qualquer
-  // outro fica registrado e reprova o teste "nenhum aviso inesperado".
-  vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
-    if (typeof args[0] === 'string' && args[0].startsWith(AVISO_ACESSO_LOCAL)) return;
-    avisosInesperados.push(args);
-  });
+  vigiarAvisos(avisosInesperados);
   const fetchEspiao = vi.spyOn(globalThis, 'fetch');
 
   simples = modeloDeVolume({ participantes: 3, encaminhamentos: 3 });

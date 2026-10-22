@@ -9,6 +9,7 @@ import type { AtaTypeDefinition } from '../ata-types/types';
 import type { DocumentModel } from '../document/model';
 import { modeloDeVolume, rascunhoDeVolume, type OpcoesVolume } from '../test/documento-volume';
 import { xmlDoDocx } from '../test/docx-xml';
+import { espacos, vigiarAvisos } from '../test/pdfmake-node';
 import { TEMPO_VOLUME_MS } from '../test/tempos';
 import { gerarDocx } from './docx/gerar-docx';
 import { larguraUtilDxa } from './docx/medidas-docx';
@@ -119,11 +120,6 @@ const CASOS: Caso[] = [
   },
 ];
 
-const espacos = (texto: string) => texto.replace(/\s+/g, ' ');
-
-/** Único aviso aceito: o pdfmake no Node pede política de acesso local (no navegador não há). */
-const AVISO_ACESSO_LOCAL = 'No local access policy defined.';
-
 const paragrafos = (xml: string) => [...xml.matchAll(/<w:p>.*?<\/w:p>/gs)].map((m) => m[0]);
 
 describe.each(CASOS)('exportação · $tipo.id com volume', (caso) => {
@@ -133,11 +129,7 @@ describe.each(CASOS)('exportação · $tipo.id com volume', (caso) => {
   const avisosInesperados: unknown[][] = [];
 
   beforeAll(async () => {
-    // Só o aviso do pdfmake no Node é aceito (ver gerar-pdf.test.ts); qualquer outro reprova.
-    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
-      if (typeof args[0] === 'string' && args[0].startsWith(AVISO_ACESSO_LOCAL)) return;
-      avisosInesperados.push(args);
-    });
+    vigiarAvisos(avisosInesperados);
     modelo = modeloDeVolume({
       participantes: caso.participantes ?? 12,
       encaminhamentos: 5,
@@ -204,10 +196,7 @@ describe('exportação · condominio com 200 condôminos assinando', () => {
   const avisosInesperados: unknown[][] = [];
 
   beforeAll(async () => {
-    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
-      if (typeof args[0] === 'string' && args[0].startsWith(AVISO_ACESSO_LOCAL)) return;
-      avisosInesperados.push(args);
-    });
+    vigiarAvisos(avisosInesperados);
     const modelo = modeloDeVolume(o);
     const inicio = performance.now();
     const pdf = new Uint8Array(await (await gerarPdf(modelo)).arrayBuffer());
