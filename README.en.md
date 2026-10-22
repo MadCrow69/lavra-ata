@@ -107,7 +107,7 @@ form (details, participants) ─────────────────
 - **No backend:** the site is static (GitHub Pages) and the only connections are the browser's to the three providers.
 - **CSP in a `<meta>` tag** (GitHub Pages does not allow custom headers), generated from a single source and checked at build time; the E2E tests run against the build with the CSP active and fail on any request to another host or any policy violation.
 - **Local export:** PDF and DOCX are assembled in the browser, from the same model as the sheet.
-- **Quality in CI:** formatting, lint, types, tests with coverage, build, dependency audit and E2E on every PR; CodeQL and OpenSSF Scorecard. As of 2026-10-22: 2,011 unit tests (Vitest) and 38 E2E tests (Playwright).
+- **Quality in CI:** formatting, lint, types, tests with coverage, build, dependency audit and E2E on every PR; CodeQL and OpenSSF Scorecard. As of 2026-10-22: 2,112 unit tests (Vitest) and 43 E2E tests (Playwright).
 
 ## Limitations
 
