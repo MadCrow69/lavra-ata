@@ -24,6 +24,7 @@ import {
 } from '../../preferencias/preferencias-store';
 import { storageFalso } from '../../test/storage-falso';
 import { ToastProvider } from '../../ui/Toast';
+import { AJUDA_LEMBRAR_NO_EXEMPLO, AJUDA_LEMBRAR_PREFERENCIAS } from '../form/LembrarPreferencias';
 import { Workbench } from '../workbench/Workbench';
 import { MOTIVO_EXEMPLO, MOTIVO_TIPO_NO_EXEMPLO } from './ModoExemplo';
 
@@ -494,6 +495,31 @@ describe('modo exemplo: sair', () => {
     expect(definir).not.toHaveBeenCalled();
   });
 
+  it('trocar o tom dentro do exemplo vale só para o exemplo: não grava preferências e, ao sair, volta o da pessoa', async () => {
+    simularLargura(true);
+    const preferencias = criarPreferenciasStore(null, null);
+    preferencias.definir({ tom: 'conciso' });
+    const definir = vi.spyOn(preferencias, 'definir');
+    const { user } = renderizar({ preferencias });
+    const tom = () => screen.getByLabelText(/^Tom da redação/);
+    await verExemplo(user, cipa.rotulo);
+
+    await user.selectOptions(tom(), 'detalhado');
+    expect(tom()).toHaveValue('detalhado');
+    expect(definir).not.toHaveBeenCalled();
+    expect(preferencias.atual().tom).toBe('conciso');
+
+    await user.click(within(bannerAtivo()).getByRole('button', { name: 'Começar a minha' }));
+    // O tom mudou: o exemplo não está mais intacto, então sair pergunta.
+    const dialogo = screen.getByRole('dialog', { name: 'Fechar o exemplo?' });
+    await user.click(within(dialogo).getByRole('button', { name: 'Apagar e começar a minha' }));
+    expect(tom()).toHaveValue('conciso');
+
+    // Fora do exemplo, trocar o tom volta a gravar a escolha da pessoa.
+    await user.selectOptions(tom(), 'formal');
+    expect(definir).toHaveBeenCalledWith({ tom: 'formal' });
+  });
+
   it('exemplo editado: "Começar a minha" pede confirmação; Cancelar mantém tudo; confirmar limpa', async () => {
     simularLargura(true);
     const { user } = renderizar();
@@ -571,11 +597,16 @@ describe('modo exemplo: sair', () => {
     preferencias.definir({ tipoId: 'corporativa', tom: 'conciso' });
     const definir = vi.spyOn(preferencias, 'definir');
     const { user } = renderizar({ preferencias, store: comChave() });
+    const caixa = () =>
+      screen.getByRole('checkbox', { name: 'Lembrar preferências neste navegador' });
+    expect(caixa()).toHaveAccessibleDescription(AJUDA_LEMBRAR_PREFERENCIAS);
     await verExemplo(user, cipa.rotulo);
-
-    await user.click(
-      screen.getByRole('checkbox', { name: 'Lembrar preferências neste navegador' }),
+    // A ajuda diz a exceção do exemplo antes do clique.
+    expect(caixa()).toHaveAccessibleDescription(
+      `${AJUDA_LEMBRAR_PREFERENCIAS} ${AJUDA_LEMBRAR_NO_EXEMPLO}`,
     );
+
+    await user.click(caixa());
 
     expect(definir).toHaveBeenCalledTimes(1);
     const gravado = definir.mock.calls[0]?.[0] ?? {};

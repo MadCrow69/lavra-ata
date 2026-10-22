@@ -10,6 +10,8 @@ import logo from './logo.module.css';
 
 export const AJUDA_LEMBRAR_PREFERENCIAS =
   'Guarda o tipo de ata, o tom, a cor de destaque e a ordem e os modelos dos provedores. Nunca a transcrição, os participantes, a ata ou as chaves de IA.';
+/** Ressalva do modo exemplo: tipo e tom ali são do exemplo, não escolhas da pessoa. */
+export const AJUDA_LEMBRAR_NO_EXEMPLO = 'No exemplo, o tipo e o tom do exemplo não são guardados.';
 export const AVISO_PREFERENCIAS_BLOQUEADAS =
   'Este navegador bloqueou o armazenamento; as preferências valem só nesta aba.';
 const TOAST_LEMBRADAS = 'Preferências lembradas neste navegador.';
@@ -80,7 +82,9 @@ export function LembrarPreferencias() {
         Lembrar preferências neste navegador
       </label>
       <p id={ajudaId} className={logo.ajuda}>
-        {AJUDA_LEMBRAR_PREFERENCIAS}
+        {noExemplo
+          ? `${AJUDA_LEMBRAR_PREFERENCIAS} ${AJUDA_LEMBRAR_NO_EXEMPLO}`
+          : AJUDA_LEMBRAR_PREFERENCIAS}
       </p>
       {lembrando ? (
         <div className={logo.linha}>

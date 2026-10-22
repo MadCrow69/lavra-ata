@@ -94,7 +94,9 @@ export function TipoBlock() {
                 const tom = TONS.find((t) => t === e.target.value);
                 if (!tom) return;
                 dispatch({ type: 'definirTom', tom });
-                preferencias.definir({ tom });
+                // No exemplo, o tom vale só para o exemplo: a preferência da pessoa fica como estava
+                // e volta ao sair dele.
+                if (!noExemplo) preferencias.definir({ tom });
               }}
             >
               {TONS.map((tom) => (
