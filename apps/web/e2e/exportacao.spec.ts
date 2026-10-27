@@ -8,6 +8,7 @@ import {
   colarParticipantes,
   comeca,
   configurarChaves,
+  enviarRevisao,
   expect,
   folha,
   gerarAta,
@@ -263,6 +264,7 @@ test.describe('exportação no build com CSP ativa', () => {
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
     await preencherReuniao(page);
     await page.getByRole('button', { name: /Gerar ata/ }).click();
+    await enviarRevisao(page);
 
     const barra = barraDeExportacao(page);
     for (const nome of ['Baixar PDF', 'Baixar DOCX', 'Copiar tarefas por responsável']) {

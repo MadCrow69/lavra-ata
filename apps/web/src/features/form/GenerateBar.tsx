@@ -87,8 +87,8 @@ export function GenerateBar({
   );
 
   /**
-   * Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta nem do
-   * modo exemplo (lá nada é enviado para IA).
+   * Porta única de toda chamada (Gerar, "Enviar" da revisão e "Tentar de novo"): nada sai com falta
+   * nem do modo exemplo (lá nada é enviado para IA).
    */
   const podeGerar = !noExemplo && faltas.length === 0 && operacao === null;
 

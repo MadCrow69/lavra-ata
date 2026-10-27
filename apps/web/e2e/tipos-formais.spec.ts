@@ -11,6 +11,7 @@ import {
   colarParticipantes,
   comeca,
   configurarChaves,
+  enviarRevisao,
   escolherTipo,
   ROTULOS_TIPO,
   expect,
@@ -148,6 +149,7 @@ test.describe('CIPA no build com CSP ativa', () => {
     });
     await expect(botaoGerar(page)).toBeEnabled();
     await botaoGerar(page).click();
+    await enviarRevisao(page);
     await expect(page.getByText(ABRIR_GERACAO)).toBeVisible({ timeout: FOLGA_FALLBACK_MS });
 
     const documento = folha(page);
@@ -245,6 +247,7 @@ test.describe('condomínio no build com CSP ativa', () => {
       'Joana Prado: Abrimos a assembleia. A síndica apresentou as contas.',
     );
     await botaoGerar(page).click();
+    await enviarRevisao(page);
     await expect(page.getByText(ABRIR_GERACAO)).toBeVisible({ timeout: FOLGA_FALLBACK_MS });
 
     const condominos = folha(page).getByRole('group', {
@@ -321,6 +324,7 @@ test.describe('sócios de Ltda no build com CSP ativa', () => {
       'Joana Prado: Abrimos a reunião. Marcos Ferraz propôs mudar o endereço da sede.',
     );
     await botaoGerar(page).click();
+    await enviarRevisao(page);
     await expect(page.getByText(ABRIR_GERACAO)).toBeVisible({ timeout: FOLGA_FALLBACK_MS });
 
     // Nenhuma participação vai para a IA (nem a soma).
@@ -458,6 +462,7 @@ test.describe('troca de tipo no build com CSP ativa', () => {
     await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
     await preencherReuniao(page);
     await botaoGerar(page).click();
+    await enviarRevisao(page);
 
     const grupo = page.getByRole('group', { name: 'Tipo de ata', exact: true });
     await expect(grupo.getByText(MOTIVO_IA_OCUPADA)).toBeVisible();

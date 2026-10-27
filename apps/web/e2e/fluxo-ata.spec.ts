@@ -5,10 +5,13 @@ import {
   CPF_SO_DIGITOS,
   FOLGA_FALLBACK_MS,
   TRANSCRICAO_BASICA,
+  campo,
   colarComoPessoa,
   colarParticipantes,
   conteudoDosStorages,
   configurarChaves,
+  dialogoRevisao,
+  enviarRevisao,
   errosInesperados,
   expect,
   folha,
@@ -56,6 +59,7 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
     await expect(gerar).toBeEnabled();
     await expect(page.getByText(/Envia para OpenAI · gpt-6-luna \(depois Gemini\)/)).toBeVisible();
     await gerar.click();
+    await enviarRevisao(page);
 
     // A OpenAI responde 429 duas vezes (tentativa + 1 retry após 2 s) e a cadeia cai no Gemini.
     await expect(page.getByText('Ata gerada por Gemini · gemini-3.8-flash')).toBeVisible({
@@ -179,6 +183,7 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
 
       // Gerar leva sozinho à aba Documento; a ata pronta também cabe na largura.
       await page.getByRole('button', { name: /Gerar ata/ }).click();
+      await enviarRevisao(page);
       await expect(page.getByRole('tab', { name: 'Documento' })).toHaveAttribute(
         'aria-selected',
         'true',
@@ -188,6 +193,55 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
       await expect(folha(page)).toContainText(CPF);
       await semRolagemHorizontal(page);
 
+      expect(rede.violacoes).toEqual([]);
+      expect(await violacoesDeCsp(page)).toEqual([]);
+      expect(rede.errosDePagina).toEqual([]);
+    });
+  });
+
+  test.describe('revisão antes do envio', () => {
+    // A OpenAI responde: o teste conta a chamada de geração que sai depois de "Enviar".
+    test.use({ cenario: { openai: 'ok' } });
+
+    test('mostra marcador e aviso sensível; Cancelar não chama, Enviar chama', async ({
+      app: page,
+      rede,
+    }) => {
+      await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
+      await preencherReuniao(page);
+      await campo(page, 'Transcrição da reunião').fill(
+        `${TRANSCRICAO_BASICA}\nJoana Prado: A Helena está afastada por depressão desde março.`,
+      );
+      const posts = () => rede.chamadas.filter((c) => c.metodo === 'POST');
+
+      await page.getByRole('button', { name: /Gerar ata/ }).click();
+      const dialogo = dialogoRevisao(page);
+      await expect(dialogo).toBeVisible();
+      await expect(dialogo).toContainText('Isto sai do seu navegador para OpenAI · gpt-6-luna');
+      const conteudo = dialogo.getByRole('region', { name: 'Conteúdo enviado à IA' });
+      await expect(conteudo.locator('mark', { hasText: MARCADOR_CPF }).first()).toBeVisible();
+      await expect(conteudo).not.toContainText(CPF);
+      const aviso = dialogo.getByRole('region', { name: /^Possível dado sensível \(saúde\)/ });
+      await expect(aviso).toContainText('afastada (saúde)');
+      await expect(aviso).toContainText('depressão (saúde)');
+      await expect(aviso).toContainText('Não são mascarados.');
+      // O termo sensível vai como está: só o aviso, nada de máscara.
+      await expect(conteudo).toContainText('afastada por depressão');
+
+      await dialogo.getByRole('button', { name: 'Cancelar' }).click();
+      await expect(dialogo).toBeHidden();
+      // Nada saiu: nenhuma chamada de geração chegou a um provedor.
+      expect(posts()).toEqual([]);
+
+      await page.getByRole('button', { name: /Gerar ata/ }).click();
+      await enviarRevisao(page);
+      await expect(page.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible({
+        timeout: FOLGA_FALLBACK_MS,
+      });
+      expect(posts()).toHaveLength(1);
+      expect(posts()[0]?.corpo).toContain(MARCADOR_CPF);
+      expect(posts()[0]?.corpo).not.toContain(CPF);
+      expect(posts()[0]?.corpo).toContain('afastada por depressão');
       expect(rede.violacoes).toEqual([]);
       expect(await violacoesDeCsp(page)).toEqual([]);
       expect(rede.errosDePagina).toEqual([]);
@@ -244,6 +298,7 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
 
     // A geração com esse volume termina (só há chave do Gemini: a cadeia vai direto a ele).
     await page.getByRole('button', { name: /Gerar ata/ }).click();
+    await enviarRevisao(page);
     await expect(page.getByText('Ata gerada por Gemini · gemini-3.8-flash')).toBeVisible({
       timeout: FOLGA_FALLBACK_MS,
     });
