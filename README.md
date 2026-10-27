@@ -12,7 +12,7 @@ Gerador de atas de reunião brasileiras a partir da transcrição, direto no nav
 
 1. Você informa a **sua chave de API** (OpenAI, Google Gemini ou Anthropic), preenche os dados da reunião e os participantes e cola a transcrição (ou envia o `.txt`/`.vtt`; o conteúdo de um `.vtt` colado no campo é convertido como o arquivo). Se a transcrição traz quem falou (falas "Nome: fala" ou as marcas `<v Nome>` do `.vtt`), o app sugere essas pessoas como participantes (nome todo em maiúsculas ou minúsculas entra com a caixa padrão: "MARIA DE ALMEIDA" vira "Maria de Almeida"; a transcrição não muda); com o `.vtt`, sugere também o término a partir do início e da duração da gravação. Nada entra sem o seu clique.
 2. O app **mascara os identificadores pessoais** (CPF, CNPJ, telefone, e-mail, cartão etc.) com [`@lavra/pii-br`](packages/pii-br/README.md) e mostra a comparação "Original" × "Enviado à IA". Se o texto livre tem termos de possível dado sensível (saúde, conflito trabalhista, filiação sindical, política ou religiosa, origem racial ou étnica, vida sexual, biometria), o selo da transcrição avisa; esses termos **não** são mascarados.
-3. "Gerar ata" abre a **revisão obrigatória** "Revise o que vai para a IA": o conteúdo exato que vai sair (dados da reunião, pauta, participantes e transcrição, já mascarados), para qual provedor e modelo, o aviso de termo sensível e as instruções fixas do Lavra. **Nada sai antes de "Enviar para a IA"**, e a revisão não pode ser desligada. A chamada vai **direto do navegador ao provedor**, sem passar por servidor do Lavra. Se um provedor falhar, o app tenta o próximo da sua lista de prioridade e registra a troca na seção (ex.: "Gerado por OpenAI · gpt-6-luna — Gemini falhou (limite de uso)"). A ordem padrão é Gemini → OpenAI → Anthropic (a maioria tem chave gratuita do Gemini); você a muda no modal de chaves, e a sua ordem vale.
+3. "Gerar ata" abre a **revisão obrigatória** "Revise o que vai para a IA": o conteúdo exato que vai sair (dados da reunião, pauta, participantes e transcrição, já mascarados), para qual provedor e modelo, o aviso de termo sensível e as instruções fixas do Lavra. **Nada sai antes de "Enviar para a IA"** (ou "Enviar e substituir a ata"), e a revisão não pode ser desligada. Regerar ou ajustar uma seção passa pela mesma revisão, com o pedido da seção, quando os dados da reunião, a pauta, os participantes ou a transcrição mudaram desde a última revisão autorizada nesta aba (ou quando nada foi revisado nela ainda). A chamada vai **direto do navegador ao provedor**, sem passar por servidor do Lavra. Se um provedor falhar, o app tenta o próximo da sua lista de prioridade e registra a troca na seção (ex.: "Gerado por OpenAI · gpt-6-luna — Gemini falhou (limite de uso)"). A ordem padrão é Gemini → OpenAI → Anthropic (a maioria tem chave gratuita do Gemini); você a muda no modal de chaves, e a sua ordem vale.
 4. A IA devolve JSON validado por schema; o app põe os dados originais de volta **neste navegador** e monta a ata em uma folha A4, em texto puro (nunca HTML vindo da IA). Você revisa seção por seção: edita à mão, regera ou ajusta com uma instrução.
 5. Com a ata revisada, você **baixa em PDF ou DOCX** (com a sua logo no cabeçalho, se quiser) ou copia as tarefas agrupadas por responsável.
 
@@ -32,14 +32,14 @@ Pontos de projeto:
 
 Você não precisa confiar no texto acima: dá para conferir no próprio navegador. O app tem esta mesma página no botão "Privacidade: como verificar", no cabeçalho.
 
-**O que sai do navegador.** Somente as chamadas aos provedores de IA que você cadastrou, na ordem da sua lista, com a transcrição já mascarada e só depois de você revisar o conteúdo e clicar em "Enviar para a IA". Nenhum servidor do Lavra recebe nada. Os únicos endereços permitidos são `api.openai.com`, `generativelanguage.googleapis.com` e `api.anthropic.com`.
+**O que sai do navegador.** Somente as chamadas aos provedores de IA que você cadastrou, na ordem da sua lista, com a transcrição já mascarada e só depois de você revisar o conteúdo e clicar em "Enviar para a IA" (ou "Enviar e substituir a ata"). A única exceção é regerar ou ajustar uma seção quando os dados da reunião, a pauta, os participantes e a transcrição são os mesmos da última revisão autorizada nesta aba e a fila não ganhou provedor nem modelo: aí o pedido sai direto, com esse mesmo conteúdo mais o texto atual da seção e a instrução que você digitou, que estão à vista na seção. "Cancelar" numa revisão desfaz essa autorização. Nenhum servidor do Lavra recebe nada. Os únicos endereços permitidos são `api.openai.com`, `generativelanguage.googleapis.com` e `api.anthropic.com`.
 
 **Confira na aba Rede.**
 
 1. Abra as ferramentas do desenvolvedor: <kbd>F12</kbd> ou <kbd>Ctrl+Shift+I</kbd> (no Mac, <kbd>Cmd+Option+I</kbd>).
 2. Vá à aba Rede (Network) e recarregue a página.
 3. Filtre por Fetch/XHR.
-4. Gere uma ata (revise e clique em "Enviar para a IA"): só aparecem chamadas a `api.openai.com`, `generativelanguage.googleapis.com` ou `api.anthropic.com`, na ordem da sua lista.
+4. Gere uma ata (revise e clique em "Enviar para a IA" ou "Enviar e substituir a ata"): só aparecem chamadas a `api.openai.com`, `generativelanguage.googleapis.com` ou `api.anthropic.com`, na ordem da sua lista.
 5. Abra a chamada e veja o conteúdo enviado (Payload): no lugar de CPF, telefone e e-mail aparecem marcadores como `[CPF_1]`.
 
 **Confira a política de segurança (CSP).** Na aba Elementos, dentro de `<head>`, a tag `<meta http-equiv="Content-Security-Policy">` lista os destinos permitidos em `connect-src`; o próprio navegador bloqueia qualquer outro. A política tem `script-src 'self'` e `style-src 'self'`, sem `unsafe-inline` nem `unsafe-eval`; ela vem de uma definição única, e o build confere o HTML gerado contra essa definição e falha se não bater.
@@ -55,7 +55,7 @@ Você não precisa confiar no texto acima: dá para conferir no próprio navegad
 
 - Nomes de pessoas não são mascarados — a ata precisa deles.
 - Informação sensível escrita em linguagem natural (um diagnóstico, um endereço, uma opinião) vai como está. O app avisa quando acha termos de uma lista (saúde, conflito trabalhista, filiação sindical, política ou religiosa, origem racial ou étnica, vida sexual, biometria), mas é um aviso por lista de palavras, não uma proteção: o que for dito de outro jeito passa sem aviso.
-- Regerar ou ajustar uma seção não abre a revisão: reenvia a transcrição já revisada (mascarada), o texto atual da seção e a instrução que você digitar (também mascarados).
+- Regerar ou ajustar uma seção só abre a revisão se o conteúdo-base (dados da reunião, pauta, participantes e transcrição, mascarados) mudou desde a última revisão autorizada nesta aba. Sem mudança, o pedido sai direto com esse conteúdo, o texto atual da seção e a instrução que você digitar (também mascarados). A autorização fica só na memória da aba: recarregar a página ou recuperar um rascunho começa sem ela.
 - O que é enviado fica sob os termos do provedor que você escolheu.
 - Uma extensão do navegador com acesso à página pode ler a chave e o texto (veja o [modelo de ameaças](SECURITY.md)).
 - O modo exemplo não envia nada para IA: o exemplo já vem pronto no site. Só o "Testar" do modal de chaves, se você clicar nele, fala com o provedor, para conferir a sua chave, sem nada do exemplo.
@@ -103,11 +103,11 @@ formulário (dados, participantes) ───────────────
           pii-br: confere a saída e devolve os originais ──► modelo da ata ──► folha / PDF / DOCX
 ```
 
-- **Revisão = envio:** o pedido mostrado em "Revise o que vai para a IA" é montado pela mesma função que o envia (`prepararEnvioDaAta`, em `apps/web/src/generation/pipeline.ts`): o que você revisa é, byte a byte, o que sai.
+- **Revisão = envio:** o pedido mostrado em "Revise o que vai para a IA" é montado pela mesma função que o envia (`prepararEnvioDaAta` e `prepararEnvioDaSecao`, em `apps/web/src/generation/pipeline.ts`): o conteúdo que você revisa (instruções e dados da reunião) é, byte a byte, o que sai; o pedido leva junto só o formato de resposta esperado (schema) e os parâmetros do modelo, sem dado da reunião.
 - **Sem backend:** o site é estático (GitHub Pages) e as únicas conexões são as do navegador aos três provedores.
 - **CSP em `<meta>`** (o GitHub Pages não permite cabeçalhos próprios), gerada de uma fonte única e conferida no build; o E2E roda contra o build com a CSP ativa e reprova qualquer requisição a outro host ou violação da política.
 - **Exportação local:** PDF e DOCX são montados no navegador, a partir do mesmo modelo da folha.
-- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 22/10/2026: 2.182 testes unitários (Vitest) e 44 testes E2E (Playwright).
+- **Qualidade no CI:** formatação, lint, tipos, testes com cobertura, build, auditoria de dependências e E2E em todo PR; CodeQL e OpenSSF Scorecard. Em 27/10/2026: 2.274 testes unitários (Vitest, todos os pacotes) e 45 testes E2E (Playwright).
 
 ## Limitações
 
