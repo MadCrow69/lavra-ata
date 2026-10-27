@@ -69,8 +69,14 @@ export function ComoVerificarModal({
           <h3>O que sai do navegador</h3>
           <p>
             Somente as chamadas aos provedores de IA que você cadastrou, na ordem da sua lista, com
-            a transcrição já mascarada. Nenhum servidor do Lavra recebe nada. Os únicos endereços
-            permitidos são:
+            a transcrição já mascarada e só depois de você revisar o conteúdo e clicar em “Enviar
+            para a IA” (ou “Enviar e substituir a ata”). A única exceção é regerar ou ajustar uma
+            seção quando os dados da reunião, a pauta, os participantes e a transcrição são os
+            mesmos da última revisão autorizada nesta aba e a fila não ganhou provedor nem modelo:
+            aí o pedido sai direto, com esse mesmo conteúdo mais o texto atual da seção e a
+            instrução que você digitou, que estão à vista na seção. “Cancelar” numa revisão desfaz
+            essa autorização. Nenhum servidor do Lavra recebe nada. Os únicos endereços permitidos
+            são:
           </p>
           <ul>
             {HOSTS.map((host) => (
@@ -91,7 +97,8 @@ export function ComoVerificarModal({
             <li>Vá à aba Rede (Network) e recarregue a página.</li>
             <li>Filtre por Fetch/XHR.</li>
             <li>
-              Gere uma ata: só aparecem chamadas a <HostsUnidos />, na ordem da sua lista.
+              Gere uma ata (revise e clique em “Enviar para a IA” ou “Enviar e substituir a ata”):
+              só aparecem chamadas a <HostsUnidos />, na ordem da sua lista.
             </li>
             <li>
               Abra a chamada e veja o conteúdo enviado (Payload): no lugar de CPF, telefone e e-mail
@@ -157,7 +164,17 @@ export function ComoVerificarModal({
             <li>Nomes de pessoas não são mascarados — a ata precisa deles.</li>
             <li>
               Informação sensível escrita em linguagem natural (um diagnóstico, um endereço, uma
-              opinião) vai como está.
+              opinião) vai como está. O app avisa quando acha termos de uma lista (saúde, conflito
+              trabalhista, filiação sindical, política ou religiosa, origem racial ou étnica, vida
+              sexual, biometria), mas é um aviso por lista de palavras, não uma proteção: o que for
+              dito de outro jeito passa sem aviso.
+            </li>
+            <li>
+              Regerar ou ajustar uma seção só abre a revisão se o conteúdo-base (dados da reunião,
+              pauta, participantes e transcrição, mascarados) mudou desde a última revisão
+              autorizada nesta aba. Sem mudança, o pedido sai direto com esse conteúdo, o texto
+              atual da seção e a instrução que você digitar (também mascarados). A autorização fica
+              só na memória da aba: recarregar a página ou recuperar um rascunho começa sem ela.
             </li>
             <li>O que é enviado fica sob os termos do provedor que você escolheu.</li>
             <li>Uma extensão do navegador com acesso à página pode ler a chave e o texto.</li>

@@ -10,7 +10,13 @@ import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } fro
 import type { AtaDraft, Bloco, Encaminhamento, Participante, ResultadoAta } from '../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../domain/draft-reducer';
 import { normalizarResultado } from './normalize';
-import { gerarAta, regerarSecao } from './pipeline';
+import {
+  gerarAta,
+  prepararEnvioDaAta,
+  previaDoEnvio,
+  previaDoEnvioSecao,
+  regerarSecao,
+} from './pipeline';
 
 const CPF = '529.982.247-25';
 const CPF_2 = '111.444.777-35';
@@ -266,6 +272,65 @@ describe('gerarAta', () => {
   });
 });
 
+describe('previaDoEnvio (revisão antes do envio)', () => {
+  it('o que a revisão mostra é byte a byte o que o adaptador recebe', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaAta({ resumo: [par('Ok.')] })),
+    });
+    const d = rascunho({
+      pauta: [`Cadastro do CPF ${CPF_2}`],
+      participantes: [{ ...ANA, papel: `Contato ${TELEFONE}` }],
+    });
+    const previa = previaDoEnvio(d, corporativa);
+    await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]?.usuario).toBe(previa.usuario);
+    expect(pedidos[0]?.sistema).toBe(previa.sistema);
+    expect(previa.usuario).toContain('[CPF_1]');
+    expect(previa.usuario).not.toContain(CPF);
+  });
+
+  it('com mapa anterior e colisão, a prévia continua igual ao pedido e lista a colisão', async () => {
+    const anterior = mask(`CPF ${CPF_2}`, { map: createMaskMap() }).map;
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaAta({ resumo: [par('Ok.')] })),
+    });
+    const d = rascunho({
+      mapa: anterior,
+      transcricao: `Ana: o campo aparecia como [CPF_1]; o novo é ${CPF}.`,
+    });
+    const previa = previaDoEnvio(d, corporativa);
+    expect(previa.colisoes).toEqual(['[CPF_1]']);
+    await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(pedidos[0]?.usuario).toBe(previa.usuario);
+  });
+
+  it('não altera o rascunho e é determinística', () => {
+    const d = rascunho();
+    const antes = structuredClone(d);
+    const a = previaDoEnvio(d, corporativa);
+    const b = previaDoEnvio(d, corporativa);
+    expect(a).toEqual(b);
+    expect(d).toEqual(antes);
+  });
+
+  it('prepararEnvioDaAta devolve o mapa usado no pedido', () => {
+    const { prompt, mapa } = prepararEnvioDaAta(rascunho(), corporativa);
+    expect(mapa.markers['[CPF_1]']).toBe(CPF);
+    expect(prompt.usuario).toContain('[CPF_1]');
+  });
+
+  it('LIMITE: dado sensível em linguagem natural segue sem máscara (só há aviso na revisão)', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaAta({ resumo: [par('Ok.')] })),
+    });
+    const fala = 'Joana está afastada por depressão desde março e entrou com processo trabalhista.';
+    const d = rascunho({ transcricao: `Ana: ${fala}` });
+    await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(pedidos[0]?.usuario).toContain(fala);
+  });
+});
+
 function comResultado(d: AtaDraft, resultado: Partial<ResultadoAta>, mapa = d.mapa): AtaDraft {
   return {
     ...d,
@@ -280,6 +345,44 @@ function comResultado(d: AtaDraft, resultado: Partial<ResultadoAta>, mapa = d.ma
     },
   };
 }
+
+describe('previaDoEnvioSecao e a base autorizada', () => {
+  it('o que a revisão da seção mostra é byte a byte o que o adaptador recebe', async () => {
+    const base = rascunho();
+    const mapa = mask(base.transcricao, { map: createMaskMap() }).map;
+    const d = comResultado(base, { secoes: { decisoes: [par(`Reembolso ao CPF ${CPF}.`)] } }, mapa);
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve({ blocos: [par('Ok.')] }),
+    });
+    const previa = previaDoEnvioSecao(d, corporativa, 'decisoes', `Cite o CPF ${CPF_2}`);
+    await regerarSecao(d, corporativa, 'decisoes', `Cite o CPF ${CPF_2}`, CADEIA, sinal(), opcoes);
+    expect(pedidos[0]?.usuario).toBe(previa.usuario);
+    expect(pedidos[0]?.sistema).toBe(previa.sistema);
+    expect(previa.usuario).toContain('Cite o CPF [CPF_2]');
+  });
+
+  it('a base da seção é a mesma da ata inteira (texto da seção e instrução fora dela)', () => {
+    const d = comResultado(rascunho(), { secoes: { resumo: [par('Texto da seção.')] } });
+    const daAta = previaDoEnvio(d, corporativa).base;
+    expect(previaDoEnvioSecao(d, corporativa, 'resumo', 'Mais curto').base).toBe(daAta);
+    expect(previaDoEnvio(d, corporativa).usuario).toBe(daAta);
+    const outra = { ...d, transcricao: `${d.transcricao} Fala nova.` };
+    expect(previaDoEnvioSecao(outra, corporativa, 'resumo', null).base).not.toBe(daAta);
+  });
+
+  it('destaca só marcadores de dado real; o exemplo fixo do cabeçalho fica de fora', () => {
+    const comCpf = previaDoEnvio(rascunho(), corporativa);
+    const destacados = comCpf.marcadores.map((m) => comCpf.usuario.slice(m.start, m.end));
+    expect(destacados).toEqual(['[CPF_1]']);
+    // O único destacado está dentro de <transcricao>, não no cabeçalho.
+    const inicio = comCpf.usuario.indexOf('<transcricao>');
+    expect(comCpf.marcadores[0]?.start).toBeGreaterThan(inicio);
+
+    const semCpf = previaDoEnvio(rascunho({ transcricao: 'Ana: nada a mascarar.' }), corporativa);
+    expect(semCpf.usuario).toContain('marcadores como [CPF_1]');
+    expect(semCpf.marcadores).toEqual([]);
+  });
+});
 
 describe('regerarSecao', () => {
   it('mascara o texto atual (já desmascarado) e a instrução com o mesmo mapa', async () => {

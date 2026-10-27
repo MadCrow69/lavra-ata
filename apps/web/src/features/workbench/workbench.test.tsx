@@ -20,6 +20,7 @@ import {
   criarPreferenciasStore,
   type PreferenciasStore,
 } from '../../preferencias/preferencias-store';
+import { gerarEEnviar } from '../../test/revisao-envio';
 import { storageFalso } from '../../test/storage-falso';
 import { registrarTipoDeTeste } from '../../test/tipo-de-teste';
 import { ToastProvider } from '../../ui/Toast';
@@ -196,7 +197,7 @@ describe('Workbench: fluxo de ponta a ponta', () => {
     expect(screen.queryAllByRole('dialog', { hidden: true })).toHaveLength(0);
 
     rolar.mockClear();
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
 
     expect(await within(folha()).findByText(`Reembolso a ${CPF}.`)).toBeVisible();
     expect(screen.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
@@ -374,7 +375,7 @@ describe('Workbench: logo', () => {
       logo: { processar: () => Promise.resolve(LOGO_FICTICIA) },
     });
     await enviarLogo(user);
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     expect(await within(folha()).findByText(`Reembolso a ${CPF}.`)).toBeVisible();
 
     const [, pedido] = gerar.mock.calls[0] ?? [];
@@ -472,7 +473,7 @@ describe('Workbench: Nova ata', () => {
       },
     });
 
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     expect(screen.getByRole('progressbar', { name: 'Gerando a ata' })).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Nova ata' }));
@@ -504,7 +505,7 @@ describe('Workbench: conta sem saldo', () => {
       store: comChave(),
       gerar: () => Promise.reject(erroSemCredito('openai', 429)),
     });
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     await waitFor(() => {
       expect(store.cadeia()).toEqual([]);
     });
@@ -523,7 +524,7 @@ describe('Workbench: estados depois de gerar', () => {
     const { user } = renderizar({ store: comChave() });
     expect(screen.getByRole('tab', { name: 'Editar' })).toHaveAttribute('aria-selected', 'true');
 
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
 
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(screen.getByRole('tab', { name: 'Documento' })).toHaveAttribute('aria-selected', 'true');
@@ -547,7 +548,7 @@ describe('Workbench: estados depois de gerar', () => {
         });
       },
     });
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     await user.click(screen.getByRole('tab', { name: 'Documento' }));
 
     const painel = screen.getByRole('tabpanel', { name: 'Documento' });
@@ -574,7 +575,7 @@ describe('Workbench: estados depois de gerar', () => {
           });
         }),
     });
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     await user.click(screen.getByRole('tab', { name: 'Documento' }));
     const painel = screen.getByRole('tabpanel', { name: 'Documento' });
     await user.click(within(painel).getByRole('button', { name: 'Cancelar geração da ata' }));
@@ -601,7 +602,7 @@ describe('Workbench: estados depois de gerar', () => {
           };
         }),
     });
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     await user.click(screen.getByRole('tab', { name: 'Documento' }));
     await act(async () => {
       falhar();
@@ -615,7 +616,7 @@ describe('Workbench: estados depois de gerar', () => {
     simularLargura(true);
     salvarRascunho(completo());
     const { user } = renderizar({ store: comChave(), gerar: () => new Promise(() => undefined) });
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     expect(screen.getAllByRole('progressbar', { name: 'Gerando a ata' })).toHaveLength(1);
   });
 
@@ -695,8 +696,7 @@ describe('Workbench: estados depois de gerar', () => {
     await user.click(screen.getByRole('button', { name: 'Editar seção Resumo' }));
     expect(screen.getByLabelText('Texto da seção Resumo')).toHaveValue('Texto antigo.');
 
-    await user.click(botaoGerar());
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
     await act(async () => {
       entregar(resposta('Texto novo da IA.'));
       await Promise.resolve();
@@ -753,7 +753,7 @@ describe('Workbench: acessibilidade', () => {
       store: comChave(),
       gerar: () => Promise.reject(erroProvedor('inesperado', 'openai', { status: 418 })),
     });
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     expect(await screen.findByRole('alert')).toHaveTextContent('A ata não foi alterada.');
     expect(screen.queryByText(/Ata gerada por/)).not.toBeInTheDocument();
   });
@@ -869,7 +869,7 @@ describe('Workbench: troca de tipo de ata', () => {
         }),
     });
     await user.click(screen.getByRole('button', { name: 'Fechar aviso de rascunho recuperado' }));
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     expect(screen.getByRole('progressbar', { name: 'Gerando a ata' })).toBeVisible();
 
     expect(radioTeste()).toBeDisabled();

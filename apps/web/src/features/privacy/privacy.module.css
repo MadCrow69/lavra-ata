@@ -9,79 +9,27 @@
   background: var(--cor-fundo);
 }
 
-.selo {
+.selos {
+  display: flex;
   flex: 1 1 16rem;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.selo {
   margin: 0;
   font-weight: 600;
 }
 
-.comparativo {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espaco-4);
-}
-
-.aviso {
+.seloSensivel {
   margin: 0;
-  padding: var(--espaco-2) var(--espaco-3);
-  border-left: 4px solid var(--cor-primaria);
-  background: var(--cor-fundo);
-  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--cor-destaque-texto);
 }
 
-/* Telas estreitas: as colunas empilham; a partir de 1024 px ficam lado a lado. */
-.colunas {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--espaco-4);
-}
-
-@media (min-width: 64rem) {
-  .colunas {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.coluna {
-  display: flex;
-  flex-direction: column;
-  gap: var(--espaco-2);
-  min-width: 0;
-}
-
-.colunaTitulo {
+/* Enquanto o comparativo ou a revisão carregam (chunk sob demanda). */
+.carregando {
   margin: 0;
-  font-family: var(--fonte-interface);
-  font-size: 1rem;
-}
-
-.texto {
-  max-height: 50vh;
-  padding: var(--espaco-3);
-  overflow: auto;
-  border: 1px solid var(--cor-borda-forte);
-  border-radius: var(--raio);
-  background: var(--cor-superficie);
   font-size: 0.9375rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* Marcador que a IA recebe: fundo + negrito (não só cor). */
-.marca {
-  padding: 0 var(--espaco-1);
-  border-radius: 4px;
-  background: var(--cor-destaque-fundo);
-  color: var(--cor-sobre-destaque);
-  font-weight: 700;
-}
-
-/* Valor original que será trocado: fundo neutro com sublinhado de erro. */
-.marcaOriginal {
-  background: transparent;
-  color: inherit;
-  text-decoration: underline wavy var(--cor-erro);
-  text-underline-offset: 3px;
-  font-weight: 700;
+  color: var(--cor-texto-suave);
 }

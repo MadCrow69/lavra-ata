@@ -79,9 +79,14 @@ test.describe('dados tirados da transcrição', () => {
       ),
     ).toBeVisible();
 
-    // Nenhuma chamada a provedor e nenhum arquivo novo do app: tudo foi local.
+    // Nenhuma chamada a provedor e nenhum arquivo novo do app além do detector de termos
+    // sensíveis (sob demanda, mesma origem, carregado quando a transcrição tem texto): tudo local.
     expect(rede.chamadas).toEqual([]);
-    expect(rede.arquivosDoApp.slice(arquivosAntes)).toEqual([]);
+    expect(
+      rede.arquivosDoApp
+        .slice(arquivosAntes)
+        .filter((caminho) => !/\/assets\/termos-sensiveis-[^/]+\.js$/.test(caminho)),
+    ).toEqual([]);
     await afirmarLimpo(page, rede);
   });
 

@@ -138,8 +138,29 @@ function dadosDaReuniao(tipo: AtaTypeDefinition, d: AtaDraft): string {
   ].join('\n\n');
 }
 
-function blocoDeTranscricao(transcricaoMascarada: string): string {
-  return `Transcrição (dados pessoais trocados por marcadores como [CPF_1]):\n<transcricao>\n${transcricaoMascarada}\n</transcricao>`;
+/**
+ * Cabeçalho fixo do bloco da transcrição. O `[CPF_1]` dele é um EXEMPLO de marcador para a IA, não
+ * um dado: a revisão não o destaca.
+ */
+export const CABECALHO_TRANSCRICAO =
+  'Transcrição (dados pessoais trocados por marcadores como [CPF_1]):';
+
+/** Bloco da transcrição: sempre o ÚLTIMO do `usuario` (a revisão localiza o cabeçalho por isso). */
+export function blocoDeTranscricao(transcricaoMascarada: string): string {
+  return `${CABECALHO_TRANSCRICAO}\n<transcricao>\n${transcricaoMascarada}\n</transcricao>`;
+}
+
+/**
+ * Conteúdo-base de todo pedido: dados da reunião, pauta, participantes e transcrição (de `d` já
+ * mascarado). É o `usuario` da ata inteira e o que a revisão autoriza; o pedido de uma seção leva
+ * o mesmo conteúdo mais o texto atual da seção e a instrução.
+ */
+export function conteudoBase(
+  tipo: AtaTypeDefinition,
+  d: AtaDraft,
+  transcricaoMascarada: string,
+): string {
+  return [dadosDaReuniao(tipo, d), blocoDeTranscricao(transcricaoMascarada)].join('\n\n');
 }
 
 /** Prompt da ata inteira: todas as seções do tipo e os encaminhamentos. */
@@ -158,8 +179,7 @@ export function montarPrompt(
       (tipo.temEncaminhamentos ? ' e "encaminhamentos".' : '.'),
   ].join('\n\n');
 
-  const usuario = [dadosDaReuniao(tipo, d), blocoDeTranscricao(transcricaoMascarada)].join('\n\n');
-  return { sistema, usuario };
+  return { sistema, usuario: conteudoBase(tipo, d, transcricaoMascarada) };
 }
 
 /** Prompt para reescrever uma só seção (ou só os encaminhamentos), com instrução opcional. */

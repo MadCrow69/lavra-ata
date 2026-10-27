@@ -60,6 +60,16 @@ describe('Privacidade: como verificar (modal)', () => {
     expect(botao).toHaveFocus();
   });
 
+  it('diz que nada sai antes da revisão e do clique em “Enviar para a IA”', () => {
+    renderizarModal();
+    expect(
+      secaoDe('O que sai do navegador').getByText(/só depois de você revisar o conteúdo/),
+    ).toHaveTextContent('clicar em “Enviar para a IA”');
+    expect(secaoDe('Confira na aba Rede').getByRole('list')).toHaveTextContent(
+      'Gere uma ata (revise e clique em “Enviar para a IA” ou “Enviar e substituir a ata”)',
+    );
+  });
+
   it('lista o host de cada provedor permitido, vindo de ORIGEM_PROVEDOR', () => {
     renderizarModal();
     const hosts = Object.values(ORIGEM_PROVEDOR).map((o) => new URL(o).host);
@@ -153,6 +163,16 @@ describe('Privacidade: como verificar (modal)', () => {
       screen.getByText(/Informação sensível escrita em linguagem natural/),
     ).toBeInTheDocument();
     expect(screen.getByText(/sob os termos do provedor que você escolheu/)).toBeInTheDocument();
+    // O aviso de termo sensível não é vendido como proteção.
+    expect(
+      screen.getByText(/é um aviso por lista de palavras, não uma proteção/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Regerar ou ajustar uma seção só abre a revisão se o conteúdo-base/),
+    ).toBeInTheDocument();
+    expect(
+      secaoDe('O que sai do navegador').getByText(/A única exceção é regerar ou ajustar uma seção/),
+    ).toHaveTextContent('“Cancelar” numa revisão desfaz essa autorização.');
     expect(
       screen.getByText(
         'O modo exemplo não envia nada para IA: o exemplo já vem pronto no site. Só o “Testar” do modal de chaves, se você clicar nele, fala com o provedor, para conferir a sua chave, sem nada do exemplo.',

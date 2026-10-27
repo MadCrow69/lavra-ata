@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { erroProvedor } from '../../ai/errors';
 import { criarKeyStore, type ChaveProvedor } from '../../ai/keys';
@@ -12,8 +13,11 @@ import { GenerateBar } from '../form/GenerateBar';
 import { A4Preview } from './A4Preview';
 import { ModoExemploDeTeste } from '../../test/modo-exemplo';
 import { renderizarComProvedores } from '../../test/provedores';
+import { AutorizacaoDaSessao } from '../../test/autorizacao-da-sessao';
+import { dialogoRevisao, gerarEEnviar } from '../../test/revisao-envio';
 import { MOTIVO_EXEMPLO } from '../exemplo/ModoExemplo';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
+import { TEXTO_MOTIVO_REVISAO } from '../../generation/autorizacao';
 
 const CPF_NA_TRANSCRICAO = '529.982.247-25';
 const CPF_INVENTADO = '111.444.777-35';
@@ -146,6 +150,13 @@ interface Opcoes {
   comEdicaoPorFora?: boolean;
   /** Dentro do modo exemplo: ligado desde o início ou ligado depois pelo teste. */
   exemplo?: 'ligado' | 'depois';
+  /**
+   * A ata inicial já foi revisada e enviada nesta sessão (padrão): as ações de seção saem direto
+   * enquanto o conteúdo-base não mudar. `false` = sessão sem revisão (rascunho recuperado).
+   */
+  revisado?: boolean;
+  /** Elementos de apoio do teste, renderizados depois da folha. */
+  extra?: ReactNode;
 }
 
 function renderizar({
@@ -156,6 +167,8 @@ function renderizar({
   comBarra,
   comEdicaoPorFora,
   exemplo,
+  revisado = true,
+  extra,
 }: Opcoes = {}) {
   const store = criarKeyStore(null);
   for (const c of chaves) store.definir(c);
@@ -164,9 +177,11 @@ function renderizar({
   const opcoesCadeia = { adaptadores: a, esperaRetryMs: 0 };
   const conteudo = (
     <>
+      {revisado ? <AutorizacaoDaSessao /> : null}
       {comBarra ? <GenerateBar onConfigurarChaves={vi.fn()} opcoesCadeia={opcoesCadeia} /> : null}
       <A4Preview opcoesCadeia={opcoesCadeia} />
       {comEdicaoPorFora ? <EdicaoPorFora /> : null}
+      {extra}
       <Espiao />
     </>
   );
@@ -716,8 +731,7 @@ describe('revisão por seção: uma operação de IA por vez', () => {
   it('enquanto a ata inteira é gerada, as ações de IA das seções ficam paradas com motivo', async () => {
     const espera = pendente();
     const { user } = renderizar({ impl: { gemini: espera.gerar }, comBarra: true });
-    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
 
     const s = secao('Resumo');
     expect(within(s).getByRole('button', { name: 'Regerar seção Resumo' })).toBeDisabled();
@@ -988,8 +1002,7 @@ describe('revisão por seção: ajustes finos', () => {
       within(s).getByRole('textbox', { name: 'Texto da seção Resumo' }),
       ' Mais um trecho.',
     );
-    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
 
     const editor = within(s).getByRole('group', { name: 'Editar seção Resumo' });
     expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeDisabled();
@@ -1011,8 +1024,7 @@ describe('revisão por seção: ajustes finos', () => {
     const { user } = renderizar({ impl: { gemini: espera.gerar }, comBarra: true });
     const s = secao('Encaminhamentos');
     await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
-    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
     const editor = within(s).getByRole('group', { name: 'Editar seção Encaminhamentos' });
     expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeDisabled();
     expect(within(editor).getByText(MOTIVO_OCUPADA)).toBeVisible();
@@ -1078,5 +1090,142 @@ describe('revisão por seção: ajustes finos', () => {
     expect(await within(s).findByRole('alert')).toBeVisible();
     await user.click(within(s).getByRole('button', { name: 'Editar seção Resumo' }));
     expect(within(s).queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+/** Resposta da ata inteira (corporativa), com o resumo preenchido. */
+function respostaAtaInteira() {
+  return {
+    secoes: {
+      resumo: [{ tipo: 'paragrafo', texto: 'Resumo da ata inteira.', itens: [] }],
+      discussao: [{ tipo: 'paragrafo', texto: 'Discussão.', itens: [] }],
+      decisoes: [],
+      pendencias: [],
+      riscos: [],
+      proxima_reuniao: [],
+    },
+    encaminhamentos: [],
+  };
+}
+
+/** Troca a transcrição por fora (como a pessoa faria no bloco Transcrição, depois da revisão). */
+function TrocarTranscricao({ texto }: { texto: string }) {
+  const { dispatch } = useDraft();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        dispatch({ type: 'definirTranscricao', texto });
+      }}
+    >
+      Trocar a transcrição
+    </button>
+  );
+}
+
+describe('revisão por seção: revisão antes do envio', () => {
+  const NOVA = 'Ana: a Joana está afastada por depressão desde março.';
+
+  it('com o conteúdo-base já revisado nesta sessão, regerar sai direto (sem diálogo)', async () => {
+    const { user, gerar } = renderizar({
+      impl: { gemini: () => Promise.resolve(respostaBlocos('Resumo novo da IA.')) },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    expect(await within(s).findByText('Resumo novo da IA.')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(gerar.gemini).toHaveBeenCalledTimes(1);
+  });
+
+  it('transcrição editada depois da revisão: regerar abre a revisão, diz que mudou e não chama', async () => {
+    const { user, gerar } = renderizar({
+      impl: { gemini: () => Promise.resolve(respostaBlocos('Resumo novo da IA.')) },
+      extra: <TrocarTranscricao texto={NOVA} />,
+    });
+    await user.click(screen.getByRole('button', { name: 'Trocar a transcrição' }));
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    const dialogo = await dialogoRevisao();
+    expect(gerar.gemini).not.toHaveBeenCalled();
+    expect(dialogo).toHaveTextContent(TEXTO_MOTIVO_REVISAO.conteudo ?? '');
+    expect(dialogo).toHaveTextContent('Pedido para reescrever a seção “Resumo”');
+    const conteudo = within(dialogo).getByRole('region', { name: 'Conteúdo enviado à IA' });
+    expect(conteudo).toHaveTextContent('a Joana está afastada por depressão desde março.');
+    expect(
+      within(dialogo).getByRole('region', { name: 'Possível dado sensível (saúde)' }),
+    ).toBeVisible();
+
+    // Cancelar: nada sai.
+    await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(gerar.gemini).not.toHaveBeenCalled();
+  });
+
+  it('sem revisão nesta sessão (rascunho recuperado): o revisado é o enviado, inclusive a instrução', async () => {
+    const { user, gerar } = renderizar({
+      revisado: false,
+      impl: { gemini: () => Promise.resolve(respostaBlocos('Resumo ajustado.')) },
+    });
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Ajustar seção Resumo com instrução' }));
+    await user.type(screen.getByLabelText('Instrução para a seção Resumo'), 'Deixe mais curto');
+    await user.click(screen.getByRole('button', { name: 'Aplicar ajuste' }));
+    const dialogo = await dialogoRevisao();
+    expect(gerar.gemini).not.toHaveBeenCalled();
+    // Primeira revisão: sem linha de "mudou".
+    expect(dialogo).not.toHaveTextContent(TEXTO_MOTIVO_REVISAO.conteudo ?? '');
+    const revisado = within(dialogo).getByRole('region', {
+      name: 'Conteúdo enviado à IA',
+    }).textContent;
+    expect(revisado).toContain('Deixe mais curto');
+    expect(revisado).not.toContain(CPF_NA_TRANSCRICAO);
+    const instrucoes = screen.getByTestId('instrucoes-enviadas').textContent;
+    await user.click(within(dialogo).getByRole('button', { name: 'Enviar para a IA' }));
+
+    expect(await within(s).findByText('Resumo ajustado.')).toBeVisible();
+    expect(gerar.gemini).toHaveBeenCalledTimes(1);
+    expect(gerar.gemini.mock.calls[0]?.[1].usuario).toBe(revisado);
+    expect(gerar.gemini.mock.calls[0]?.[1].sistema).toBe(instrucoes);
+  });
+
+  it('a autorização é compartilhada: depois de enviar pela barra, a seção sai direto', async () => {
+    let chamadas = 0;
+    const { user, gerar } = renderizar({
+      revisado: false,
+      comBarra: true,
+      impl: {
+        gemini: () => {
+          chamadas++;
+          return Promise.resolve(
+            chamadas === 1 ? respostaAtaInteira() : respostaBlocos('Resumo regerado.'),
+          );
+        },
+      },
+    });
+    await gerarEEnviar(user);
+    await waitFor(() => {
+      expect(gerar.gemini).toHaveBeenCalledTimes(1);
+    });
+    const s = secao('Resumo');
+    await user.click(await within(s).findByRole('button', { name: 'Regerar seção Resumo' }));
+    expect(await within(s).findByText('Resumo regerado.')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(gerar.gemini).toHaveBeenCalledTimes(2);
+  });
+
+  it('Cancelar na revisão da seção revoga a autorização: a próxima ação abre a revisão de novo', async () => {
+    const { user, gerar } = renderizar({
+      impl: { gemini: () => Promise.resolve(respostaBlocos('Resumo novo da IA.')) },
+      extra: <TrocarTranscricao texto={NOVA} />,
+    });
+    await user.click(screen.getByRole('button', { name: 'Trocar a transcrição' }));
+    const s = secao('Resumo');
+    await user.click(within(s).getByRole('button', { name: 'Regerar seção Resumo' }));
+    await user.click(within(await dialogoRevisao()).getByRole('button', { name: 'Cancelar' }));
+    await user.click(
+      within(secao('Discussão por item de pauta')).getByRole('button', { name: /^Regerar seção/ }),
+    );
+    expect(await dialogoRevisao()).toBeVisible();
+    expect(gerar.gemini).not.toHaveBeenCalled();
   });
 });

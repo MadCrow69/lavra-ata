@@ -238,13 +238,16 @@ test.describe('visitante sem chave, no celular', () => {
     const dialogo = page.getByRole('dialog', { name: 'Privacidade: como verificar' });
     await expect(dialogo).toBeVisible();
 
-    // O corpo longo entra no Tab e rola pelas setas até "O que não é protegido" (só texto).
+    // O corpo longo entra no Tab e rola pelas setas até o fim de "O que não é protegido" (só
+    // texto): o último item da seção fica à vista. (O título, no meio da seção, pode sair da tela a
+    // 360 px.)
     const corpo = dialogo.getByRole('region', { name: 'Texto de Privacidade: como verificar' });
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
     await expect(corpo).toBeFocused();
     await page.keyboard.press('End');
-    await expect(dialogo.getByRole('heading', { name: 'O que não é protegido' })).toBeInViewport();
+    const secao = dialogo.getByRole('heading', { name: 'O que não é protegido' }).locator('..');
+    await expect(secao.getByRole('listitem').last()).toBeInViewport();
     expect(await corpo.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
     await page.keyboard.press('Escape');
     await expect(dialogo).toBeHidden();

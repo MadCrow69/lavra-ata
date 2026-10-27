@@ -1,74 +1,31 @@
-import { findMarkers } from '@lavra/pii-br';
-import { Fragment, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useDraft } from '../../domain/DraftContext';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
-import { fatiar, type Parte } from './fatiar';
+import { preCarregar, sobDemanda, useSobDemanda } from '../../ui/sob-demanda';
 import styles from './privacy.module.css';
 import { fraseDoSelo } from './rotulos';
 import { usePrivacyScan, type PrivacyScan } from './usePrivacyScan';
 
-function Texto({ partes, classeMarca }: { partes: Parte[]; classeMarca: string }) {
-  return partes.map((p) =>
-    p.destaque ? (
-      <mark key={p.inicio} className={classeMarca}>
-        {p.texto}
-      </mark>
-    ) : (
-      <Fragment key={p.inicio}>{p.texto}</Fragment>
-    ),
-  );
-}
+/** O comparativo só abre em "Ver o que vai para a IA": fica fora da carga inicial. */
+const COMPARATIVO = sobDemanda(() => import('./Comparativo'));
 
-function Comparativo({ scan }: { scan: PrivacyScan }) {
-  const original = useMemo(
-    () => fatiar(scan.analisado, scan.achados),
-    [scan.analisado, scan.achados],
-  );
-  const enviado = useMemo(
-    () => fatiar(scan.mascarado, findMarkers(scan.mascarado)),
-    [scan.mascarado],
-  );
-
-  return (
-    <div className={styles.comparativo}>
-      <p className={styles.aviso}>
-        <strong>Nomes de pessoas não são removidos — a ata precisa deles.</strong> Só documentos,
-        contatos e cartões viram marcadores. A IA recebe apenas a coluna “Enviado à IA”; ao final,
-        os marcadores voltam para os valores originais neste navegador.
-      </p>
-      {scan.colisoes.length > 0 ? (
-        <p className={styles.aviso}>
-          {`Atenção: ${scan.colisoes.join(', ')} já aparece${scan.colisoes.length === 1 ? '' : 'm'} no texto como se fosse um marcador e foi reescrito para não se confundir com os de verdade.`}
-        </p>
-      ) : null}
-      <div className={styles.colunas}>
-        <section className={styles.coluna}>
-          <h3 className={styles.colunaTitulo}>Original</h3>
-          <div
-            className={styles.texto}
-            role="region"
-            aria-label="Original"
-            tabIndex={0}
-            data-testid="coluna-original"
-          >
-            <Texto partes={original} classeMarca={styles.marcaOriginal ?? ''} />
-          </div>
-        </section>
-        <section className={styles.coluna}>
-          <h3 className={styles.colunaTitulo}>Enviado à IA</h3>
-          <div
-            className={styles.texto}
-            role="region"
-            aria-label="Enviado à IA"
-            tabIndex={0}
-            data-testid="coluna-enviado"
-          >
-            <Texto partes={enviado} classeMarca={styles.marca ?? ''} />
-          </div>
-        </section>
+/** Corpo do diálogo: o comparativo quando carregou; antes disso, o estado da carga. */
+function ComparativoSobDemanda({ scan }: { scan: PrivacyScan }) {
+  const { modulo, falhou, tentarDeNovo } = useSobDemanda(COMPARATIVO);
+  if (modulo !== null) return <modulo.Comparativo scan={scan} />;
+  if (falhou) {
+    return (
+      <div role="alert">
+        <p>Não foi possível carregar a comparação. Verifique a conexão e tente de novo.</p>
+        <Button onClick={tentarDeNovo}>Tentar de novo</Button>
       </div>
-    </div>
+    );
+  }
+  return (
+    <p role="status" className={styles.carregando}>
+      Carregando a comparação…
+    </p>
   );
 }
 
@@ -80,24 +37,39 @@ export function PrivacyPreview({ texto }: { texto: string }) {
 
   return (
     <div className={styles.previa}>
-      <p className={styles.selo} aria-live="polite" data-pendente={scan.pendente}>
-        {texto === '' ? (
-          'Cole a transcrição para ver quais dados pessoais serão protegidos.'
-        ) : scan.excedido ? (
-          'Reduza a transcrição ao limite para ver a prévia.'
-        ) : scan.pendente ? (
-          'Verificando dados pessoais…'
-        ) : (
-          <>
-            <span aria-hidden="true">🛡 </span>
-            {fraseDoSelo(scan.total, scan.contagem)}
-          </>
-        )}
-      </p>
+      {/* Uma região só anuncia as duas linhas (dado pessoal e termo sensível) quando mudam. */}
+      <div className={styles.selos} aria-live="polite">
+        <p className={styles.selo} data-pendente={scan.pendente}>
+          {texto === '' ? (
+            'Cole a transcrição para ver quais dados pessoais serão protegidos.'
+          ) : scan.excedido ? (
+            'Reduza a transcrição ao limite para ver a prévia.'
+          ) : scan.pendente ? (
+            'Verificando dados pessoais…'
+          ) : (
+            <>
+              <span aria-hidden="true">🛡 </span>
+              {fraseDoSelo(scan.total, scan.contagem)}
+            </>
+          )}
+        </p>
+        {texto !== '' && !scan.excedido && !scan.pendente && scan.fraseSensiveis !== null ? (
+          <p className={styles.seloSensivel}>
+            <span aria-hidden="true">⚠ </span>
+            {scan.fraseSensiveis}
+          </p>
+        ) : null}
+      </div>
       <Button
         disabled={texto === '' || scan.excedido || scan.pendente}
         onClick={() => {
           setAberto(true);
+        }}
+        onPointerEnter={() => {
+          preCarregar(COMPARATIVO);
+        }}
+        onFocus={() => {
+          preCarregar(COMPARATIVO);
         }}
       >
         Ver o que vai para a IA
@@ -109,7 +81,7 @@ export function PrivacyPreview({ texto }: { texto: string }) {
           setAberto(false);
         }}
       >
-        <Comparativo scan={scan} />
+        <ComparativoSobDemanda scan={scan} />
       </Modal>
     </div>
   );

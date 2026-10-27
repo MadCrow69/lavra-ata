@@ -2,6 +2,14 @@ import { mask, type Finding, type MaskMap, type PiiType } from '@lavra/pii-br';
 import { useEffect, useMemo, useState } from 'react';
 import { transcricaoExcedeLimite } from '../../ata-types/registry';
 import { DEBOUNCE_DETECCAO_MS } from '../../config/limits';
+import { sobDemanda } from '../../ui/sob-demanda';
+import type { TermoSensivel } from './termos-sensiveis';
+
+/**
+ * Detector de termos sensíveis (com a lista de `config/termos-sensiveis.ts`): carregado sob demanda
+ * quando há texto a analisar, fora da carga inicial. Os testes podem pré-carregar com `carregar()`.
+ */
+export const DETECTOR_SENSIVEIS = sobDemanda(() => import('./termos-sensiveis'));
 
 export interface PrivacyScan {
   /** Ocorrências por tipo. */
@@ -19,10 +27,17 @@ export interface PrivacyScan {
   achados: Finding[];
   /** Trechos do usuário parecidos com marcador que foram reescritos (`[CPF_1]` → `[CPF#1]`). */
   colisoes: string[];
+  /**
+   * Termos de possível dado sensível no texto analisado (só aviso: vão como estão). Vazio enquanto
+   * o detector carrega (ou se a carga falhar: a revisão antes do envio repete a detecção).
+   */
+  sensiveis: TermoSensivel[];
+  /** Linha do selo sobre os termos sensíveis; `null` sem achados. */
+  fraseSensiveis: string | null;
 }
 
 /** Resultado de um texto vazio: não passa pelo debounce nem pelo `mask`. */
-const VAZIO: Omit<PrivacyScan, 'pendente' | 'excedido'> = {
+const VAZIO: Omit<PrivacyScan, 'pendente' | 'excedido' | 'sensiveis' | 'fraseSensiveis'> = {
   analisado: '',
   contagem: {},
   total: 0,
@@ -38,7 +53,7 @@ export function contarPorTipo(achados: readonly Finding[]): Partial<Record<PiiTy
 }
 
 /**
- * Prévia do mascaramento: acima do limite não roda; abaixo, roda `mask` só depois que a digitação parou por `DEBOUNCE_DETECCAO_MS`
+ * Prévia do mascaramento (e do aviso de termos sensíveis, que não mascara): acima do limite não roda; abaixo, roda `mask` só depois que a digitação parou por `DEBOUNCE_DETECCAO_MS`
  * (a transcrição pode ter centenas de milhares de caracteres). Usa o mapa do rascunho para que
  * os marcadores mostrados sejam os mesmos que a IA receberá. Nunca altera o rascunho.
  */
@@ -58,6 +73,22 @@ export function usePrivacyScan(texto: string, mapa?: MaskMap | null): PrivacySca
 
   // Texto vazio não espera o debounce: não há o que analisar.
   const base = texto === '' || excedido ? '' : analisado;
+
+  const [detector, setDetector] = useState(() => DETECTOR_SENSIVEIS.obter());
+  useEffect(() => {
+    if (detector !== null || base === '') return;
+    let vivo = true;
+    DETECTOR_SENSIVEIS.carregar().then(
+      (m) => {
+        if (vivo) setDetector(m);
+      },
+      () => undefined,
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [detector, base]);
+
   const resultado = useMemo(() => {
     if (base === '') return VAZIO;
     const r = mask(base, mapa ? { map: mapa } : {});
@@ -70,6 +101,18 @@ export function usePrivacyScan(texto: string, mapa?: MaskMap | null): PrivacySca
       colisoes: r.collisions,
     };
   }, [base, mapa]);
+  const sensiveis = useMemo(
+    () => (detector === null || base === '' ? [] : detector.detectarTermosSensiveis(base)),
+    [detector, base],
+  );
+  const fraseSensiveis =
+    detector === null || sensiveis.length === 0 ? null : detector.fraseDoAvisoSensivel(sensiveis);
 
-  return { ...resultado, excedido, pendente: !excedido && texto !== base };
+  return {
+    ...resultado,
+    sensiveis,
+    fraseSensiveis,
+    excedido,
+    pendente: !excedido && texto !== base,
+  };
 }

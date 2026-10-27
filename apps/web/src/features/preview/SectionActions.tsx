@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type Ref } from 'react';
 import { obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
 import { useKeys } from '../../ai/KeysContext';
@@ -9,13 +9,21 @@ import type { Bloco, Encaminhamento } from '../../domain/draft';
 import { CHAVE_ENCAMINHAMENTOS } from '../../domain/draft-reducer';
 import { textoDaFalha } from '../../generation/atribuicao';
 import { descreverErroDeGeracao, type ErroDeGeracao } from '../../generation/erro-geracao';
-import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
-import { regerarSecao } from '../../generation/pipeline';
+import {
+  destinoDe,
+  motivoParaRevisar,
+  TEXTO_MOTIVO_REVISAO,
+  type MotivoDaRevisao,
+} from '../../generation/autorizacao';
+import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
+import { prepararEnvioDaSecao, previaDoEnvioSecao, regerarSecao } from '../../generation/pipeline';
 import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
 import { MOTIVO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
+import { ROTULO_ENVIAR } from '../privacy/revisao-textos';
+import { prepararRevisao, RevisaoDoEnvioSobDemanda } from '../privacy/RevisaoSobDemanda';
 import styles from './revisao.module.css';
 
 export const MOTIVO_SEM_CHAVE = 'Configure uma chave de IA para usar esta ação.';
@@ -24,6 +32,13 @@ const PLACEHOLDER_INSTRUCAO = 'Ex.: Deixe mais curto · Destaque os prazos';
 const FORMATO_NUMERO = new Intl.NumberFormat('pt-BR');
 
 type Origem = 'regerar' | 'ajustar';
+
+/** Revisão de um pedido de seção aberta: o que seria enviado e por que a revisão abriu. */
+interface RevisaoDaSecao {
+  pedido: string | null;
+  origem: Origem;
+  motivo: MotivoDaRevisao;
+}
 
 function ehEncaminhamento(item: Bloco | Encaminhamento): item is Encaminhamento {
   return 'acao' in item;
@@ -56,7 +71,14 @@ export interface SectionActionsProps {
  * com Cancelar, erro com "Tentar de novo" e a confirmação de regerar uma seção editada à mão.
  *
  * Só uma operação de IA roda por vez no app (`useOperacaoIA`): enquanto há outra, os botões de IA
- * ficam parados com o motivo à vista. O rascunho só muda no sucesso; falha ou cancelamento deixam
+ * ficam parados com o motivo à vista.
+ *
+ * Revisão: o pedido de uma seção leva o conteúdo-base (dados, pauta, participantes e transcrição
+ * mascarados) mais o texto atual da seção e a instrução. Se o conteúdo-base é o mesmo da última
+ * revisão autorizada (na barra ou numa seção) e a fila não ganhou provedor nem modelo, sai direto: o
+ * texto da seção e a instrução estão à vista da pessoa. Senão (nada autorizado nesta sessão,
+ * transcrição ou dados editados depois, autorização revogada por "Cancelar"), abre "Revise o que
+ * vai para a IA" com o pedido exato da seção. O rascunho só muda no sucesso; falha ou cancelamento deixam
  * a seção como estava.
  */
 export function SectionActions({
@@ -79,6 +101,8 @@ export function SectionActions({
   const [instrucao, setInstrucao] = useState('');
   const [erro, setErro] = useState<ErroDeGeracao | null>(null);
   const [cancelada, setCancelada] = useState(false);
+  const [revisao, setRevisao] = useState<RevisaoDaSecao | null>(null);
+  const { autorizado, autorizar, revogar } = useOperacaoIA();
 
   const regerarRef = useRef<HTMLButtonElement>(null);
   const ajustarRef = useRef<HTMLButtonElement>(null);
@@ -124,8 +148,17 @@ export function SectionActions({
     if (ajustando) instrucaoRef.current?.focus();
   }, [ajustando]);
 
-  /** Porta única das chamadas (Regerar, Ajustar e "Tentar de novo"). */
-  const executar = async (pedido: string | null, origem: Origem) => {
+  // Montado do MESMO rascunho que `enviar` usa neste render: o revisado é o enviado.
+  const previa = useMemo(
+    () =>
+      revisao === null
+        ? null
+        : previaDoEnvioSecao(state, obterTipo(state.tipoId), chave, revisao.pedido),
+    [revisao, state, chave],
+  );
+
+  /** A chamada em si; só `pedirEnvio` (ou o "Enviar" da revisão) chega aqui. */
+  const enviar = async (pedido: string | null, origem: Origem) => {
     if (noExemplo || semChave || operacao !== null) return;
     await chamada.executar(
       (signal, opcoes) => regerarSecao(state, tipo, chave, pedido, cadeia, signal, opcoes),
@@ -184,11 +217,36 @@ export function SectionActions({
     );
   };
 
+  /**
+   * Porta única das chamadas (Regerar, Ajustar e "Tentar de novo"): envia direto se o conteúdo-base
+   * já foi autorizado; senão abre a revisão.
+   */
+  const pedirEnvio = (pedido: string | null, origem: Origem) => {
+    if (noExemplo || semChave || operacao !== null) return;
+    const { base } = prepararEnvioDaSecao(state, tipo, chave, pedido);
+    const motivo = motivoParaRevisar(autorizado(), base, cadeia);
+    if (motivo === null) void enviar(pedido, origem);
+    else setRevisao({ pedido, origem, motivo });
+  };
+
+  const aoEnviarRevisao = () => {
+    if (revisao === null || previa === null) return;
+    autorizar({ base: previa.base, destinos: cadeia.map(destinoDe) });
+    setRevisao(null);
+    void enviar(revisao.pedido, revisao.origem);
+  };
+
+  /** Cancelar a revisão revoga a autorização: nada sai sem revisar de novo. */
+  const aoCancelarRevisao = () => {
+    revogar();
+    setRevisao(null);
+  };
+
   const aoClicarRegerar = () => {
     if (iaParada) return;
     // Seção vazia não tem edições para perder.
     if (editada && !vazia) setConfirmando(true);
-    else void executar(null, 'regerar');
+    else pedirEnvio(null, 'regerar');
   };
 
   /**
@@ -198,11 +256,11 @@ export function SectionActions({
   const aoTentarDeNovo = () => {
     if (iaParada) return;
     if (origemRef.current === 'ajustar') {
-      void executar(ultimaInstrucaoRef.current, 'ajustar');
+      pedirEnvio(ultimaInstrucaoRef.current, 'ajustar');
       return;
     }
     if (editada && !vazia && conteudo !== baseDaTentativaRef.current) setConfirmando(true);
-    else void executar(null, 'regerar');
+    else pedirEnvio(null, 'regerar');
   };
 
   const aoTeclarNoAjuste = (e: KeyboardEvent<HTMLElement>) => {
@@ -251,6 +309,8 @@ export function SectionActions({
               aria-label={vazia ? `Gerar esta seção (${titulo})` : `Regerar seção ${titulo}`}
               aria-describedby={descricao}
               onClick={aoClicarRegerar}
+              onPointerEnter={prepararRevisao}
+              onFocus={prepararRevisao}
             >
               {vazia ? 'Gerar esta seção' : 'Regerar'}
             </button>
@@ -266,6 +326,8 @@ export function SectionActions({
                 onClick={() => {
                   setAjustando((aberto) => !aberto);
                 }}
+                onPointerEnter={prepararRevisao}
+                onFocus={prepararRevisao}
               >
                 Ajustar
               </button>
@@ -310,7 +372,7 @@ export function SectionActions({
               disabled={instrucaoLimpa === '' || iaParada}
               aria-describedby={descricao}
               onClick={() => {
-                void executar(instrucaoLimpa, 'ajustar');
+                pedirEnvio(instrucaoLimpa, 'ajustar');
               }}
             >
               Aplicar ajuste
@@ -366,6 +428,8 @@ export function SectionActions({
               disabled={iaParada}
               aria-describedby={descricao}
               onClick={aoTentarDeNovo}
+              onPointerEnter={prepararRevisao}
+              onFocus={prepararRevisao}
             >
               Tentar de novo
             </Button>
@@ -399,7 +463,7 @@ export function SectionActions({
               variante="primario"
               onClick={() => {
                 setConfirmando(false);
-                void executar(null, 'regerar');
+                pedirEnvio(null, 'regerar');
               }}
             >
               Regerar e substituir
@@ -409,6 +473,17 @@ export function SectionActions({
       >
         <p>Você editou esta seção. Regerar vai substituir suas edições.</p>
       </Modal>
+
+      <RevisaoDoEnvioSobDemanda
+        previa={previa}
+        cadeia={cadeia}
+        descricao={`Pedido para reescrever a seção “${titulo}” (com o texto atual dela${(revisao?.pedido ?? null) === null ? '' : ' e a sua instrução'}).`}
+        motivo={revisao === null ? null : TEXTO_MOTIVO_REVISAO[revisao.motivo]}
+        avisoSubstituir="A resposta substitui o texto atual desta seção; as outras seções não mudam."
+        rotuloEnviar={ROTULO_ENVIAR}
+        onCancelar={aoCancelarRevisao}
+        onEnviar={aoEnviarRevisao}
+      />
     </div>
   );
 }

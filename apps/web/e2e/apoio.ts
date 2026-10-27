@@ -418,7 +418,23 @@ export function botaoGerar(page: Page): Locator {
   return page.getByRole('button', { name: 'Gerar ata', exact: true });
 }
 
-/** Chaves + dados + clique em "Gerar ata"; espera a folha mostrar os encaminhamentos. */
+/** O diálogo de revisão que "Gerar ata" abre antes de qualquer envio. */
+export function dialogoRevisao(page: Page): Locator {
+  return page.getByRole('dialog', { name: 'Revise o que vai para a IA' });
+}
+
+/**
+ * Na revisão aberta por "Gerar ata", clica em "Enviar" ("Enviar para a IA" ou, com ata gerada,
+ * "Enviar e substituir a ata"): é o único caminho até o provedor.
+ */
+export async function enviarRevisao(page: Page) {
+  const dialogo = dialogoRevisao(page);
+  await expect(dialogo).toBeVisible();
+  await dialogo.getByRole('button', { name: /^Enviar/ }).click();
+  await expect(dialogo).toBeHidden();
+}
+
+/** Chaves + dados + "Gerar ata" + "Enviar" na revisão; espera a folha mostrar os encaminhamentos. */
 export async function gerarAta(
   page: Page,
   preencher: () => Promise<void> = () => preencherReuniao(page),
@@ -426,6 +442,7 @@ export async function gerarAta(
   await configurarChaves(page, { OpenAI: CHAVE_OPENAI });
   await preencher();
   await botaoGerar(page).click();
+  await enviarRevisao(page);
   await expect(page.getByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible({
     timeout: FOLGA_FALLBACK_MS,
   });
