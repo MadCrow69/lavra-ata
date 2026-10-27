@@ -1,20 +1,30 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { camposFaltando, obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
-import type { ProviderConfig } from '../../ai/types';
 import { useKeys } from '../../ai/KeysContext';
 import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
 import type { ResultadoAta } from '../../domain/draft';
 import { textoDaFalha } from '../../generation/atribuicao';
 import { descreverErroDeGeracao } from '../../generation/erro-geracao';
-import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
+import {
+  destinoDe,
+  motivoParaRevisar,
+  TEXTO_MOTIVO_REVISAO,
+  type MotivoDaRevisao,
+} from '../../generation/autorizacao';
+import { MOTIVO_IA_OCUPADA, useOperacaoIA } from '../../generation/OperacaoIA';
 import { gerarAta, previaDoEnvio } from '../../generation/pipeline';
 import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
 import { useToast } from '../../ui/Toast';
 import { MOTIVO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
-import { RevisaoDoEnvio } from '../privacy/RevisaoDoEnvio';
+import {
+  AVISO_SUBSTITUIR_ATA,
+  ROTULO_ENVIAR,
+  ROTULO_ENVIAR_SUBSTITUIR,
+} from '../privacy/revisao-textos';
+import { prepararRevisao, RevisaoDoEnvioSobDemanda } from '../privacy/RevisaoSobDemanda';
 import { focarCampo } from './focar-campo';
 import styles from './generate.module.css';
 
@@ -38,18 +48,11 @@ function estadoDeErro(e: unknown): Estado {
   return { fase: 'erro', ...descreverErroDeGeracao(e, 'ata') };
 }
 
-/** O que a pessoa autorizou na última revisão: o conteúdo exato e os destinos (provedor + modelo). */
-interface EnvioAutorizado {
-  usuario: string;
-  destinos: readonly string[];
-}
-
-const destinoDe = (c: ProviderConfig): string => `${c.id}:${c.modelo}`;
-
 /**
  * Barra de geração da ata: o que falta, para quem vai, progresso, cancelar e erro. "Gerar ata"
  * nunca envia direto: abre a revisão do pedido exato (`RevisaoDoEnvio`, que também avisa quando a
- * ata atual será substituída) e só "Enviar" chama a IA. O rascunho só muda no sucesso.
+ * ata atual será substituída) e só "Enviar" chama a IA. A autorização dada ali fica no
+ * `OperacaoIAProvider` (compartilhada com as seções). O rascunho só muda no sucesso.
  */
 export function GenerateBar({
   onConfigurarChaves,
@@ -61,9 +64,9 @@ export function GenerateBar({
   const keys = useKeys();
   const { mostrar } = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: 'parado' });
-  const [revisando, setRevisando] = useState(false);
-  /** Última revisão autorizada ("Tentar de novo" só pula a revisão se nada mudou desde ela). */
-  const autorizadoRef = useRef<EnvioAutorizado | null>(null);
+  /** Revisão aberta e por quê (a reaberta por "Tentar de novo" diz o que mudou); `null` = fechada. */
+  const [revisao, setRevisao] = useState<{ motivo: MotivoDaRevisao } | null>(null);
+  const { autorizado, autorizar, revogar } = useOperacaoIA();
   const gerarRef = useRef<HTMLButtonElement>(null);
   /** A ata como estava quando a última tentativa saiu (para saber se algo mudou desde então). */
   const baseDaTentativaRef = useRef<ResultadoAta | null>(null);
@@ -82,8 +85,8 @@ export function GenerateBar({
   const ocupadaPorSecao = operacao !== null && !gerando;
   // Montado do MESMO rascunho que `gerar` envia neste render: o revisado é o enviado.
   const previa = useMemo(
-    () => (revisando ? previaDoEnvio(state, obterTipo(state.tipoId)) : null),
-    [revisando, state],
+    () => (revisao === null ? null : previaDoEnvio(state, obterTipo(state.tipoId))),
+    [revisao, state],
   );
 
   /**
@@ -128,20 +131,27 @@ export function GenerateBar({
       onConfigurarChaves();
       return;
     }
-    setRevisando(true);
+    setRevisao({ motivo: 'primeira' });
   };
 
   const aoEnviar = () => {
     if (previa === null) return;
-    autorizadoRef.current = { usuario: previa.usuario, destinos: cadeia.map(destinoDe) };
-    setRevisando(false);
+    autorizar({ base: previa.base, destinos: cadeia.map(destinoDe) });
+    setRevisao(null);
     void gerar();
   };
 
+  /** Cancelar a revisão revoga a autorização anterior: "Tentar de novo" não envia o recusado. */
+  const aoCancelarRevisao = () => {
+    revogar();
+    setRevisao(null);
+  };
+
   /**
-   * "Tentar de novo" envia direto só se o pedido é idêntico ao último revisado, a fila não ganhou
-   * provedor ou modelo novo e a ata não mudou desde a tentativa (ex.: uma seção editada à mão
-   * depois da falha). Qualquer diferença reabre a revisão.
+   * "Tentar de novo" envia direto só se o conteúdo-base é idêntico ao último autorizado (que
+   * "Cancelar" numa revisão revoga), a fila não ganhou provedor ou modelo novo e a ata não mudou
+   * desde a tentativa (ex.: uma seção editada à mão depois da falha). Qualquer diferença reabre a
+   * revisão, que diz o que mudou.
    */
   const aoTentarDeNovo = () => {
     if (!podeGerar) return;
@@ -149,14 +159,11 @@ export function GenerateBar({
       onConfigurarChaves();
       return;
     }
-    const autorizado = autorizadoRef.current;
-    const igual =
-      autorizado !== null &&
-      state.resultado === baseDaTentativaRef.current &&
-      cadeia.every((c) => autorizado.destinos.includes(destinoDe(c))) &&
-      previaDoEnvio(state, tipo).usuario === autorizado.usuario;
-    if (igual) void gerar();
-    else setRevisando(true);
+    const motivo =
+      motivoParaRevisar(autorizado(), previaDoEnvio(state, tipo).base, cadeia) ??
+      (state.resultado === baseDaTentativaRef.current ? null : 'ata');
+    if (motivo === null) void gerar();
+    else setRevisao({ motivo });
   };
 
   const [primeiro, ...depois] = cadeia;
@@ -177,6 +184,8 @@ export function GenerateBar({
           disabled={!podeGerar}
           aria-describedby={descricaoId === '' ? undefined : descricaoId}
           onClick={aoClicarGerar}
+          onPointerEnter={prepararRevisao}
+          onFocus={prepararRevisao}
         >
           <span aria-hidden="true">✨</span> Gerar ata
         </Button>
@@ -270,6 +279,8 @@ export function GenerateBar({
               disabled={!podeGerar}
               aria-describedby={descricaoId === '' ? undefined : descricaoId}
               onClick={aoTentarDeNovo}
+              onPointerEnter={prepararRevisao}
+              onFocus={prepararRevisao}
             >
               Tentar de novo
             </Button>
@@ -278,14 +289,14 @@ export function GenerateBar({
         </div>
       ) : null}
 
-      <RevisaoDoEnvio
-        aberto={revisando}
+      <RevisaoDoEnvioSobDemanda
         previa={previa}
         cadeia={cadeia}
-        substitui={state.resultado !== null}
-        onCancelar={() => {
-          setRevisando(false);
-        }}
+        descricao="Pedido da ata inteira."
+        motivo={revisao === null ? null : TEXTO_MOTIVO_REVISAO[revisao.motivo]}
+        avisoSubstituir={state.resultado === null ? null : AVISO_SUBSTITUIR_ATA}
+        rotuloEnviar={state.resultado === null ? ROTULO_ENVIAR : ROTULO_ENVIAR_SUBSTITUIR}
+        onCancelar={aoCancelarRevisao}
         onEnviar={aoEnviar}
       />
     </section>

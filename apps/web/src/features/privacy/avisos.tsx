@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { MAX_TRECHOS_SENSIVEIS_VISIVEIS } from '../../config/termos-sensiveis';
 import { plural } from '../../ui/plural';
-import styles from './privacy.module.css';
+import styles from './destaques.module.css';
 import {
   categoriasDosAchados,
   rotuloDaCategoria,
@@ -30,16 +30,6 @@ export function AvisoColisoes({ colisoes }: { colisoes: readonly string[] }) {
       {`Atenção: ${colisoes.join(', ')} já aparece${colisoes.length === 1 ? '' : 'm'} no texto como se fosse um marcador e foi reescrito para não se confundir com os de verdade.`}
     </p>
   );
-}
-
-/**
- * "2 trechos com possível dado sensível (saúde, conflito trabalhista) vão como estão — revise
- * antes de enviar." (linha do selo da transcrição).
- */
-export function fraseDoAvisoSensivel(achados: readonly TermoSensivel[]): string {
-  const n = achados.length;
-  const categorias = categoriasDosAchados(achados).join(', ');
-  return `${String(n)} ${plural(n, 'trecho', 'trechos')} com possível dado sensível (${categorias}) ${plural(n, 'vai como está', 'vão como estão')} — revise antes de enviar.`;
 }
 
 /**

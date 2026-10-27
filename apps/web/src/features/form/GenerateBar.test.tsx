@@ -9,6 +9,7 @@ import { criarKeyStore, type ChaveProvedor } from '../../ai/keys';
 import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } from '../../ai/types';
 import { LIMITE_TRANSCRICAO } from '../../config/limits';
 import { MAX_TRECHOS_SENSIVEIS_VISIVEIS } from '../../config/termos-sensiveis';
+import { TEXTO_MOTIVO_REVISAO } from '../../generation/autorizacao';
 import { DraftProvider, useDraft } from '../../domain/DraftContext';
 import type { AtaDraft } from '../../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../../domain/draft-reducer';
@@ -424,7 +425,7 @@ describe('GenerateBar', () => {
       impl: { openai: () => Promise.resolve(RESPOSTA) },
     });
     await user.click(botaoGerar());
-    const dialogo = dialogoRevisao();
+    const dialogo = await dialogoRevisao();
     expect(gerar.openai).not.toHaveBeenCalled();
     expect(dialogo).toHaveTextContent(
       'Isto sai do seu navegador para OpenAI · gpt-6-luna (se falhar, para Gemini).',
@@ -434,9 +435,14 @@ describe('GenerateBar', () => {
     expect(dialogo).not.toHaveTextContent(/substitui a ata atual/);
     const conteudo = within(dialogo).getByRole('region', { name: 'Conteúdo enviado à IA' });
     expect(conteudo).toHaveAttribute('tabindex', '0');
-    expect(conteudo).toHaveTextContent('[CPF_1]');
     expect(conteudo).not.toHaveTextContent(CPF);
-    for (const m of within(conteudo).getAllByText('[CPF_1]')) expect(m.tagName).toBe('MARK');
+    // Só o marcador do CPF real (na transcrição) é destacado; o exemplo fixo do cabeçalho
+    // ("marcadores como [CPF_1]") fica como texto comum.
+    const marcas = within(conteudo).getAllByText('[CPF_1]');
+    expect(marcas).toHaveLength(1);
+    expect(marcas[0]?.tagName).toBe('MARK');
+    expect(marcas[0]?.closest('[data-testid="conteudo-enviado"]')).toBe(conteudo);
+    expect(conteudo.textContent).toContain(`Ana: reembolso ao CPF [CPF_1].`);
     expect(conteudo).toHaveTextContent('Ana Souza');
     expect(conteudo).toHaveTextContent('Reembolsos');
 
@@ -446,7 +452,9 @@ describe('GenerateBar', () => {
     expect(botaoGerar()).toHaveFocus();
 
     await user.click(botaoGerar());
-    await user.click(within(dialogoRevisao()).getByRole('button', { name: 'Enviar para a IA' }));
+    await user.click(
+      within(await dialogoRevisao()).getByRole('button', { name: 'Enviar para a IA' }),
+    );
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(gerar.openai).toHaveBeenCalledTimes(1);
   });
@@ -466,11 +474,13 @@ describe('GenerateBar', () => {
       impl: { openai: () => Promise.resolve(RESPOSTA) },
     });
     await user.click(botaoGerar());
-    const revisado = within(dialogoRevisao()).getByRole('region', {
+    const revisado = within(await dialogoRevisao()).getByRole('region', {
       name: 'Conteúdo enviado à IA',
     }).textContent;
     const instrucoes = screen.getByTestId('instrucoes-enviadas').textContent;
-    await user.click(within(dialogoRevisao()).getByRole('button', { name: 'Enviar para a IA' }));
+    await user.click(
+      within(await dialogoRevisao()).getByRole('button', { name: 'Enviar para a IA' }),
+    );
     await screen.findByText('Ata gerada por OpenAI · gpt-6-luna');
     expect(gerar.openai.mock.calls[0]?.[1].usuario).toBe(revisado);
     expect(gerar.openai.mock.calls[0]?.[1].sistema).toBe(instrucoes);
@@ -479,7 +489,7 @@ describe('GenerateBar', () => {
   it('as instruções fixas ficam recolhidas num <details> com o resumo do que são', async () => {
     const { user } = renderizar({ chaves: [OPENAI] });
     await user.click(botaoGerar());
-    const resumo = within(dialogoRevisao()).getByText(
+    const resumo = within(await dialogoRevisao()).getByText(
       'Instruções do Lavra enviadas junto (iguais em toda ata deste tipo e tom, sem dados da reunião)',
     );
     const detalhes = resumo.closest('details');
@@ -497,7 +507,7 @@ describe('GenerateBar', () => {
       }),
     });
     await user.click(botaoGerar());
-    const dialogo = dialogoRevisao();
+    const dialogo = await dialogoRevisao();
     const aviso = within(dialogo).getByRole('region', {
       name: 'Possível dado sensível (saúde, conflito trabalhista)',
     });
@@ -506,7 +516,7 @@ describe('GenerateBar', () => {
         .getAllByRole('listitem')
         .map((li) => li.textContent),
     ).toEqual([
-      'afastada (saúde)',
+      'afastada por (saúde)',
       'depressão (saúde)',
       'processo trabalhista (conflito trabalhista)',
     ]);
@@ -521,7 +531,7 @@ describe('GenerateBar', () => {
 
   it('muitos trechos sensíveis: lista os primeiros e resume o resto em "e mais N"', async () => {
     const termos = [
-      'atestado',
+      'atestado médico',
       'cirurgia',
       'gravidez',
       'burnout',
@@ -534,10 +544,12 @@ describe('GenerateBar', () => {
     ];
     const { user } = renderizar({
       chaves: [OPENAI],
-      inicial: completo({ transcricao: `Ana: ${termos.join(', ')}, atestado de novo.` }),
+      inicial: completo({ transcricao: `Ana: ${termos.join(', ')}, atestado médico de novo.` }),
     });
     await user.click(botaoGerar());
-    const aviso = within(dialogoRevisao()).getByRole('region', { name: /Possível dado sensível/ });
+    const aviso = within(await dialogoRevisao()).getByRole('region', {
+      name: /Possível dado sensível/,
+    });
     expect(within(aviso).getAllByRole('listitem')).toHaveLength(MAX_TRECHOS_SENSIVEIS_VISIVEIS);
     expect(aviso).toHaveTextContent(
       `e mais ${String(termos.length - MAX_TRECHOS_SENSIVEIS_VISIVEIS)} trechos`,
@@ -548,7 +560,7 @@ describe('GenerateBar', () => {
     const { user } = renderizar({ chaves: [OPENAI] });
     await user.click(botaoGerar());
     expect(
-      within(dialogoRevisao()).queryByRole('region', { name: /Possível dado sensível/ }),
+      within(await dialogoRevisao()).queryByRole('region', { name: /Possível dado sensível/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -569,7 +581,7 @@ describe('GenerateBar', () => {
     });
     await user.click(botaoGerar());
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    const dialogo = dialogoRevisao();
+    const dialogo = await dialogoRevisao();
     expect(dialogo).toHaveTextContent(/substitui a ata atual, inclusive as seções editadas à mão/);
     expect(within(dialogo).getByRole('region', { name: 'Conteúdo enviado à IA' })).toBeVisible();
     await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
@@ -578,7 +590,7 @@ describe('GenerateBar', () => {
 
     await user.click(botaoGerar());
     await user.click(
-      within(dialogoRevisao()).getByRole('button', { name: 'Enviar e substituir a ata' }),
+      within(await dialogoRevisao()).getByRole('button', { name: 'Enviar e substituir a ata' }),
     );
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(gerar.openai).toHaveBeenCalledTimes(1);
@@ -595,7 +607,7 @@ describe('GenerateBar', () => {
       }),
     });
     await user.click(botaoGerar());
-    expect(dialogoRevisao()).toHaveTextContent(
+    expect(await dialogoRevisao()).toHaveTextContent(
       'Atenção: [CPF_1] já aparece no texto como se fosse um marcador',
     );
   });
@@ -650,14 +662,43 @@ describe('GenerateBar', () => {
       target: { value: 'Ana: a Joana está afastada desde março.' },
     });
     await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
-    const dialogo = dialogoRevisao();
+    const dialogo = await dialogoRevisao();
     expect(gerar.openai).toHaveBeenCalledTimes(1);
+    // A revisão reaberta diz por quê.
+    expect(dialogo).toHaveTextContent(TEXTO_MOTIVO_REVISAO.conteudo ?? '');
     expect(
       within(dialogo).getByRole('region', { name: 'Conteúdo enviado à IA' }),
     ).toHaveTextContent('a Joana está afastada desde março.');
     await user.click(within(dialogo).getByRole('button', { name: 'Enviar para a IA' }));
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(gerar.openai).toHaveBeenCalledTimes(2);
+  });
+
+  it('"Cancelar" numa revisão revoga a autorização: "Tentar de novo" reabre em vez de enviar', async () => {
+    const { user, gerar } = renderizar({
+      chaves: [OPENAI],
+      impl: { openai: () => Promise.reject(erroProvedor('recusa', 'openai')) },
+    });
+    await gerarEEnviar(user);
+    const alerta = await screen.findByRole('alert');
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
+    // A pessoa abre a revisão de novo, vê o conteúdo e desiste.
+    await user.click(botaoGerar());
+    await user.click(within(await dialogoRevisao()).getByRole('button', { name: 'Cancelar' }));
+    await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
+    const dialogo = await dialogoRevisao();
+    expect(gerar.openai).toHaveBeenCalledTimes(1);
+    // Primeira revisão depois da revogação: sem linha de "mudou".
+    expect(dialogo).not.toHaveTextContent(TEXTO_MOTIVO_REVISAO.conteudo ?? '');
+  });
+
+  it('a primeira revisão não traz linha de "mudou"', async () => {
+    const { user } = renderizar({ chaves: [OPENAI] });
+    await user.click(botaoGerar());
+    const dialogo = await dialogoRevisao();
+    for (const texto of Object.values(TEXTO_MOTIVO_REVISAO)) {
+      if (texto !== null) expect(dialogo).not.toHaveTextContent(texto);
+    }
   });
 
   it('"Tentar de novo" depois de editar uma seção reabre a revisão com o aviso de substituir', async () => {
@@ -690,7 +731,7 @@ describe('GenerateBar', () => {
     await user.click(screen.getByRole('button', { name: 'Editar o resumo à mão' }));
     expect(screen.getByTestId('espiao')).toHaveTextContent('Escrito à mão.');
     await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
-    const dialogo = dialogoRevisao();
+    const dialogo = await dialogoRevisao();
     expect(dialogo).toHaveTextContent(/substitui a ata atual, inclusive as seções editadas à mão/);
     await user.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
     expect(gerar.openai).toHaveBeenCalledTimes(1);
@@ -698,7 +739,7 @@ describe('GenerateBar', () => {
 
     await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
     await user.click(
-      within(dialogoRevisao()).getByRole('button', { name: 'Enviar e substituir a ata' }),
+      within(await dialogoRevisao()).getByRole('button', { name: 'Enviar e substituir a ata' }),
     );
     expect(await screen.findByText('Ata gerada por OpenAI · gpt-6-luna')).toBeVisible();
     expect(gerar.openai).toHaveBeenCalledTimes(2);
@@ -718,7 +759,7 @@ describe('GenerateBar', () => {
       store.definir(GEMINI);
     });
     await user.click(within(alerta).getByRole('button', { name: 'Tentar de novo' }));
-    expect(dialogoRevisao()).toHaveTextContent('Isto sai do seu navegador para Gemini');
+    expect(await dialogoRevisao()).toHaveTextContent('Isto sai do seu navegador para Gemini');
     expect(gerar.gemini).not.toHaveBeenCalled();
   });
 

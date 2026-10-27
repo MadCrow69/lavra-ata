@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import type { EnvioAutorizado } from './autorizacao';
 
 /** Texto exibido em todo botão de IA parado porque outra operação de IA está em andamento. */
 export const MOTIVO_IA_OCUPADA = 'Aguarde a geração em andamento terminar.';
@@ -41,6 +42,15 @@ interface OperacaoIAApi {
    * da vez).
    */
   interromper: () => void;
+  /**
+   * A última revisão autorizada (compartilhada pela barra de geração e pelas seções). Lida na hora
+   * da decisão, sem re-render: só em memória, nunca em storage.
+   */
+  autorizado: () => EnvioAutorizado | null;
+  /** "Enviar" na revisão: guarda o que a pessoa autorizou. */
+  autorizar: (envio: EnvioAutorizado) => void;
+  /** "Cancelar" na revisão: o que estava autorizado deixa de valer (nada sai sem revisar de novo). */
+  revogar: () => void;
 }
 
 const OperacaoIAContext = createContext<OperacaoIAApi | null>(null);
@@ -54,13 +64,15 @@ interface Ativa {
  * Uma operação de IA por vez em todo o app. Cada chamada parte do mesmo mapa de mascaramento do
  * rascunho: duas em paralelo poderiam dar o mesmo marcador (ex.: `[CPF_3]`) a pessoas diferentes e
  * corromper a restauração dos dados nas próximas. O app todo (barra de geração e seções) pede a
- * vez aqui antes de chamar a IA.
+ * vez aqui antes de chamar a IA. Guarda também a última revisão autorizada (`autorizacao.ts`), que
+ * a barra e as seções consultam antes de enviar sem abrir a revisão.
  */
 export function OperacaoIAProvider({ children }: { children: ReactNode }) {
   const [operacao, setOperacao] = useState<OperacaoIA | null>(null);
   // A recusa não pode esperar o próximo render: dois cliques na mesma rodada chegam aqui juntos.
   const ativaRef = useRef<Ativa | null>(null);
   const canceladasRef = useRef(new WeakSet<AbortController>());
+  const autorizadoRef = useRef<EnvioAutorizado | null>(null);
 
   const iniciar = useCallback((nova: OperacaoIA) => {
     if (ativaRef.current !== null) return null;
@@ -100,6 +112,14 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
     setOperacao(null);
   }, []);
 
+  const autorizado = useCallback(() => autorizadoRef.current, []);
+  const autorizar = useCallback((envio: EnvioAutorizado) => {
+    autorizadoRef.current = envio;
+  }, []);
+  const revogar = useCallback(() => {
+    autorizadoRef.current = null;
+  }, []);
+
   // Sair da tela no meio de uma chamada a cancela (o resultado tardio é descartado pelo pipeline).
   useEffect(
     () => () => {
@@ -109,8 +129,30 @@ export function OperacaoIAProvider({ children }: { children: ReactNode }) {
   );
 
   const api = useMemo(
-    () => ({ operacao, iniciar, concluir, cancelar, cancelarAtual, foiCancelada, interromper }),
-    [operacao, iniciar, concluir, cancelar, cancelarAtual, foiCancelada, interromper],
+    () => ({
+      operacao,
+      iniciar,
+      concluir,
+      cancelar,
+      cancelarAtual,
+      foiCancelada,
+      interromper,
+      autorizado,
+      autorizar,
+      revogar,
+    }),
+    [
+      operacao,
+      iniciar,
+      concluir,
+      cancelar,
+      cancelarAtual,
+      foiCancelada,
+      interromper,
+      autorizado,
+      autorizar,
+      revogar,
+    ],
   );
   return <OperacaoIAContext value={api}>{children}</OperacaoIAContext>;
 }

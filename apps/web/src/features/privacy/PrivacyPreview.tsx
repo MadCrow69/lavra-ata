@@ -1,78 +1,31 @@
-import { findMarkers } from '@lavra/pii-br';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useDraft } from '../../domain/DraftContext';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
-import { AvisoColisoes, AvisoNomes, fraseDoAvisoSensivel } from './avisos';
-import { fatiar, mesclarTrechos } from './fatiar';
+import { preCarregar, sobDemanda, useSobDemanda } from '../../ui/sob-demanda';
 import styles from './privacy.module.css';
 import { fraseDoSelo } from './rotulos';
-import { detectarTermosSensiveis, ehTermoSensivel } from './termos-sensiveis';
-import { TextoDestacado } from './TextoDestacado';
 import { usePrivacyScan, type PrivacyScan } from './usePrivacyScan';
 
-/** Classe do destaque: o dado pessoal/marcador (`classePii`) ou o termo sensível. */
-function classeDoTrecho(classePii: string) {
-  return (t: object) => (ehTermoSensivel(t) ? (styles.marcaSensivel ?? '') : classePii);
-}
+/** O comparativo só abre em "Ver o que vai para a IA": fica fora da carga inicial. */
+const COMPARATIVO = sobDemanda(() => import('./Comparativo'));
 
-function Comparativo({ scan }: { scan: PrivacyScan }) {
-  const original = useMemo(
-    () => fatiar(scan.analisado, mesclarTrechos(scan.achados, scan.sensiveis)),
-    [scan.analisado, scan.achados, scan.sensiveis],
-  );
-  const enviado = useMemo(
-    () =>
-      fatiar(
-        scan.mascarado,
-        mesclarTrechos(findMarkers(scan.mascarado), detectarTermosSensiveis(scan.mascarado)),
-      ),
-    [scan.mascarado],
-  );
-
-  return (
-    <div className={styles.comparativo}>
-      <AvisoNomes>
-        A IA recebe apenas a coluna “Enviado à IA”; ao final, os marcadores voltam para os valores
-        originais neste navegador.
-      </AvisoNomes>
-      {scan.sensiveis.length > 0 ? (
-        <p className={styles.aviso}>
-          Trechos com contorno tracejado são possível dado sensível: não viram marcador e vão como
-          estão.
-        </p>
-      ) : null}
-      <AvisoColisoes colisoes={scan.colisoes} />
-      <div className={styles.colunas}>
-        <section className={styles.coluna}>
-          <h3 className={styles.colunaTitulo}>Original</h3>
-          <div
-            className={styles.texto}
-            role="region"
-            aria-label="Original"
-            tabIndex={0}
-            data-testid="coluna-original"
-          >
-            <TextoDestacado
-              partes={original}
-              classeDe={classeDoTrecho(styles.marcaOriginal ?? '')}
-            />
-          </div>
-        </section>
-        <section className={styles.coluna}>
-          <h3 className={styles.colunaTitulo}>Enviado à IA</h3>
-          <div
-            className={styles.texto}
-            role="region"
-            aria-label="Enviado à IA"
-            tabIndex={0}
-            data-testid="coluna-enviado"
-          >
-            <TextoDestacado partes={enviado} classeDe={classeDoTrecho(styles.marca ?? '')} />
-          </div>
-        </section>
+/** Corpo do diálogo: o comparativo quando carregou; antes disso, o estado da carga. */
+function ComparativoSobDemanda({ scan }: { scan: PrivacyScan }) {
+  const { modulo, falhou, tentarDeNovo } = useSobDemanda(COMPARATIVO);
+  if (modulo !== null) return <modulo.Comparativo scan={scan} />;
+  if (falhou) {
+    return (
+      <div role="alert">
+        <p>Não foi possível carregar a comparação. Verifique a conexão e tente de novo.</p>
+        <Button onClick={tentarDeNovo}>Tentar de novo</Button>
       </div>
-    </div>
+    );
+  }
+  return (
+    <p role="status" className={styles.carregando}>
+      Carregando a comparação…
+    </p>
   );
 }
 
@@ -100,10 +53,10 @@ export function PrivacyPreview({ texto }: { texto: string }) {
             </>
           )}
         </p>
-        {texto !== '' && !scan.excedido && !scan.pendente && scan.sensiveis.length > 0 ? (
+        {texto !== '' && !scan.excedido && !scan.pendente && scan.fraseSensiveis !== null ? (
           <p className={styles.seloSensivel}>
             <span aria-hidden="true">⚠ </span>
-            {fraseDoAvisoSensivel(scan.sensiveis)}
+            {scan.fraseSensiveis}
           </p>
         ) : null}
       </div>
@@ -111,6 +64,12 @@ export function PrivacyPreview({ texto }: { texto: string }) {
         disabled={texto === '' || scan.excedido || scan.pendente}
         onClick={() => {
           setAberto(true);
+        }}
+        onPointerEnter={() => {
+          preCarregar(COMPARATIVO);
+        }}
+        onFocus={() => {
+          preCarregar(COMPARATIVO);
         }}
       >
         Ver o que vai para a IA
@@ -122,7 +81,7 @@ export function PrivacyPreview({ texto }: { texto: string }) {
           setAberto(false);
         }}
       >
-        <Comparativo scan={scan} />
+        <ComparativoSobDemanda scan={scan} />
       </Modal>
     </div>
   );

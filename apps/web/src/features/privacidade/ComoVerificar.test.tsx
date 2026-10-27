@@ -66,7 +66,7 @@ describe('Privacidade: como verificar (modal)', () => {
       secaoDe('O que sai do navegador').getByText(/só depois de você revisar o conteúdo/),
     ).toHaveTextContent('clicar em “Enviar para a IA”');
     expect(secaoDe('Confira na aba Rede').getByRole('list')).toHaveTextContent(
-      'Gere uma ata (revise e clique em “Enviar para a IA”)',
+      'Gere uma ata (revise e clique em “Enviar para a IA” ou “Enviar e substituir a ata”)',
     );
   });
 
@@ -167,7 +167,12 @@ describe('Privacidade: como verificar (modal)', () => {
     expect(
       screen.getByText(/é um aviso por lista de palavras, não uma proteção/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Regerar ou ajustar uma seção não abre a revisão/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Regerar ou ajustar uma seção só abre a revisão se o conteúdo-base/),
+    ).toBeInTheDocument();
+    expect(
+      secaoDe('O que sai do navegador').getByText(/A única exceção é regerar ou ajustar uma seção/),
+    ).toHaveTextContent('“Cancelar” numa revisão desfaz essa autorização.');
     expect(
       screen.getByText(
         'O modo exemplo não envia nada para IA: o exemplo já vem pronto no site. Só o “Testar” do modal de chaves, se você clicar nele, fala com o provedor, para conferir a sua chave, sem nada do exemplo.',

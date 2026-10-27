@@ -1,12 +1,13 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mask } from '@lavra/pii-br';
 import { corporativa } from '../../ata-types/corporativa';
 import { DEBOUNCE_DETECCAO_MS, LIMITE_TRANSCRICAO } from '../../config/limits';
 import { DraftProvider } from '../../domain/DraftContext';
 import { TranscricaoBlock } from '../form/TranscricaoBlock';
 import { ToastProvider } from '../../ui/Toast';
+import { DETECTOR_SENSIVEIS } from './usePrivacyScan';
 
 // `mask` real, mas espionado: o teste de volume prova que ele só roda depois do debounce.
 vi.mock('@lavra/pii-br', async (original) => {
@@ -50,6 +51,12 @@ function campoArquivo(container: HTMLElement): HTMLInputElement {
 }
 
 describe('prévia de privacidade', () => {
+  // O detector de termos sensíveis é carregado sob demanda; com timers falsos, a carga assíncrona
+  // não andaria sozinha: pré-carrega uma vez (o caminho sob demanda é o mesmo, só já pronto).
+  beforeAll(async () => {
+    await DETECTOR_SENSIVEIS.carregar();
+  });
+
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: false });
   });
@@ -99,8 +106,9 @@ describe('prévia de privacidade', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Ver o que vai para a IA' }));
 
-    const dialogo = screen.getByRole('dialog');
-    const enviado = within(dialogo).getByRole('region', { name: 'Enviado à IA' });
+    // O comparativo é carregado sob demanda: espera a coluna aparecer.
+    const dialogo = await screen.findByRole('dialog');
+    const enviado = await within(dialogo).findByRole('region', { name: 'Enviado à IA' });
     expect(within(enviado).getByText('[CPF_1]').tagName).toBe('MARK');
     expect(within(enviado).getByText('[CPF_2]').tagName).toBe('MARK');
     expect(within(enviado).getByText('[TELEFONE_1]').tagName).toBe('MARK');
@@ -126,7 +134,7 @@ describe('prévia de privacidade', () => {
     expect(linha.closest('[aria-live="polite"]')).not.toBeNull();
     expect(screen.getByText('1 dado pessoal será protegido (1 CPF)')).toBeInTheDocument();
 
-    colar('Faltou o atestado.');
+    colar('Faltou o atestado médico.');
     passarDebounce();
     expect(
       screen.getByText(
@@ -146,10 +154,10 @@ describe('prévia de privacidade', () => {
     vi.useRealTimers();
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Ver o que vai para a IA' }));
-    const dialogo = screen.getByRole('dialog');
+    const dialogo = await screen.findByRole('dialog');
     for (const nome of ['Original', 'Enviado à IA']) {
-      const coluna = within(dialogo).getByRole('region', { name: nome });
-      const afastada = within(coluna).getByText('afastada');
+      const coluna = await within(dialogo).findByRole('region', { name: nome });
+      const afastada = within(coluna).getByText('afastada por');
       expect(afastada.tagName).toBe('MARK');
       expect(within(coluna).getByText('depressão').tagName).toBe('MARK');
       // Estilo próprio, diferente do marcador e do valor original.
@@ -158,7 +166,7 @@ describe('prévia de privacidade', () => {
       );
     }
     expect(
-      within(dialogo).getByText(/Trechos com contorno tracejado são possível dado sensível/),
+      within(dialogo).getByText(/Trechos com sublinhado tracejado são possível dado sensível/),
     ).toBeInTheDocument();
   });
 

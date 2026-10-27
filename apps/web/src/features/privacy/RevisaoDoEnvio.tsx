@@ -1,35 +1,17 @@
-import { findMarkers } from '@lavra/pii-br';
 import { useMemo } from 'react';
-import type { ProviderConfig } from '../../ai/types';
 import { ROTULO_CURTO } from '../../config/models';
-import type { PreviaDoEnvio } from '../../generation/pipeline';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
 import { AvisoColisoes, AvisoNomes, AvisoSensiveis } from './avisos';
+import styles from './destaques.module.css';
 import { fatiar, mesclarTrechos } from './fatiar';
-import styles from './privacy.module.css';
-import { detectarTermosSensiveis, ehTermoSensivel } from './termos-sensiveis';
-import { TextoDestacado } from './TextoDestacado';
-
-export const TITULO_REVISAO = 'Revise o que vai para a IA';
-export const ROTULO_CONTEUDO_ENVIADO = 'Conteúdo enviado à IA';
-export const AVISO_SUBSTITUIR =
-  'Gerar de novo substitui a ata atual, inclusive as seções editadas à mão. Para mudar só uma parte, use as ações da própria seção na folha.';
-
-export interface RevisaoDoEnvioProps {
-  aberto: boolean;
-  /** O pedido exato (`previaDoEnvio`): o que aparece aqui é o que sai ao enviar. */
-  previa: PreviaDoEnvio | null;
-  /** Fila de provedores, na ordem em que serão tentados. */
-  cadeia: readonly ProviderConfig[];
-  /** Já há ata: enviar a substitui (o aviso e o rótulo do botão mudam). */
-  substitui: boolean;
-  onCancelar: () => void;
-  onEnviar: () => void;
-}
+import type { RevisaoDoEnvioProps } from './RevisaoSobDemanda';
+import { ROTULO_CONTEUDO_ENVIADO, TITULO_REVISAO } from './revisao-textos';
+import { detectarTermosSensiveis } from './termos-sensiveis';
+import { classeDoTrecho, TextoDestacado } from './TextoDestacado';
 
 /** "OpenAI · gpt-6-luna (se falhar, para Gemini, depois Anthropic)". */
-function descreverDestino(cadeia: readonly ProviderConfig[]): string {
+function descreverDestino(cadeia: RevisaoDoEnvioProps['cadeia']): string {
   const [primeiro, ...depois] = cadeia;
   if (!primeiro) return '';
   const fila =
@@ -39,53 +21,61 @@ function descreverDestino(cadeia: readonly ProviderConfig[]): string {
   return `${ROTULO_CURTO[primeiro.id]} · ${primeiro.modelo}${fila}`;
 }
 
-const classeDoTrecho = (t: object): string =>
-  ehTermoSensivel(t) ? (styles.marcaSensivel ?? '') : (styles.marca ?? '');
+const classeDoPedido = classeDoTrecho(styles.marca);
 
 /**
- * Revisão obrigatória antes de gerar a ata: mostra o pedido inteiro como sai do navegador
- * (marcadores destacados, termos de possível dado sensível com contorno próprio), para quem vai,
- * as instruções fixas e, se já houver ata, o aviso de que ela será substituída. Nada sai antes de
- * "Enviar". Não há como pular esta etapa: ela é a autorização do envio.
+ * Revisão antes de enviar à IA (ata inteira ou seção): o pedido inteiro como sai do navegador
+ * (só os marcadores de dados reais destacados, termos de possível dado sensível com estilo
+ * próprio), para quem vai, as instruções fixas e os avisos. Nada sai antes de "Enviar"; não há
+ * como desligar esta etapa: ela é a autorização do envio. Carregada sob demanda
+ * (`RevisaoSobDemanda`).
  */
 export function RevisaoDoEnvio({
-  aberto,
   previa,
   cadeia,
-  substitui,
+  descricao,
+  motivo,
+  avisoSubstituir,
+  rotuloEnviar,
   onCancelar,
   onEnviar,
 }: RevisaoDoEnvioProps) {
-  const usuario = previa?.usuario ?? '';
+  const { usuario } = previa;
   const sensiveis = useMemo(() => detectarTermosSensiveis(usuario), [usuario]);
   const partes = useMemo(
-    () => fatiar(usuario, mesclarTrechos(findMarkers(usuario), sensiveis)),
-    [usuario, sensiveis],
+    () => fatiar(usuario, mesclarTrechos(previa.marcadores, sensiveis)),
+    [usuario, previa.marcadores, sensiveis],
   );
 
   return (
     <Modal
-      aberto={aberto && previa !== null}
+      aberto
       titulo={TITULO_REVISAO}
       onFechar={onCancelar}
       acoes={
         <>
           <Button onClick={onCancelar}>Cancelar</Button>
           <Button variante="primario" onClick={onEnviar}>
-            {substitui ? 'Enviar e substituir a ata' : 'Enviar para a IA'}
+            {rotuloEnviar}
           </Button>
         </>
       }
     >
       <div className={styles.revisao}>
+        {motivo === null ? null : (
+          <p className={styles.motivoRevisao}>
+            <span aria-hidden="true">↻ </span>
+            {motivo}
+          </p>
+        )}
         <p className={styles.destinoEnvio}>
-          {`Isto sai do seu navegador para ${descreverDestino(cadeia)}.`}
+          {`${descricao} Isto sai do seu navegador para ${descreverDestino(cadeia)}.`}
         </p>
         <AvisoNomes>
           Os marcadores voltam aos valores originais só neste navegador, depois da resposta.
         </AvisoNomes>
-        {substitui ? <p className={styles.aviso}>{AVISO_SUBSTITUIR}</p> : null}
-        <AvisoColisoes colisoes={previa?.colisoes ?? []} />
+        {avisoSubstituir === null ? null : <p className={styles.aviso}>{avisoSubstituir}</p>}
+        <AvisoColisoes colisoes={previa.colisoes} />
         <AvisoSensiveis texto={usuario} achados={sensiveis} />
         <div
           className={styles.texto}
@@ -94,7 +84,7 @@ export function RevisaoDoEnvio({
           tabIndex={0}
           data-testid="conteudo-enviado"
         >
-          <TextoDestacado partes={partes} classeDe={classeDoTrecho} />
+          <TextoDestacado partes={partes} classeDe={classeDoPedido} />
         </div>
         <details className={styles.instrucoes}>
           <summary>
@@ -102,7 +92,7 @@ export function RevisaoDoEnvio({
             reunião)
           </summary>
           <div className={styles.texto} data-testid="instrucoes-enviadas">
-            {previa?.sistema ?? ''}
+            {previa.sistema}
           </div>
         </details>
       </div>

@@ -1,10 +1,18 @@
 import { screen, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
-import { TITULO_REVISAO } from '../features/privacy/RevisaoDoEnvio';
+import { TITULO_REVISAO } from '../features/privacy/revisao-textos';
 
-/** O diálogo de revisão antes do envio (aberto por "Gerar ata"). */
-export function dialogoRevisao(): HTMLElement {
-  return screen.getByRole('dialog', { name: TITULO_REVISAO });
+/**
+ * O diálogo de revisão antes do envio. Assíncrono: o diálogo é carregado sob demanda na primeira
+ * abertura (`RevisaoSobDemanda`).
+ */
+export function dialogoRevisao(): Promise<HTMLElement> {
+  return screen.findByRole('dialog', { name: TITULO_REVISAO });
+}
+
+/** Na revisão aberta, "Enviar" ("Enviar para a IA" ou "Enviar e substituir a ata"). */
+export async function enviarRevisao(user: UserEvent): Promise<void> {
+  await user.click(within(await dialogoRevisao()).getByRole('button', { name: /^Enviar/ }));
 }
 
 /**
@@ -13,5 +21,5 @@ export function dialogoRevisao(): HTMLElement {
  */
 export async function gerarEEnviar(user: UserEvent): Promise<void> {
   await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-  await user.click(within(dialogoRevisao()).getByRole('button', { name: /^Enviar/ }));
+  await enviarRevisao(user);
 }

@@ -24,7 +24,15 @@ import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../domain/draft-redu
 import { nomeComArtigo } from '../features/privacy/rotulos';
 import { normalizarBlocos, normalizarEncaminhamentos, normalizarResultado } from './normalize';
 import { exigirChaveDeSecao, nomeDoSchema, schemaDaAta, schemaDaSecao } from './output-schema';
-import { montarPrompt, montarPromptSecao, textoAtualDaSecao, type Prompt } from './prompt';
+import {
+  CABECALHO_TRANSCRICAO,
+  blocoDeTranscricao,
+  conteudoBase,
+  montarPrompt,
+  montarPromptSecao,
+  textoAtualDaSecao,
+  type Prompt,
+} from './prompt';
 
 /**
  * Pipeline de geração (spec 5.2 e 8.3):
@@ -202,6 +210,14 @@ export interface EnvioDaAta {
   /** Mapa de marcadores depois de mascarar tudo que vai no pedido (o `unmask` usa este). */
   mapa: MaskMap;
   colisoes: readonly Colisao[];
+  /**
+   * Conteúdo-base mascarado (dados, pauta, participantes e transcrição; `conteudoBase`). Na ata
+   * inteira é o próprio `usuario`; numa seção, o mesmo texto que a ata mandaria. É o que a
+   * autorização da revisão guarda e compara.
+   */
+  base: string;
+  /** Transcrição mascarada (localiza o cabeçalho fixo, último bloco do `usuario`). */
+  transcricao: string;
 }
 
 /**
@@ -213,27 +229,105 @@ export function prepararEnvioDaAta(d: AtaDraft, tipo: AtaTypeDefinition): EnvioD
   const m = new Mascarador(d.mapa);
   const mascarado = rascunhoMascarado(d, tipo, m);
   const prompt = montarPrompt(tipo, mascarado, mascarado.transcricao);
-  return { prompt, mapa: m.mapa, colisoes: m.colisoes };
+  return {
+    prompt,
+    mapa: m.mapa,
+    colisoes: m.colisoes,
+    base: prompt.usuario,
+    transcricao: mascarado.transcricao,
+  };
 }
 
-/** O que a revisão antes do envio mostra: exatamente o pedido que `gerarAta` envia. */
+/** O pedido de uma seção, pronto para sair (mesmo formato do da ata, com os marcadores suspeitos). */
+export interface EnvioDaSecao extends EnvioDaAta {
+  /** Marcadores que já estavam no texto atual sem existir no mapa (a IA os inventou antes). */
+  suspeitos: ReadonlySet<string>;
+}
+
+/**
+ * Monta o pedido de regerar uma seção (ou os encaminhamentos), com instrução opcional. Mascara o
+ * rascunho primeiro (por isso o conteúdo-base sai igual ao da ata inteira com o mesmo mapa), depois
+ * o texto ATUAL da seção (já desmascarado, inclusive edição manual) e a instrução, com o mesmo mapa.
+ * Única montagem: `regerarSecao` envia o que sai daqui e `previaDoEnvioSecao` mostra o mesmo. Pura.
+ */
+export function prepararEnvioDaSecao(
+  d: AtaDraft,
+  tipo: AtaTypeDefinition,
+  chave: string,
+  instrucao: string | null,
+): EnvioDaSecao {
+  exigirChaveDeSecao(tipo, chave);
+  const m = new Mascarador(d.mapa);
+  const mascarado = rascunhoMascarado(d, tipo, m);
+  const base = conteudoBase(tipo, mascarado, mascarado.transcricao);
+  const textoAtual = textoAtualDaSecao(d, chave);
+  const suspeitos = marcadoresForaDoMapa(textoAtual, d.mapa);
+  const atual = m.mascarar(textoAtual);
+  const pedido = instrucao === null || instrucao.trim() === '' ? null : m.mascarar(instrucao);
+  const prompt = montarPromptSecao(tipo, mascarado, chave, atual, pedido, mascarado.transcricao);
+  return {
+    prompt,
+    mapa: m.mapa,
+    colisoes: m.colisoes,
+    base,
+    transcricao: mascarado.transcricao,
+    suspeitos,
+  };
+}
+
+/** Posição de um marcador a destacar na revisão. */
+export interface MarcadorNoPedido {
+  start: number;
+  end: number;
+}
+
+/** O que a revisão antes do envio mostra: exatamente o pedido que sai. */
 export interface PreviaDoEnvio {
   /** Instruções fixas do Lavra (tipo de ata e tom; sem dados da reunião). */
   sistema: string;
-  /** Dados da reunião, pauta, participantes e transcrição, já mascarados. */
+  /** Dados da reunião, pauta, participantes e transcrição (e, na seção, o texto e a instrução), mascarados. */
   usuario: string;
   /** Literais com forma de marcador que a pessoa escreveu e foram reescritos (`[CPF_1]`). */
   colisoes: string[];
+  /** Conteúdo-base (ver `EnvioDaAta.base`): o que a autorização guarda. */
+  base: string;
+  /**
+   * Marcadores do `usuario` que correspondem a um dado do mapa desta geração, em ordem. O exemplo
+   * fixo do cabeçalho da transcrição ("marcadores como [CPF_1]") fica de fora: não é dado.
+   */
+  marcadores: MarcadorNoPedido[];
+}
+
+function previaDe(envio: EnvioDaAta): PreviaDoEnvio {
+  const { prompt, mapa } = envio;
+  const inicioDoCabecalho = prompt.usuario.length - blocoDeTranscricao(envio.transcricao).length;
+  const fimDoCabecalho = inicioDoCabecalho + CABECALHO_TRANSCRICAO.length;
+  const marcadores = findMarkers(prompt.usuario)
+    .filter((m) => Object.hasOwn(mapa.markers, `[${m.type}_${m.number}]`))
+    .filter((m) => m.start >= fimDoCabecalho || m.end <= inicioDoCabecalho)
+    .map(({ start, end }) => ({ start, end }));
+  return {
+    sistema: prompt.sistema,
+    usuario: prompt.usuario,
+    colisoes: envio.colisoes.map((c) => c.literal),
+    base: envio.base,
+    marcadores,
+  };
 }
 
 /** Visão de `prepararEnvioDaAta` para a revisão (o mapa não sai daqui). Pura. */
 export function previaDoEnvio(d: AtaDraft, tipo: AtaTypeDefinition): PreviaDoEnvio {
-  const { prompt, colisoes } = prepararEnvioDaAta(d, tipo);
-  return {
-    sistema: prompt.sistema,
-    usuario: prompt.usuario,
-    colisoes: colisoes.map((c) => c.literal),
-  };
+  return previaDe(prepararEnvioDaAta(d, tipo));
+}
+
+/** Visão de `prepararEnvioDaSecao` para a revisão. Pura. */
+export function previaDoEnvioSecao(
+  d: AtaDraft,
+  tipo: AtaTypeDefinition,
+  chave: string,
+  instrucao: string | null,
+): PreviaDoEnvio {
+  return previaDe(prepararEnvioDaSecao(d, tipo, chave, instrucao));
 }
 
 export async function gerarAta(
@@ -317,14 +411,8 @@ export async function regerarSecao(
   mapa: MaskMap;
   atribuicao: Atribuicao;
 }> {
-  exigirChaveDeSecao(tipo, chave);
-  const m = new Mascarador(d.mapa);
-  const mascarado = rascunhoMascarado(d, tipo, m);
-  const textoAtual = textoAtualDaSecao(d, chave);
-  const suspeitos = marcadoresForaDoMapa(textoAtual, d.mapa);
-  const atual = m.mascarar(textoAtual);
-  const pedido = instrucao === null || instrucao.trim() === '' ? null : m.mascarar(instrucao);
-  const prompt = montarPromptSecao(tipo, mascarado, chave, atual, pedido, mascarado.transcricao);
+  const envio = prepararEnvioDaSecao(d, tipo, chave, instrucao);
+  const { prompt, mapa, suspeitos } = envio;
 
   const r = await gerarComFallback(
     cadeia,
@@ -338,9 +426,8 @@ export async function regerarSecao(
   );
   conferirCancelamento(signal, r);
 
-  const { mapa } = m;
   const raiz = ehRegistro(r.valor) ? r.valor : {};
-  const colisoes = m.colisoes.map(avisoDeColisao);
+  const colisoes = envio.colisoes.map(avisoDeColisao);
 
   if (chave === CHAVE_ENCAMINHAMENTOS) {
     const itens = normalizarEncaminhamentos(raiz.encaminhamentos);
