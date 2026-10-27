@@ -10,7 +10,7 @@ import type { GenerateRequest, ProviderAdapter, ProviderConfig, ProviderId } fro
 import type { AtaDraft, Bloco, Encaminhamento, Participante, ResultadoAta } from '../domain/draft';
 import { CHAVE_AVISOS_GERAIS, criarRascunho } from '../domain/draft-reducer';
 import { normalizarResultado } from './normalize';
-import { gerarAta, regerarSecao } from './pipeline';
+import { gerarAta, prepararEnvioDaAta, previaDoEnvio, regerarSecao } from './pipeline';
 
 const CPF = '529.982.247-25';
 const CPF_2 = '111.444.777-35';
@@ -263,6 +263,65 @@ describe('gerarAta', () => {
       opcoes,
     ).catch((e: unknown) => e);
     expect((erro as ErroProvedor).tipo).toBe('cancelado');
+  });
+});
+
+describe('previaDoEnvio (revisão antes do envio)', () => {
+  it('o que a revisão mostra é byte a byte o que o adaptador recebe', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaAta({ resumo: [par('Ok.')] })),
+    });
+    const d = rascunho({
+      pauta: [`Cadastro do CPF ${CPF_2}`],
+      participantes: [{ ...ANA, papel: `Contato ${TELEFONE}` }],
+    });
+    const previa = previaDoEnvio(d, corporativa);
+    await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(pedidos).toHaveLength(1);
+    expect(pedidos[0]?.usuario).toBe(previa.usuario);
+    expect(pedidos[0]?.sistema).toBe(previa.sistema);
+    expect(previa.usuario).toContain('[CPF_1]');
+    expect(previa.usuario).not.toContain(CPF);
+  });
+
+  it('com mapa anterior e colisão, a prévia continua igual ao pedido e lista a colisão', async () => {
+    const anterior = mask(`CPF ${CPF_2}`, { map: createMaskMap() }).map;
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaAta({ resumo: [par('Ok.')] })),
+    });
+    const d = rascunho({
+      mapa: anterior,
+      transcricao: `Ana: o campo aparecia como [CPF_1]; o novo é ${CPF}.`,
+    });
+    const previa = previaDoEnvio(d, corporativa);
+    expect(previa.colisoes).toEqual(['[CPF_1]']);
+    await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(pedidos[0]?.usuario).toBe(previa.usuario);
+  });
+
+  it('não altera o rascunho e é determinística', () => {
+    const d = rascunho();
+    const antes = structuredClone(d);
+    const a = previaDoEnvio(d, corporativa);
+    const b = previaDoEnvio(d, corporativa);
+    expect(a).toEqual(b);
+    expect(d).toEqual(antes);
+  });
+
+  it('prepararEnvioDaAta devolve o mapa usado no pedido', () => {
+    const { prompt, mapa } = prepararEnvioDaAta(rascunho(), corporativa);
+    expect(mapa.markers['[CPF_1]']).toBe(CPF);
+    expect(prompt.usuario).toContain('[CPF_1]');
+  });
+
+  it('LIMITE: dado sensível em linguagem natural segue sem máscara (só há aviso na revisão)', async () => {
+    const { opcoes, pedidos } = adaptadores({
+      openai: () => Promise.resolve(respostaAta({ resumo: [par('Ok.')] })),
+    });
+    const fala = 'Joana está afastada por depressão desde março e entrou com processo trabalhista.';
+    const d = rascunho({ transcricao: `Ana: ${fala}` });
+    await gerarAta(d, corporativa, CADEIA, sinal(), opcoes);
+    expect(pedidos[0]?.usuario).toContain(fala);
   });
 });
 

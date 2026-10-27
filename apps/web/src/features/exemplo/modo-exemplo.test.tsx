@@ -22,6 +22,7 @@ import {
   criarPreferenciasStore,
   type PreferenciasStore,
 } from '../../preferencias/preferencias-store';
+import { gerarEEnviar } from '../../test/revisao-envio';
 import { storageFalso } from '../../test/storage-falso';
 import { ToastProvider } from '../../ui/Toast';
 import { AJUDA_LEMBRAR_NO_EXEMPLO, AJUDA_LEMBRAR_PREFERENCIAS } from '../form/LembrarPreferencias';
@@ -324,7 +325,7 @@ describe('modo exemplo: entrar', () => {
       },
     });
 
-    await user.click(botaoGerar());
+    await gerarEEnviar(user);
     expect(screen.getByRole('progressbar', { name: 'Gerando a ata' })).toBeVisible();
 
     const dialogo = await abrirSeletor(user);

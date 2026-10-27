@@ -1,6 +1,7 @@
-import { useId, useRef, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { camposFaltando, obterTipo } from '../../ata-types/registry';
 import type { OpcoesCadeia } from '../../ai/chain';
+import type { ProviderConfig } from '../../ai/types';
 import { useKeys } from '../../ai/KeysContext';
 import { ROTULO_CURTO } from '../../config/models';
 import { useDraft } from '../../domain/DraftContext';
@@ -8,12 +9,12 @@ import type { ResultadoAta } from '../../domain/draft';
 import { textoDaFalha } from '../../generation/atribuicao';
 import { descreverErroDeGeracao } from '../../generation/erro-geracao';
 import { MOTIVO_IA_OCUPADA } from '../../generation/OperacaoIA';
-import { gerarAta } from '../../generation/pipeline';
+import { gerarAta, previaDoEnvio } from '../../generation/pipeline';
 import { useChamadaIA } from '../../generation/useChamadaIA';
 import { Button } from '../../ui/Button';
-import { Modal } from '../../ui/Modal';
 import { useToast } from '../../ui/Toast';
 import { MOTIVO_EXEMPLO, useModoExemplo } from '../exemplo/ModoExemplo';
+import { RevisaoDoEnvio } from '../privacy/RevisaoDoEnvio';
 import { focarCampo } from './focar-campo';
 import styles from './generate.module.css';
 
@@ -37,9 +38,18 @@ function estadoDeErro(e: unknown): Estado {
   return { fase: 'erro', ...descreverErroDeGeracao(e, 'ata') };
 }
 
+/** O que a pessoa autorizou na última revisão: o conteúdo exato e os destinos (provedor + modelo). */
+interface EnvioAutorizado {
+  usuario: string;
+  destinos: readonly string[];
+}
+
+const destinoDe = (c: ProviderConfig): string => `${c.id}:${c.modelo}`;
+
 /**
- * Barra de geração da ata: o que falta, para quem vai, progresso, cancelar, erro e confirmação
- * antes de substituir uma ata já gerada. O rascunho só muda no sucesso.
+ * Barra de geração da ata: o que falta, para quem vai, progresso, cancelar e erro. "Gerar ata"
+ * nunca envia direto: abre a revisão do pedido exato (`RevisaoDoEnvio`, que também avisa quando a
+ * ata atual será substituída) e só "Enviar" chama a IA. O rascunho só muda no sucesso.
  */
 export function GenerateBar({
   onConfigurarChaves,
@@ -51,7 +61,9 @@ export function GenerateBar({
   const keys = useKeys();
   const { mostrar } = useToast();
   const [estado, setEstado] = useState<Estado>({ fase: 'parado' });
-  const [confirmando, setConfirmando] = useState(false);
+  const [revisando, setRevisando] = useState(false);
+  /** Última revisão autorizada ("Tentar de novo" só pula a revisão se nada mudou desde ela). */
+  const autorizadoRef = useRef<EnvioAutorizado | null>(null);
   const gerarRef = useRef<HTMLButtonElement>(null);
   /** A ata como estava quando a última tentativa saiu (para saber se algo mudou desde então). */
   const baseDaTentativaRef = useRef<ResultadoAta | null>(null);
@@ -68,6 +80,11 @@ export function GenerateBar({
   // `useKeys` re-renderiza a cada mudança no KeyStore; a cadeia (até 3 itens) é lida a cada render.
   const cadeia = keys.cadeia();
   const ocupadaPorSecao = operacao !== null && !gerando;
+  // Montado do MESMO rascunho que `gerar` envia neste render: o revisado é o enviado.
+  const previa = useMemo(
+    () => (revisando ? previaDoEnvio(state, obterTipo(state.tipoId)) : null),
+    [revisando, state],
+  );
 
   /**
    * Porta única de toda chamada (Gerar, confirmação e "Tentar de novo"): nada sai com falta nem do
@@ -111,24 +128,35 @@ export function GenerateBar({
       onConfigurarChaves();
       return;
     }
-    if (state.resultado) {
-      setConfirmando(true);
-      return;
-    }
+    setRevisando(true);
+  };
+
+  const aoEnviar = () => {
+    if (previa === null) return;
+    autorizadoRef.current = { usuario: previa.usuario, destinos: cadeia.map(destinoDe) };
+    setRevisando(false);
     void gerar();
   };
 
   /**
-   * "Tentar de novo": se a ata mudou desde a tentativa (ex.: uma seção editada à mão depois da
-   * falha), passa pela mesma confirmação de substituir; sem mudança, a confirmação já foi dada.
+   * "Tentar de novo" envia direto só se o pedido é idêntico ao último revisado, a fila não ganhou
+   * provedor ou modelo novo e a ata não mudou desde a tentativa (ex.: uma seção editada à mão
+   * depois da falha). Qualquer diferença reabre a revisão.
    */
   const aoTentarDeNovo = () => {
     if (!podeGerar) return;
-    if (state.resultado && state.resultado !== baseDaTentativaRef.current) {
-      setConfirmando(true);
+    if (cadeia.length === 0) {
+      onConfigurarChaves();
       return;
     }
-    void gerar();
+    const autorizado = autorizadoRef.current;
+    const igual =
+      autorizado !== null &&
+      state.resultado === baseDaTentativaRef.current &&
+      cadeia.every((c) => autorizado.destinos.includes(destinoDe(c))) &&
+      previaDoEnvio(state, tipo).usuario === autorizado.usuario;
+    if (igual) void gerar();
+    else setRevisando(true);
   };
 
   const [primeiro, ...depois] = cadeia;
@@ -250,38 +278,16 @@ export function GenerateBar({
         </div>
       ) : null}
 
-      <Modal
-        aberto={confirmando}
-        titulo="Gerar a ata de novo?"
-        onFechar={() => {
-          setConfirmando(false);
+      <RevisaoDoEnvio
+        aberto={revisando}
+        previa={previa}
+        cadeia={cadeia}
+        substitui={state.resultado !== null}
+        onCancelar={() => {
+          setRevisando(false);
         }}
-        acoes={
-          <>
-            <Button
-              onClick={() => {
-                setConfirmando(false);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variante="primario"
-              onClick={() => {
-                setConfirmando(false);
-                void gerar();
-              }}
-            >
-              Gerar de novo
-            </Button>
-          </>
-        }
-      >
-        <p>
-          Gerar de novo substitui a ata atual, inclusive as seções editadas à mão. Para mudar só uma
-          parte, use as ações da própria seção na folha.
-        </p>
-      </Modal>
+        onEnviar={aoEnviar}
+      />
     </section>
   );
 }

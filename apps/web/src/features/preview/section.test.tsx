@@ -12,6 +12,7 @@ import { GenerateBar } from '../form/GenerateBar';
 import { A4Preview } from './A4Preview';
 import { ModoExemploDeTeste } from '../../test/modo-exemplo';
 import { renderizarComProvedores } from '../../test/provedores';
+import { gerarEEnviar } from '../../test/revisao-envio';
 import { MOTIVO_EXEMPLO } from '../exemplo/ModoExemplo';
 import { TEMPO_VOLUME_MS } from '../../test/tempos';
 
@@ -716,8 +717,7 @@ describe('revisão por seção: uma operação de IA por vez', () => {
   it('enquanto a ata inteira é gerada, as ações de IA das seções ficam paradas com motivo', async () => {
     const espera = pendente();
     const { user } = renderizar({ impl: { gemini: espera.gerar }, comBarra: true });
-    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
 
     const s = secao('Resumo');
     expect(within(s).getByRole('button', { name: 'Regerar seção Resumo' })).toBeDisabled();
@@ -988,8 +988,7 @@ describe('revisão por seção: ajustes finos', () => {
       within(s).getByRole('textbox', { name: 'Texto da seção Resumo' }),
       ' Mais um trecho.',
     );
-    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
 
     const editor = within(s).getByRole('group', { name: 'Editar seção Resumo' });
     expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeDisabled();
@@ -1011,8 +1010,7 @@ describe('revisão por seção: ajustes finos', () => {
     const { user } = renderizar({ impl: { gemini: espera.gerar }, comBarra: true });
     const s = secao('Encaminhamentos');
     await user.click(within(s).getByRole('button', { name: 'Editar seção Encaminhamentos' }));
-    await user.click(screen.getByRole('button', { name: /Gerar ata/ }));
-    await user.click(screen.getByRole('button', { name: 'Gerar de novo' }));
+    await gerarEEnviar(user);
     const editor = within(s).getByRole('group', { name: 'Editar seção Encaminhamentos' });
     expect(within(editor).getByRole('button', { name: 'Salvar' })).toBeDisabled();
     expect(within(editor).getByText(MOTIVO_OCUPADA)).toBeVisible();

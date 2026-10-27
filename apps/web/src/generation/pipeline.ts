@@ -24,7 +24,7 @@ import { CHAVE_AVISOS_GERAIS, CHAVE_ENCAMINHAMENTOS } from '../domain/draft-redu
 import { nomeComArtigo } from '../features/privacy/rotulos';
 import { normalizarBlocos, normalizarEncaminhamentos, normalizarResultado } from './normalize';
 import { exigirChaveDeSecao, nomeDoSchema, schemaDaAta, schemaDaSecao } from './output-schema';
-import { montarPrompt, montarPromptSecao, textoAtualDaSecao } from './prompt';
+import { montarPrompt, montarPromptSecao, textoAtualDaSecao, type Prompt } from './prompt';
 
 /**
  * Pipeline de geração (spec 5.2 e 8.3):
@@ -36,7 +36,7 @@ import { montarPrompt, montarPromptSecao, textoAtualDaSecao } from './prompt';
  * lançam `ErroCadeia` (de `gerarComFallback`). Nenhuma mensagem leva chave ou dado desmascarado.
  */
 
-interface Colisao {
+export interface Colisao {
   /** Literal com forma de marcador que a pessoa escreveu (ex.: `[CPF_1]`). */
   literal: string;
   /** Como ele foi enviado (ex.: `[CPF#1]`). */
@@ -196,6 +196,46 @@ function conferirCancelamento(signal: AbortSignal, r: ResultadoCadeia<unknown>):
   if (signal.aborted) throw erroProvedor('cancelado', r.provedor);
 }
 
+/** O pedido da ata inteira, pronto para sair, com o mapa e as colisões da mascaração. */
+export interface EnvioDaAta {
+  prompt: Prompt;
+  /** Mapa de marcadores depois de mascarar tudo que vai no pedido (o `unmask` usa este). */
+  mapa: MaskMap;
+  colisoes: readonly Colisao[];
+}
+
+/**
+ * Monta o pedido da ata inteira: mascara o rascunho (mesmo mapa) e monta o prompt. É a ÚNICA
+ * montagem: `gerarAta` envia o que sai daqui e `previaDoEnvio` mostra o mesmo, byte a byte. Pura:
+ * nunca altera `d`.
+ */
+export function prepararEnvioDaAta(d: AtaDraft, tipo: AtaTypeDefinition): EnvioDaAta {
+  const m = new Mascarador(d.mapa);
+  const mascarado = rascunhoMascarado(d, tipo, m);
+  const prompt = montarPrompt(tipo, mascarado, mascarado.transcricao);
+  return { prompt, mapa: m.mapa, colisoes: m.colisoes };
+}
+
+/** O que a revisão antes do envio mostra: exatamente o pedido que `gerarAta` envia. */
+export interface PreviaDoEnvio {
+  /** Instruções fixas do Lavra (tipo de ata e tom; sem dados da reunião). */
+  sistema: string;
+  /** Dados da reunião, pauta, participantes e transcrição, já mascarados. */
+  usuario: string;
+  /** Literais com forma de marcador que a pessoa escreveu e foram reescritos (`[CPF_1]`). */
+  colisoes: string[];
+}
+
+/** Visão de `prepararEnvioDaAta` para a revisão (o mapa não sai daqui). Pura. */
+export function previaDoEnvio(d: AtaDraft, tipo: AtaTypeDefinition): PreviaDoEnvio {
+  const { prompt, colisoes } = prepararEnvioDaAta(d, tipo);
+  return {
+    sistema: prompt.sistema,
+    usuario: prompt.usuario,
+    colisoes: colisoes.map((c) => c.literal),
+  };
+}
+
 export async function gerarAta(
   d: AtaDraft,
   tipo: AtaTypeDefinition,
@@ -212,9 +252,7 @@ export async function gerarAta(
   /** Provedores que falharam antes do que respondeu (para o aviso de fallback). */
   falhas: FalhaProvedor[];
 }> {
-  const m = new Mascarador(d.mapa);
-  const mascarado = rascunhoMascarado(d, tipo, m);
-  const prompt = montarPrompt(tipo, mascarado, mascarado.transcricao);
+  const { prompt, mapa, colisoes } = prepararEnvioDaAta(d, tipo);
 
   const r = await gerarComFallback(
     cadeia,
@@ -223,7 +261,6 @@ export async function gerarAta(
   );
   conferirCancelamento(signal, r);
 
-  const { mapa } = m;
   const normal = normalizarResultado(r.valor, tipo);
   const atribuicao = atribuicaoDe(r);
   const avisos: Record<string, string[]> = {};
@@ -244,7 +281,7 @@ export async function gerarAta(
     );
     porSecao[CHAVE_ENCAMINHAMENTOS] = atribuicao;
   }
-  if (m.colisoes.length > 0) avisos[CHAVE_AVISOS_GERAIS] = m.colisoes.map(avisoDeColisao);
+  if (colisoes.length > 0) avisos[CHAVE_AVISOS_GERAIS] = colisoes.map(avisoDeColisao);
 
   return {
     resultado: {
@@ -255,7 +292,7 @@ export async function gerarAta(
       editadas: [],
     },
     mapa,
-    colisoes: m.colisoes.map((c) => c.literal),
+    colisoes: colisoes.map((c) => c.literal),
     atribuicao,
     falhas: r.falhas,
   };
