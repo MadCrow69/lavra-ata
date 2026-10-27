@@ -3,6 +3,7 @@ import {
   PADRAO_CODIGO_CID,
   type CategoriaSensivel,
 } from '../../config/termos-sensiveis';
+import { plural } from '../../ui/plural';
 
 /** Trecho do texto ORIGINAL que contém um termo da lista de `config/termos-sensiveis.ts`. */
 export interface TermoSensivel {
@@ -11,11 +12,13 @@ export interface TermoSensivel {
   end: number;
   /** `id` da categoria em `CATEGORIAS_SENSIVEIS`. */
   categoria: string;
+  /** Discriminante: distingue o termo sensível do dado pessoal e do marcador num destaque. */
+  origem: 'termo-sensivel';
 }
 
 /** O trecho destacado é um termo sensível (e não um dado pessoal ou marcador)? */
 export function ehTermoSensivel(trecho: object): trecho is TermoSensivel {
-  return 'categoria' in trecho;
+  return 'origem' in trecho && trecho.origem === 'termo-sensivel';
 }
 
 /** Texto normalizado e, para cada caractere dele, o trecho do original que o produziu. */
@@ -28,8 +31,10 @@ interface Normalizado {
 /**
  * Mesma regra de `normalizarBusca` (minúsculas, sem acento), feita caractere a caractere para
  * guardar a posição no original: `toLowerCase` e a decomposição podem mudar o tamanho ("İ" vira
- * "i" + ponto). Espaços não são colapsados aqui: o padrão de cada termo aceita `\s+`. Marca
- * combinante solta (texto já decomposto) estende o caractere anterior, para o destaque cobri-la.
+ * "i" + ponto). Espaços não são colapsados aqui: o padrão de cada termo aceita separadores. Marca
+ * combinante solta (texto já decomposto) e caractere de formatação invisível (hífen suave, espaço
+ * de largura zero, comuns em texto colado de PDF) somem e estendem o caractere anterior, para o
+ * destaque cobri-los: "depres" + hífen suave + "são" casa com `depressao`.
  */
 function normalizarComPosicoes(original: string): Normalizado {
   let texto = '';
@@ -38,7 +43,10 @@ function normalizarComPosicoes(original: string): Normalizado {
   let i = 0;
   for (const ch of original) {
     const proximo = i + ch.length;
-    const forma = ch.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+    const forma = ch
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\p{M}\p{Cf}]/gu, '');
     if (forma === '') {
       if (fim.length > 0) fim[fim.length - 1] = proximo;
     } else {
@@ -56,15 +64,22 @@ function normalizarComPosicoes(original: string): Normalizado {
 
 const escapar = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** `afastad*` → radical seguido de letras; espaço entre palavras → qualquer espaço. */
+/** Entre as palavras de um termo composto: espaço, quebra de linha ou hífen (também tipográfico). */
+const SEPARADOR = String.raw`[\s\-‐-―]+`;
+
+/**
+ * `afastad* por` → cada palavra com `*` no fim vira radical seguido de letras; entre as palavras,
+ * `SEPARADOR`. Letras e separador não se sobrepõem: sem retrocesso combinatório.
+ */
 function padraoDoTermo(termo: string): string {
-  const prefixo = termo.endsWith('*');
-  const base = prefixo ? termo.slice(0, -1) : termo;
-  const corpo = base
+  return termo
     .split(' ')
-    .map(escapar)
-    .join(String.raw`\s+`);
-  return prefixo ? String.raw`${corpo}[\p{L}\p{N}]*` : corpo;
+    .map((palavra) =>
+      palavra.endsWith('*')
+        ? String.raw`${escapar(palavra.slice(0, -1))}[\p{L}\p{N}]*`
+        : escapar(palavra),
+    )
+    .join(SEPARADOR);
 }
 
 interface Alternativa {
@@ -119,7 +134,7 @@ export function detectarTermosSensiveis(texto: string): TermoSensivel[] {
     const start = n.inicio[ini];
     const end = n.fim[ultimo];
     if (categoria === undefined || start === undefined || end === undefined) continue;
-    achados.push({ start, end, categoria });
+    achados.push({ start, end, categoria, origem: 'termo-sensivel' });
   }
   return achados;
 }
@@ -155,4 +170,14 @@ export function trechosDistintos(
     distintos.push({ trecho, categoria: a.categoria });
   }
   return distintos;
+}
+
+/**
+ * "2 trechos com possível dado sensível (saúde, conflito trabalhista) vão como estão — revise
+ * antes de enviar." (linha do selo da transcrição).
+ */
+export function fraseDoAvisoSensivel(achados: readonly TermoSensivel[]): string {
+  const n = achados.length;
+  const categorias = categoriasDosAchados(achados).join(', ');
+  return `${String(n)} ${plural(n, 'trecho', 'trechos')} com possível dado sensível (${categorias}) ${plural(n, 'vai como está', 'vão como estão')} — revise antes de enviar.`;
 }

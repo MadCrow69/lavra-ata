@@ -9,10 +9,13 @@
  * proteção; frase sensível sem termo da lista passa sem aviso.
  *
  * Termos escritos já normalizados (minúsculas, sem acento, espaço simples; um teste confere). `*`
- * no fim = prefixo (radical): `afastad*` acha "afastado", "afastada", "afastados". Termo com espaço
- * aceita qualquer espaço ou quebra de linha entre as palavras. Nada genérico demais ("tratamento",
- * "desligamento", "laudo" sozinho, "deficiência" sozinha): o aviso que dispara toda hora deixa de
- * ser lido.
+ * no fim de uma palavra = prefixo (radical): `afastad* por` acha "afastado por", "afastada por".
+ * Entre as palavras de um termo composto vale qualquer espaço, quebra de linha ou hífen
+ * ("licença-maternidade"). Nada genérico demais: radical que aparece toda hora em ata corporativa,
+ * de condomínio ou jurídica ("diagnóstico do sistema", "o risco foi afastado", "atestado de
+ * capacidade técnica", "cão de raça", "Rua da Igreja", "laudo da vistoria") entra só com o contexto
+ * que o liga a uma pessoa ("afastada por", "atestado médico"). O aviso que dispara toda hora deixa
+ * de ser lido. Calibrar de verdade pede um corpus de atas reais anonimizadas.
  */
 
 export interface CategoriaSensivel {
@@ -28,13 +31,17 @@ export const CATEGORIAS_SENSIVEIS: readonly CategoriaSensivel[] = [
     id: 'saude',
     rotulo: 'saúde',
     termos: [
-      'diagnostic*',
-      'cid',
-      'atestado*',
+      'diagnostico medico',
+      'diagnosticad* com',
+      'atestado medico',
+      'atestados medicos',
       'laudo medico',
       'laudos medicos',
-      'afastad*',
-      'afastamento*',
+      'afastad* do trabalho',
+      'afastad* por',
+      'afastamento medico',
+      'afastamento do trabalho',
+      'afastamento por',
       'licenca medica',
       'licenca maternidade',
       'internad*',
@@ -59,7 +66,10 @@ export const CATEGORIAS_SENSIVEIS: readonly CategoriaSensivel[] = [
       'medicament*',
       'tratamento medico',
       'psiquiatr*',
-      'psicolog*',
+      'psicologo',
+      'psicologa',
+      'acompanhamento psicologico',
+      'tratamento psicologico',
       'doenca*',
     ],
   },
@@ -88,13 +98,12 @@ export const CATEGORIAS_SENSIVEIS: readonly CategoriaSensivel[] = [
       'partido politico',
       'religiao',
       'religios*',
-      'igreja*',
     ],
   },
   {
     id: 'origem',
     rotulo: 'origem racial ou étnica',
-    termos: ['raca', 'etnia*', 'etnic*'],
+    termos: ['cor ou raca', 'raca negra', 'origem racial', 'etnia*', 'etnic*'],
   },
   {
     id: 'sexual',
@@ -110,11 +119,13 @@ export const CATEGORIAS_SENSIVEIS: readonly CategoriaSensivel[] = [
 
 /**
  * Código da CID escrito depois da sigla ("CID F32", "CID-10: F32.1", "cid m54"), aplicado ao texto
- * já normalizado. Vence o termo `cid` sozinho: o trecho destacado inclui o código.
+ * já normalizado. A sigla sozinha não avisa ("Cid" também é nome). Os separadores são curtos e
+ * limitados (`[ \t]{0,3}`): com `\s*` repetido, "CID" seguido de milhares de espaços fazia o motor
+ * testar todas as divisões dos espaços (tempo quadrático, aba travada).
  */
 export const PADRAO_CODIGO_CID = {
   categoria: 'saude',
-  fonte: String.raw`cid(?:\s*-?\s*1[01])?\s*[:\-]?\s*[a-z]\d{2}(?:\.\d{1,2})?`,
+  fonte: String.raw`cid(?:[ \t]{0,3}-?[ \t]{0,3}1[01])?[ \t]{0,3}[:\-]?[ \t]{0,3}[a-z]\d{2}(?:\.\d{1,2})?`,
 } as const;
 
 /** Quantos trechos distintos o aviso da revisão lista antes de resumir em "e mais N". */
