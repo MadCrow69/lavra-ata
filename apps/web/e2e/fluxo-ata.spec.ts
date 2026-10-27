@@ -219,10 +219,15 @@ test.describe('fluxo da ata no build com CSP ativa', () => {
       await expect(dialogo).toBeVisible();
       await expect(dialogo).toContainText('Isto sai do seu navegador para OpenAI · gpt-6-luna');
       const conteudo = dialogo.getByRole('region', { name: 'Conteúdo enviado à IA' });
-      await expect(conteudo.locator('mark', { hasText: MARCADOR_CPF }).first()).toBeVisible();
+      // Só o marcador do CPF real (o da fala de Marcos) é destacado; o exemplo fixo do cabeçalho
+      // ("marcadores como [CPF_1]") fica como texto comum.
+      const marca = conteudo.locator('mark', { hasText: MARCADOR_CPF });
+      await expect(marca).toHaveCount(1);
+      await expect(marca).toBeVisible();
+      await expect(conteudo).toContainText(`documento do sócio, CPF ${MARCADOR_CPF}, que já está`);
       await expect(conteudo).not.toContainText(CPF);
       const aviso = dialogo.getByRole('region', { name: /^Possível dado sensível \(saúde\)/ });
-      await expect(aviso).toContainText('afastada (saúde)');
+      await expect(aviso).toContainText('afastada por (saúde)');
       await expect(aviso).toContainText('depressão (saúde)');
       await expect(aviso).toContainText('Não são mascarados.');
       // O termo sensível vai como está: só o aviso, nada de máscara.
