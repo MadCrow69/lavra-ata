@@ -9,8 +9,14 @@
   background: var(--cor-fundo);
 }
 
-.selo {
+.selos {
+  display: flex;
   flex: 1 1 16rem;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.selo {
   margin: 0;
   font-weight: 600;
 }
@@ -84,4 +90,71 @@
   text-decoration: underline wavy var(--cor-erro);
   text-underline-offset: 3px;
   font-weight: 700;
+}
+
+/* Termo de possível dado sensível (só aviso, vai como está): fundo neutro e contorno tracejado,
+   para não depender só da cor nem se confundir com o marcador. */
+.marcaSensivel {
+  padding: 0 2px;
+  border-bottom: 2px dashed var(--cor-destaque-texto);
+  background: var(--cor-fundo);
+  color: inherit;
+  font-style: italic;
+}
+
+.avisoSensivel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  padding: var(--espaco-2) var(--espaco-3);
+  border: 2px dashed var(--cor-destaque-texto);
+  border-radius: var(--raio);
+  background: var(--cor-fundo);
+  font-size: 0.9375rem;
+}
+
+.avisoSensivelTitulo {
+  margin: 0;
+  font-family: var(--fonte-interface);
+  font-size: 1rem;
+  color: var(--cor-destaque-texto);
+}
+
+.avisoSensivelLista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-1) var(--espaco-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.avisoSensivelTexto {
+  margin: 0;
+}
+
+.seloSensivel {
+  margin: 0;
+  font-weight: 600;
+  color: var(--cor-destaque-texto);
+}
+
+/* Revisão antes do envio. */
+.revisao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+}
+
+.destinoEnvio {
+  margin: 0;
+  font-weight: 600;
+}
+
+.instrucoes > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 600;
 }

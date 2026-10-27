@@ -1,47 +1,48 @@
 import { findMarkers } from '@lavra/pii-br';
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useDraft } from '../../domain/DraftContext';
 import { Button } from '../../ui/Button';
 import { Modal } from '../../ui/Modal';
-import { fatiar, type Parte } from './fatiar';
+import { AvisoColisoes, AvisoNomes, fraseDoAvisoSensivel } from './avisos';
+import { fatiar, mesclarTrechos } from './fatiar';
 import styles from './privacy.module.css';
 import { fraseDoSelo } from './rotulos';
+import { detectarTermosSensiveis, ehTermoSensivel } from './termos-sensiveis';
+import { TextoDestacado } from './TextoDestacado';
 import { usePrivacyScan, type PrivacyScan } from './usePrivacyScan';
 
-function Texto({ partes, classeMarca }: { partes: Parte[]; classeMarca: string }) {
-  return partes.map((p) =>
-    p.destaque ? (
-      <mark key={p.inicio} className={classeMarca}>
-        {p.texto}
-      </mark>
-    ) : (
-      <Fragment key={p.inicio}>{p.texto}</Fragment>
-    ),
-  );
+/** Classe do destaque: o dado pessoal/marcador (`classePii`) ou o termo sensível. */
+function classeDoTrecho(classePii: string) {
+  return (t: object) => (ehTermoSensivel(t) ? (styles.marcaSensivel ?? '') : classePii);
 }
 
 function Comparativo({ scan }: { scan: PrivacyScan }) {
   const original = useMemo(
-    () => fatiar(scan.analisado, scan.achados),
-    [scan.analisado, scan.achados],
+    () => fatiar(scan.analisado, mesclarTrechos(scan.achados, scan.sensiveis)),
+    [scan.analisado, scan.achados, scan.sensiveis],
   );
   const enviado = useMemo(
-    () => fatiar(scan.mascarado, findMarkers(scan.mascarado)),
+    () =>
+      fatiar(
+        scan.mascarado,
+        mesclarTrechos(findMarkers(scan.mascarado), detectarTermosSensiveis(scan.mascarado)),
+      ),
     [scan.mascarado],
   );
 
   return (
     <div className={styles.comparativo}>
-      <p className={styles.aviso}>
-        <strong>Nomes de pessoas não são removidos — a ata precisa deles.</strong> Só documentos,
-        contatos e cartões viram marcadores. A IA recebe apenas a coluna “Enviado à IA”; ao final,
-        os marcadores voltam para os valores originais neste navegador.
-      </p>
-      {scan.colisoes.length > 0 ? (
+      <AvisoNomes>
+        A IA recebe apenas a coluna “Enviado à IA”; ao final, os marcadores voltam para os valores
+        originais neste navegador.
+      </AvisoNomes>
+      {scan.sensiveis.length > 0 ? (
         <p className={styles.aviso}>
-          {`Atenção: ${scan.colisoes.join(', ')} já aparece${scan.colisoes.length === 1 ? '' : 'm'} no texto como se fosse um marcador e foi reescrito para não se confundir com os de verdade.`}
+          Trechos com contorno tracejado são possível dado sensível: não viram marcador e vão como
+          estão.
         </p>
       ) : null}
+      <AvisoColisoes colisoes={scan.colisoes} />
       <div className={styles.colunas}>
         <section className={styles.coluna}>
           <h3 className={styles.colunaTitulo}>Original</h3>
@@ -52,7 +53,10 @@ function Comparativo({ scan }: { scan: PrivacyScan }) {
             tabIndex={0}
             data-testid="coluna-original"
           >
-            <Texto partes={original} classeMarca={styles.marcaOriginal ?? ''} />
+            <TextoDestacado
+              partes={original}
+              classeDe={classeDoTrecho(styles.marcaOriginal ?? '')}
+            />
           </div>
         </section>
         <section className={styles.coluna}>
@@ -64,7 +68,7 @@ function Comparativo({ scan }: { scan: PrivacyScan }) {
             tabIndex={0}
             data-testid="coluna-enviado"
           >
-            <Texto partes={enviado} classeMarca={styles.marca ?? ''} />
+            <TextoDestacado partes={enviado} classeDe={classeDoTrecho(styles.marca ?? '')} />
           </div>
         </section>
       </div>
@@ -80,20 +84,29 @@ export function PrivacyPreview({ texto }: { texto: string }) {
 
   return (
     <div className={styles.previa}>
-      <p className={styles.selo} aria-live="polite" data-pendente={scan.pendente}>
-        {texto === '' ? (
-          'Cole a transcrição para ver quais dados pessoais serão protegidos.'
-        ) : scan.excedido ? (
-          'Reduza a transcrição ao limite para ver a prévia.'
-        ) : scan.pendente ? (
-          'Verificando dados pessoais…'
-        ) : (
-          <>
-            <span aria-hidden="true">🛡 </span>
-            {fraseDoSelo(scan.total, scan.contagem)}
-          </>
-        )}
-      </p>
+      {/* Uma região só anuncia as duas linhas (dado pessoal e termo sensível) quando mudam. */}
+      <div className={styles.selos} aria-live="polite">
+        <p className={styles.selo} data-pendente={scan.pendente}>
+          {texto === '' ? (
+            'Cole a transcrição para ver quais dados pessoais serão protegidos.'
+          ) : scan.excedido ? (
+            'Reduza a transcrição ao limite para ver a prévia.'
+          ) : scan.pendente ? (
+            'Verificando dados pessoais…'
+          ) : (
+            <>
+              <span aria-hidden="true">🛡 </span>
+              {fraseDoSelo(scan.total, scan.contagem)}
+            </>
+          )}
+        </p>
+        {texto !== '' && !scan.excedido && !scan.pendente && scan.sensiveis.length > 0 ? (
+          <p className={styles.seloSensivel}>
+            <span aria-hidden="true">⚠ </span>
+            {fraseDoAvisoSensivel(scan.sensiveis)}
+          </p>
+        ) : null}
+      </div>
       <Button
         disabled={texto === '' || scan.excedido || scan.pendente}
         onClick={() => {

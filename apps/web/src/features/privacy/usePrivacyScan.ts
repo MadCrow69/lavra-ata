@@ -2,6 +2,7 @@ import { mask, type Finding, type MaskMap, type PiiType } from '@lavra/pii-br';
 import { useEffect, useMemo, useState } from 'react';
 import { transcricaoExcedeLimite } from '../../ata-types/registry';
 import { DEBOUNCE_DETECCAO_MS } from '../../config/limits';
+import { detectarTermosSensiveis, type TermoSensivel } from './termos-sensiveis';
 
 export interface PrivacyScan {
   /** Ocorrências por tipo. */
@@ -19,6 +20,8 @@ export interface PrivacyScan {
   achados: Finding[];
   /** Trechos do usuário parecidos com marcador que foram reescritos (`[CPF_1]` → `[CPF#1]`). */
   colisoes: string[];
+  /** Termos de possível dado sensível no texto analisado (só aviso: vão como estão). */
+  sensiveis: TermoSensivel[];
 }
 
 /** Resultado de um texto vazio: não passa pelo debounce nem pelo `mask`. */
@@ -29,6 +32,7 @@ const VAZIO: Omit<PrivacyScan, 'pendente' | 'excedido'> = {
   mascarado: '',
   achados: [],
   colisoes: [],
+  sensiveis: [],
 };
 
 export function contarPorTipo(achados: readonly Finding[]): Partial<Record<PiiType, number>> {
@@ -38,7 +42,7 @@ export function contarPorTipo(achados: readonly Finding[]): Partial<Record<PiiTy
 }
 
 /**
- * Prévia do mascaramento: acima do limite não roda; abaixo, roda `mask` só depois que a digitação parou por `DEBOUNCE_DETECCAO_MS`
+ * Prévia do mascaramento (e do aviso de termos sensíveis, que não mascara): acima do limite não roda; abaixo, roda `mask` só depois que a digitação parou por `DEBOUNCE_DETECCAO_MS`
  * (a transcrição pode ter centenas de milhares de caracteres). Usa o mapa do rascunho para que
  * os marcadores mostrados sejam os mesmos que a IA receberá. Nunca altera o rascunho.
  */
@@ -68,6 +72,7 @@ export function usePrivacyScan(texto: string, mapa?: MaskMap | null): PrivacySca
       mascarado: r.masked,
       achados: r.findings,
       colisoes: r.collisions,
+      sensiveis: detectarTermosSensiveis(base),
     };
   }, [base, mapa]);
 

@@ -114,6 +114,54 @@ describe('prévia de privacidade', () => {
     ).toBeInTheDocument();
   });
 
+  it('termo sensível: uma linha a mais no selo, com ícone, categorias e plural', () => {
+    renderizar();
+    colar(`Joana está afastada por depressão. Ela entrou com processo trabalhista. CPF ${CPF_A}`);
+    expect(screen.queryByText(/possível dado sensível/)).not.toBeInTheDocument();
+    passarDebounce();
+    const linha = screen.getByText(
+      '3 trechos com possível dado sensível (saúde, conflito trabalhista) vão como estão — revise antes de enviar.',
+    );
+    expect(linha.closest('p')).toHaveTextContent(/^⚠/);
+    expect(linha.closest('[aria-live="polite"]')).not.toBeNull();
+    expect(screen.getByText('1 dado pessoal será protegido (1 CPF)')).toBeInTheDocument();
+
+    colar('Faltou o atestado.');
+    passarDebounce();
+    expect(
+      screen.getByText(
+        '1 trecho com possível dado sensível (saúde) vai como está — revise antes de enviar.',
+      ),
+    ).toBeInTheDocument();
+
+    colar('Reunião sem nada disso.');
+    passarDebounce();
+    expect(screen.queryByText(/possível dado sensível/)).not.toBeInTheDocument();
+  });
+
+  it('o comparativo destaca o termo sensível nas duas colunas; o dado pessoal vence a sobreposição', async () => {
+    renderizar();
+    colar(`Joana está afastada por depressão, CPF ${CPF_A}.`);
+    passarDebounce();
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Ver o que vai para a IA' }));
+    const dialogo = screen.getByRole('dialog');
+    for (const nome of ['Original', 'Enviado à IA']) {
+      const coluna = within(dialogo).getByRole('region', { name: nome });
+      const afastada = within(coluna).getByText('afastada');
+      expect(afastada.tagName).toBe('MARK');
+      expect(within(coluna).getByText('depressão').tagName).toBe('MARK');
+      // Estilo próprio, diferente do marcador e do valor original.
+      expect(afastada.className).not.toBe(
+        within(coluna).getByText(nome === 'Original' ? CPF_A : '[CPF_1]').className,
+      );
+    }
+    expect(
+      within(dialogo).getByText(/Trechos com contorno tracejado são possível dado sensível/),
+    ).toBeInTheDocument();
+  });
+
   it('acima do limite não analisa: avisa o motivo e desabilita a prévia', () => {
     renderizar();
     colar('x'.repeat(LIMITE_TRANSCRICAO + 1));
