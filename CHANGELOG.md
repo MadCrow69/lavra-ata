@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/MadCrow69/lavra-ata/compare/v0.2.1...v0.3.0) (2026-10-27)
+
+
+### Novidades
+
+* **web:** revisão obrigatória do envio e aviso de dado sensível em texto livre ([#15](https://github.com/MadCrow69/lavra-ata/issues/15)) ([95d32d0](https://github.com/MadCrow69/lavra-ata/commit/95d32d0baca829699dd21d910d7dbc95250f38da))
+
 ## [0.2.1](https://github.com/MadCrow69/lavra-ata/compare/v0.2.0...v0.2.1) (2026-10-22)
 
 
