@@ -19,6 +19,7 @@ import {
   WidthType,
   type FileChild,
   type IBorderOptions,
+  type IRunOptions,
   type ITableBordersOptions,
 } from 'docx';
 import {
@@ -90,19 +91,21 @@ interface Formato {
 
 /** Corridas de um texto: uma por linha (a quebra vira `<w:br/>`), com o formato pedido. */
 function corridas(s: string, formato: Formato = {}): TextRun[] {
-  return s.split(/\r\n|\r|\n/).map(
-    (linha, i) =>
-      new TextRun({
-        text: limpo(linha),
-        ...(i > 0 ? { break: 1 } : {}),
-        ...(formato.negrito === true ? { bold: true } : {}),
-        ...(formato.tamanhoPt !== undefined ? { size: meioPonto(formato.tamanhoPt) } : {}),
-        ...(formato.fonte !== undefined ? { font: formato.fonte } : {}),
-        ...(formato.preencher === true
-          ? { shading: { type: ShadingType.CLEAR, fill: COR_PREENCHER, color: 'auto' } }
-          : {}),
-      }),
-  );
+  return s.split(/\r\n|\r|\n/).map((linha, i) => {
+    // Tipado como `IRunOptions`: no contexto do construtor (`IRunOptions | string`) o
+    // `no-deprecated` do typescript-eslint confunde `bold` com o `String.prototype.bold` obsoleto.
+    const opcoes: IRunOptions = {
+      text: limpo(linha),
+      ...(i > 0 ? { break: 1 } : {}),
+      ...(formato.negrito === true ? { bold: true } : {}),
+      ...(formato.tamanhoPt !== undefined ? { size: meioPonto(formato.tamanhoPt) } : {}),
+      ...(formato.fonte !== undefined ? { font: formato.fonte } : {}),
+      ...(formato.preencher === true
+        ? { shading: { type: ShadingType.CLEAR, fill: COR_PREENCHER, color: 'auto' } }
+        : {}),
+    };
+    return new TextRun(opcoes);
+  });
 }
 
 /** Partes do texto → corridas; a lacuna `[PREENCHER: …]` em negrito com o fundo da folha. */
