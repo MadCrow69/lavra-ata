@@ -11,6 +11,19 @@ updates:
         dependency-type: development
       production-dependencies:
         dependency-type: production
+    ignore:
+      # TypeScript 7 (nativo) não expõe a API JS que o typescript-eslint usa: o lint quebra
+      # (typescript-eslint/typescript-eslint#12518). Liberar quando o typescript-eslint suportar.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Os tipos seguem a major do Node do projeto (`engines` e CI): Node 24.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # 0.3.12 descomprime PNG num Web Worker de URL blob: (fflate assíncrono): o jsdom não tem
+      # Worker, o e2e de exportação em PDF falhou e a CSP (`script-src 'self'`, sem `worker-src`)
+      # não libera blob:. Testar de novo a próxima versão.
+      - dependency-name: pdfmake
+        versions: ['0.3.12']
     commit-message:
       prefix: 'chore(deps)'
       prefix-development: 'chore(deps)'
